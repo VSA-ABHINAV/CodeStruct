@@ -1,0 +1,37 @@
+{
+  "navigate_request": {
+    "session_token": "cap_canonical_session_token_123",
+    "relative_path": "pkg/module.py",
+    "line": 15,
+    "column": 5
+  },
+  "navigate_response": {
+    "api_version": "v1",
+    "request_id": "req_canonical_nav_01",
+    "command_id": "nav_canonical_cmd_01",
+    "session_token": "cap_canonical_session_token_123",
+    "status": "queued"
+  },
+  "pending_navigate_response": {
+    "api_version": "v1",
+    "request_id": "req_canonical_poll_01",
+    "has_command": true,
+    "command_id": "nav_canonical_cmd_01",
+    "relative_path": "pkg/module.py",
+    "line": 15,
+    "column": 5
+  },
+  "acknowledge_request": {
+    "session_token": "cap_canonical_session_token_123",
+    "command_id": "nav_canonical_cmd_01",
+    "status": "delivered",
+    "reason": null
+  },
+  "acknowledge_response": {
+    "api_version": "v1",
+    "request_id": "req_canonical_ack_01",
+    "acknowledged": true,
+    "status": "delivered",
+    "reason": null
+  }
+}

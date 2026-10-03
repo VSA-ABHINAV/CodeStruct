@@ -1,0 +1,74 @@
+name: Release candidate artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install development and release tools
+        run: python -m pip install -e ".[dev,release]"
+      - name: Backend quality suite
+        run: |
+          python -m ruff format --check backend tests sample_project tools
+          python -m ruff check backend tests sample_project tools
+          python -m mypy
+          python -m pytest
+      - name: Frontend quality suite
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run test:coverage
+          npm run test:a11y
+          npm run lint
+      - name: Build and verify local artifacts
+        run: python tools/build_release.py
+      - name: Install wheel in a clean environment
+        shell: bash
+        run: |
+          python -m venv /tmp/codestruct-wheel-test
+          /tmp/codestruct-wheel-test/bin/python -m pip install release-output/*.whl
+          /tmp/codestruct-wheel-test/bin/codestruct --version
+      - name: Upload review artifacts only
+        uses: actions/upload-artifact@v4
+        with:
+          name: codestruct-review-artifacts
+          path: release-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  platform-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python: ["3.10", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install test package
+        run: python -m pip install -e ".[dev]"
+      - name: Run package, spawn, path, and storage checks
+        run: python -m pytest -m "unit or contract or process or platform" --no-cov

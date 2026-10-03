@@ -1,0 +1,9 @@
+# Milestone 1: Codex final acceptance
+
+Date: 2026-09-30. **Decision: Accepted.** Milestone 2 may begin within its own task scope. This acceptance covers CS-001–004, the M1 documentation/verification portion of CS-023, and contract portion of CS-026. CS-026 renderer/design work remains M3.
+
+The live smoke evidence in `M1_REAL_WORKFLOW.md` shows a real running Thonny workbench/editor, local backend and headless browser navigation to `smoke_root2/app.py` at Tk cursor index `4.4`; browser feedback, selected-file isolation and API rejection evidence are preserved. The harness substituted `webbrowser.open` and message boxes only. The remaining poller-switch defect from review 7 was corrected by generation-scoped STOP/NAVIGATE messages, stale-message filtering and queue flushing. The active `vite.config.js` now contains the watcher ignore while preserving the React plugin, base and API proxy. The task-created session-info artifact is redacted and the harness removes it after use.
+
+Fresh independent checks: `M1_review7_queue_probe.py` asserts new session remains active; plugin suite **53 passed, 1 skipped** (symlink privilege); frontend component/startup **11 passed**; Ruff lint passed; Ruff format **84 files**; mypy **50 files**; frontend production build passed. Antigravity reports full project suite, frontend suite, dev proxy smoke and coverage in `M1_CORRECTIONS_7.md`; those larger checks were not independently repeated in this final focused review. Initial plugin run failed due sandbox access to Windows temp, then passed outside sandbox. Live smoke predates the narrow poller-race patch; deterministic regression covers the post-fix transition. The current frontend visual redesign remains M3 Lovable work.
+
+Proceed to M2 static correctness/metrics only. Do not interpret M1 acceptance as approval of unresolved later-milestone capability or deployment claims.

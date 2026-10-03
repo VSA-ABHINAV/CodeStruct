@@ -1,0 +1,33 @@
+{
+  "api_version": "v1",
+  "request_id": "req_canonical_diag_01",
+  "schema_version": "1.0.0",
+  "analysis_id": "ana_canonical_12345",
+  "provisional": false,
+  "items": [
+    {
+      "id": "d_canonical_syntax_01",
+      "code": "FILE_SYNTAX_ERROR",
+      "severity": "error",
+      "phase": "parsing",
+      "message": "A Python file contains invalid or incomplete syntax.",
+      "location": {
+        "source_unit_id": "src_pkg_module",
+        "path": "pkg/module.py",
+        "start_line": 1,
+        "start_column": 12,
+        "end_line": 1,
+        "end_column": 0
+      },
+      "entity_id": null,
+      "edge_id": null,
+      "recoverable": false,
+      "consequence": "skipped_or_partial",
+      "suggested_action": null,
+      "details": {}
+    }
+  ],
+  "totals": {
+    "error": 1
+  }
+}

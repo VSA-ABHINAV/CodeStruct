@@ -1,0 +1,6 @@
+
+cd Codestruct\frontend
+npm.cmd run dev
+
+cd Codestruct\backend
+python -m uvicorn main:app --reload

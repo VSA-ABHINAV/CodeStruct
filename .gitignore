@@ -1,0 +1,81 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+htmlcov/
+junit.xml
+
+# Python environments and packaging output
+.venv/
+venv/
+env/
+build/
+dist/
+release-output/
+.codestruct-release-staging/
+release-staging/
+*.sbom.json
+audit-output/
+*.container.tar
+*.egg-info/
+
+# Frontend dependencies and build output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend.lovable/node_modules/
+frontend.lovable/dist/
+frontend.lovable/.vite/
+frontend.lovable/coverage/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# CodeStruct analysis output and local data
+.codestruct/
+analysis-output/
+tests/test-output/
+prototype-launcher/runtime/
+prototype-launcher/logs/
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite3-journal
+*.sqlite-wal
+*.sqlite3-wal
+*.sqlite-shm
+*.sqlite3-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

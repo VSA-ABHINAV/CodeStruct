@@ -1,0 +1,127 @@
+# CodeStruct audit and phased recovery plan
+
+Updated: 2026-09-26 by Codex. Primary product source: `D:\REP\# CodeStruct – Technology Summary.txt`.
+Repository: `D:\REP\Codestruct\Codestruct`.
+External audit mirror: `C:\Users\ABHINAV\.gemini\antigravity-ide\brain\158ab85c-6b46-472b-9e7e-085c3bd712c0\codestruct_audit.md`.
+
+## Authority and scope
+
+Codex M2 review 4, 2026-10-03: M2 Accepted. Shared canonical community partition passes all 64 four-node and 1024 five-node graphs; fresh backend 189 pass/1 skip at 85.49% coverage, focused M2 35 pass, plugin 53 pass/1 skip, Ruff/format/mypy and real API/cache smoke pass. CS-008–011 and CS-018–019 are Accepted. Next Antigravity task is private repository bootstrap and accepted M1–M2 baseline commit/push only; M3 remains Lovable/user work. See `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md`.
+
+Antigravity M2 pass 3, 2026-10-03: Canonical deterministic community partition routine unified across Default and NetworkX adapters, passing all 64 four-node and all 1024 five-node graphs (including mask 58) as well as 6-node topologies. Quality gates (Ruff check/format, mypy, 189 full backend tests / 85.49% coverage, 53 plugin tests, real backend smoke) verified. Final verification evidence reconciled and external audit mirror synchronized. Ready for Codex review.
+
+Codex M2 review 3, 2026-10-03: focused M2 tests, canonical extraction/filtering and extended real backend/cache smoke pass, but M2 remains Changes required. Exhaustive parity enumeration passes all four-node graphs and fails on five-node mask 58, so community output still depends on adapter availability. The final M2 report/evidence is stale. The submission left the external audit mirror stale; Codex synchronized this review and verified matching hashes. See `docs/verification/M2_CODEX_REVIEW_3.md`. Do not begin M3/M4.
+
+Codex M2 review 2, 2026-10-03: canonical location, resolved-edge filtering, focused tests and real backend smoke pass, but M2 remains Changes required. Default and NetworkX community partitions diverge on a four-node triangle-with-leaf graph; the missing-NetworkX fallback is not tested; maintained metric/module/stub semantics, bounded prompt evidence, expanded smoke evidence and tracking reconciliation remain incomplete. See `docs/verification/M2_CODEX_REVIEW_2.md`. Do not begin M3/M4.
+
+Codex M2 review 1, 2026-10-02: focused M2 tests and submitted real smoke run, but M2 remains Changes required. Canonical serialized source lines are lost by explanation extraction; unresolved candidate edges affect fan-in/out; module coupling/cohesion/density and actual community detection are absent; NetworkX install policy is undeclared; effective option metadata/docs and required resolver/stub cases remain incomplete. See `docs/verification/M2_CODEX_REVIEW_1.md`. Do not begin M3/M4.
+
+Codex final review 8, 2026-09-30: M1 Accepted. Live Thonny cursor 4.4 at smoke_root2/app.py, selected-file isolation, API security, Lovable contract, and generation-scoped poller correction verified. Fresh plugin suite 53 pass/1 skip, frontend focused 11 pass, queue probe, Ruff/format/mypy and build pass. M2 CS-008–011/018–019 is ready for Antigravity under ANTIGRAVITY_TASK.md; M3 Lovable visual creation remains separate. See docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md.
+
+Codex review 7, 2026-09-30: real Thonny workbench/browser/backend smoke now demonstrates `smoke_root2/app.py` and Tk cursor `4.4`. CS-002 remains Changes required because the new unscoped queued STOP message from an old poll generation can disable a newer session; focused probe reproduces it. Also correct Vite watcher setting in active JS config and remove/redact task-created smoke credential artifact. M1 not Accepted; M2 not started. See `docs/verification/M1_CODEX_REVIEW_7.md`.
+
+Codex review 6, 2026-09-28: contract corrections accepted; fresh 50 backend/editor tests and 11 frontend contract/startup tests, default/cursor/null-location probe, Ruff/format/mypy pass. Automated M1 implementation review is complete. Actual running Thonny editor file/cursor and session isolation evidence remains a Verification gap, so full M1 acceptance and M2 start are pending. Lovable contract is approved as design input. Current task is real-workflow verification only; see docs/verification/M1_CODEX_REVIEW_6.md.
+
+Codex review 5, 2026-09-28: focused checks pass (47 backend/editor and 10 frontend), but CS-004/023/contract CS-026 required a correct 4 MiB default, a generated valid paginated example and nullable diagnostic location documentation. See `docs/verification/M1_CODEX_REVIEW_5.md`. Antigravity Pass 5 completed all 4 contract corrections (documented in `docs/verification/M1_CORRECTIONS_5.md`), verified via 50 backend and 94 frontend tests. M1 remains Ready for Codex review (pending Codex review acceptance and manual physical Thonny cursor observation). Historical submission completion claims do not override Codex review.
+
+This revision supersedes the contradictory missing/completed claims in the previous audit. The original is preserved in `docs/codestruct_audit_2026-09-23_original.md`. The technology summary defines intended capabilities; source inspection defines implementation presence; tests and real application evidence define verification. Existing code is not automatically a completed feature. This is the identified backlog, not a claim that every possible defect has been discovered.
+
+User decision: Lovable creates the new frontend. Antigravity implements backend, Thonny, contracts, tests, and integration of the exported Lovable frontend. Codex reviews each milestone before the next starts. Antigravity must not independently redesign the frontend. Frontend malfunction and poor appearance are a user-reported high-priority problem; exact browser reproductions are still required.
+
+Normal static analysis must never import or execute project code. Runtime analysis is a separate explicitly selected workflow. LLM output interprets evidence and must not become an observed program fact.
+
+## Current system and verification baseline
+
+The current pipeline is FastAPI -> analysis service -> bounded spawned worker -> scanner -> Python AST parser -> custom symbol resolver -> immutable graph -> SQLite -> versioned/paged API. The existing Vite/React frontend uses React Flow, with filtering, search, details, diagnostics, exports and a table. Thonny registers a selected file and launches browser analysis; reverse-navigation code now exists.
+
+Present in source: recursive `.py`/`.pyi` scanning, variable extraction, graph evidence and source locations, worker jobs, caching, source-navigation API and plugin polling, context menu, metric computation, DOT export, explanation endpoint, runtime tracer and merger, and an in-memory file parse cache. Integration and correctness gaps follow below.
+
+Current checks performed by Codex on 2026-09-26:
+
+| Check | Result | Limit |
+|---|---|---|
+| `.venv\Scripts\python.exe -m pytest --no-cov -p no:cacheprovider -q` | 138 passed, 1 skipped | Windows directory-link privilege skip; no coverage measurement |
+| `.venv\Scripts\python.exe -m pytest thonny-plugin/tests --no-cov -p no:cacheprovider -q` | 34 passed | Plugin tests are separate from default testpaths; real IDE not exercised |
+| `.venv\Scripts\python.exe -m ruff check backend tests thonny-plugin --output-format concise` | Passed | Format check not run |
+| `.venv\Scripts\python.exe -m mypy` | Failed before analysis: missing targets | Root `mypy.ini` overrides documented pyproject configuration |
+| `.venv\Scripts\python.exe -m mypy --config-file pyproject.toml` | Passed, 50 source files | Explicit configuration required |
+| `npm.cmd test -- --reporter=dot` in frontend | 73 passed across 7 files | Initial sandbox spawn EPERM; rerun outside sandbox passed; jsdom canvas warnings do not verify geometry |
+| `npm.cmd run lint` in frontend | Passed | No browser visual or usability verification |
+| Explanation extraction with canonical location/dict attributes | Reproduced missing path, line and metrics | Returned `None`, `None`, `{}` despite supplied canonical values |
+
+Production build, coverage gates, live browser workflows, actual Thonny cursor placement, runtime overhead, platform smoke and release verification have not been newly verified in this review. Existing working tree contains many staged, modified and untracked project files; preserve them and do not reset or clean the repository.
+
+## Priorities and statuses
+
+P0: security/trust-boundary defects or blocker to a reliable integration foundation. P1: primary workflow, correctness or intended core capability. P2: research completeness, performance, export and release validation. P3: advanced features explicitly optional in the technology summary.
+
+Statuses: Open, Partial, Verification gap, User-reported, Deferred, Ready for Codex review, Accepted. Only Codex marks Accepted after review. Old task IDs remain historical; new CS-001 onward are stable IDs. Milestone numbers specify execution batches, not issue IDs.
+
+## Findings and missing features
+
+| ID | Priority | Status | Milestone / owner | Finding, evidence and acceptance target |
+|---|---|---|---|---|
+| CS-001 | P0 | Accepted (M1 portion) | M1 / Antigravity | Navigation POST accepts arbitrary nonempty session tokens without looking up an active editor capability; pending commands live in a global store. `api/routes/navigate.py`. Bind requests, polls and acknowledgements to valid unexpired sessions, bounded queues and selected source scope; reject unknown/revoked sessions and untrusted origins according to the local deployment model. A public project alias is not an editor credential. |
+| CS-002 | P0 | Accepted | M1 / Antigravity | Plugin `_execute_navigate` searches every configured root and takes the first existing path, without canonical containment checks. Traversal or duplicate relative names can select the wrong file or escape a root. Bind navigation to the registered session's root/file; reject absolute/traversal/link escapes, verify file and exact cursor, and distinguish failed delivery from successful acknowledgement. Test two roots containing the same name. |
+| CS-003 | P1 | Accepted (M1 portion) | M1 / Antigravity | `python -m mypy` is broken by conflicting `mypy.ini`; default pytest excludes plugin tests. Consolidate or document one authoritative quality configuration, include required plugin checks, preserve meaningful coverage gates and record a repeatable baseline. Passing unit tests alone cannot establish a working app. |
+| CS-004 | P1 | Accepted (M1 portion) | M1 / Antigravity | New Lovable frontend needs a stable, complete backend integration contract. Document actual v1 schemas, safe project discovery, submit/status/cancel, partial/cache/expiry/error states, bounded pages, diagnostics, evidence, metrics, exports, explanations and editor sessions. Specify local origin/proxy/packaged deployment and typed fixtures. Hosted Lovable preview cannot simply call a user's loopback backend; target the exported frontend running locally unless a separately approved secure deployment is designed. |
+| CS-005 | P1 | User-reported | M3 / Lovable | Existing frontend works poorly and looks unsatisfactory according to the user. Create a coherent new explorer in Lovable with clean hierarchy, legible graph/detail/table views, responsive layout, clear loading/errors, accessible controls and meaningful empty states. Reproduce and record old failures; obtain user visual acceptance of new design. Do not declare this fixed through component tests or screenshots of mocks alone. |
+| CS-006 | P1 | Open | M4 / Antigravity | Import Lovable export into the local repository and connect real backend services. Existing App silently swallows navigation failures; DetailsPanel explanation fetch bypasses the configured API client. Ensure one API-base/error handling policy, actual session availability, success/failure feedback, cancellation and refresh, no fabricated results. Verify Thonny -> browser -> exact source navigation. |
+| CS-007 | P1 | Partial | M4 / Antigravity | Dense graphs are only mitigated (P12-005); layout is a synchronous custom fallback, not ELK as the old audit claimed. `graphLayout.js`, `ArchitectureExplorer.jsx`. Validate worker layout/render caps, aggregation, loaded/total counts, table parity and page failures; avoid duplicate Fit/zoom controls (P12-006). Lovable supplies visual UI; Antigravity integrates scalable behavior. |
+| CS-008 | P1 | Accepted | M2 / Antigravity | Metrics option supported (`options.metrics: bool`); distinct cache isolation verified; `metadata.metrics_computed` serialized; unsupported options return 400. |
+| CS-009 | P1 | Accepted | M2 / Antigravity | Transient NetworkX adapter, optional dependency, fallback, and shared deterministic community partition verified across exhaustive 4/5-node parity and 6-node topologies. |
+| CS-010 | P1 | Accepted | M2 / Antigravity | Resolved dependency filtering, iterative SCC, components, documented module metrics, and canonical community partition independently verified. |
+| CS-011 | P1 | Accepted | M2 / Antigravity | Canonical flat location and bounded static evidence observations verified through real serialized graph/API smoke. |
+| CS-012 | P1 | Partial | M5 / Antigravity | Runtime tracer/merger exist but are referenced only by exports/tests, not the normal job/Thonny pipeline. Add an explicit optional runtime session, bounded user-selected execution, result persistence and unified graph retrieval. Keep static analysis non-executing; separate static cache from run-dependent results. Record per-run coverage and overhead. |
+| CS-013 | P1 | Open | M5 / Antigravity | Runtime matching uses path suffix/name and first candidate; ignores recorded definition lines and skips recursive self-calls. Same-name methods can map incorrectly. Profiling is installed only on the current thread despite a thread-safe docstring; events omit thread/per-event time. Specify exception semantics and generator/async behavior. Match exact source identity/qualified symbol with ambiguity retained, capture supported threads/timing, restore prior hooks and test recursion, duplicate names, exceptions and repeated runs. |
+| CS-014 | P1 | Open | M5 / Antigravity | Runtime merger asks for metric enrichment but enrichment retains existing keys, leaving stale metrics after new edges. Runtime attributes appear on edges while explanation expects node stats. Define aggregation/repeated-session semantics, recompute derived metrics, preserve static/runtime origins and avoid double counting. |
+| CS-015 | P2 | Partial | M7 / Antigravity | `FileParseCache` is keyed only by relative path plus size/mtime and is used in `parse_project`; the production worker calls `parser.parse` directly. Cache is not integrated across spawned jobs, and equal size/mtime or other roots can reuse wrong data. Implement policy/version/project/content-bound persistent or otherwise effective per-file caching with safe invalidation and bounded storage. Preserve existing content-verified whole-result cache. |
+| CS-016 | P2 | Partial | M6 / Antigravity | Explanations have rule-based/provider code but no full source/evidence retrieval layer or validated architectural claim provenance. External JSON is accepted with permissive `.get` calls. Add bounded source+graph+runtime+metric retrieval, Pydantic validation, evidence references, inference labels, explicit opt-in provider selection, and offline fallback. Test malformed responses and canonical data; no paid/remote calls during tests. |
+| CS-017 | P2 | Partial | M7 / Antigravity | DOT generation/download exists; full Graphviz render/export to SVG/PNG and documentation-quality layouts are absent. Add bounded optional Graphviz integration, escaping, deterministic exports and dependency diagnostics; ensure frontend export distinguishes a loaded slice from the complete graph. |
+| CS-018 | P2 | Accepted | M2 / Antigravity | `.py`/`.pyi` implementation precedence, stub-only resolution and external boundaries characterized and documented. |
+| CS-019 | P1 | Accepted | M2 / Antigravity | Lexical scopes, inheritance, multi-dot paths, aliases, constructors and shadowing characterized with uncertainty preserved. |
+| CS-020 | P2 | Verification gap | M8 / Antigravity | Technology summary evaluation requires entity/import/call/inheritance/dependency precision, recall and F1 plus time/memory/layout/runtime overhead. Existing tests/baselines do not establish current integrated accuracy. Add ground-truth fixtures, reproducible evaluation reports, scale budgets and limitations. |
+| CS-021 | P1 | Verification gap | M4 + M8 / Antigravity | Running-job cancellation UI evidence remains incomplete (P12-008). Use a controlled test fixture, verify acknowledgement/terminal cancellation, timeout, crash, queue saturation, result expiry and restart. Expand storage permission/corruption/disk-full tests safely in temporary locations; preserve user data. |
+| CS-022 | P1 | Verification gap | M4 + M8 / Lovable + Antigravity | Screen-reader, keyboard/focus, zoom/reflow, reduced motion, themes/forced colors and browser/platform workflows lack complete evidence. New frontend must support these; automated axe/jsdom is supplementary. Verify actual Windows browser/Thonny workflows first; record macOS/Linux/other browsers as pending unless really tested. |
+| CS-023 | P1 | Accepted (M1 portion) | M1 then all / Antigravity | Audit/README/architecture/release docs disagree with code; old audit says missing features and complete ELK at the same time as completed rows. Correct claims incrementally, use real command outcomes, maintain `PROCESS_TRACKER.md` and require Codex acceptance. |
+| CS-024 | P2 | Verification gap | M8 / Antigravity + user | Packaging/platform/license/dependency release gates remain open. Rebuild/exported frontend must enter wheel assets; verify clean install, version agreement, restart, shutdown, upgrade and rollback. License and maintainer decisions belong to owner; public distribution and internet exposure are not authorized by this plan. |
+| CS-025 | P3 | Deferred | Future / user decision | Design-pattern detection, change-impact analysis, Git evolution/churn (old CS-P3-004), advanced points-to, graph embeddings/ML architecture recovery remain advanced optional features. No implementation until separately scoped; not blockers to the defined core completion. |
+| CS-026 | P2 | Accepted (M1 portion) | M1 contract + M3 design | Technology summary proposes Cytoscape.js; current ADR retains React Flow. Lovable design must choose a renderer based on required graph features, accessibility and measured scale, then document rationale. No automatic rewrite solely to match a library name. NetworkX is an algorithm adapter; Graphviz is export/layout, not a browser renderer. |
+
+## Eight milestone execution plan
+
+| Milestone | Priority | Scope / IDs | Prerequisites | Exit gate |
+|---|---|---|---|---|
+| M1 | P0/P1 | Secure editor bridge, reproducible checks and Lovable contract: CS-001–004, CS-023, contract decision in CS-026 | None | Security regressions + real local backend/plugin smoke; complete handoff and baseline; Codex review |
+| M2 | P1 | Static correctness, metrics, canonical explanation context, type-stub scope: CS-008–011, CS-018–019 | M1 accepted | Canonical schema/integration tests, defined metric semantics, bounded algorithms, real project analysis |
+| M3 | P1 | Lovable frontend creation: CS-005, design parts of CS-007/022/026 | M1 handoff; can design while M2 proceeds | User-approved design and usable exported source; visual creation is outside Antigravity |
+| M4 | P1 | Connect Lovable frontend, navigation, paging, large graphs, cancellation and accessible real workflows: CS-006–007, CS-021–022 | M1, M2 and M3 accepted | Real browser/backend/Thonny workflow evidence plus regressions; no mock-only success |
+| M5 | P1 | Optional runtime execution and truthful unified evidence: CS-012–014 | M2, M4 accepted | Explicit runtime run captured/persisted/merged; exact matching, hook restoration and overhead evidence |
+| M6 | P2 | Grounded semantic layer: CS-016 | M2, M5 accepted | Canonical bounded retrieval, validated output, evidence labels, offline/failed-provider tests |
+| M7 | P2 | Effective incremental caching and Graphviz outputs: CS-015, CS-017 | M2; M4 for export UI | Actual repeated-job parse reuse, invalidation tests, DOT/SVG/PNG verification |
+| M8 | P2 | Accuracy/performance, fault/accessibility/platform, packaging and final documentation: CS-020–024 | M1–M7 accepted | Fresh evaluation and release evidence; user accepts explicitly remaining environmental/owner decisions |
+
+M3 and M4 make frontend work high priority; the preceding backend work establishes the contract rather than delaying design for optional research features. Advanced CS-025 is deferred beyond these eight milestones. Milestones may be split further if a run is too large; do not silently expand the current task.
+
+## Completion definition
+
+Core completion means accepted static analysis and source evidence, Thonny project/file workflow, user-approved Lovable frontend connected to real services, bounded graph interaction, accurate metrics and clustering, opt-in runtime/unified graph, evidence-grounded optional explanations, effective incremental cache, Graphviz outputs, automated checks and reproducible evaluation. Explicitly distinguish implementation, test evidence and user acceptance. User-reported UI problems must be demonstrably resolved. Full cross-platform/public-release readiness is claimed only when its checks and owner decisions exist. Deferred advanced features do not count as implemented or silently become mandatory.
+
+## Review loop
+
+**Fourth M1 correction pass, 2026-09-28:** All 6 contract handoff mismatches resolved: create request options scoped to M1 supported payload, canonical 15-key summary in `analysis_job.json` and brief, canonical `GraphDiagnostic` location in `diagnostics.json`, actual `ApiError` envelope without invented details, nonterminal link invariant (`links.graph=null`), cancellation idempotency and pagination limit semantics. Permanent regression tests added in `tests/test_contract_fixtures.py` (10 passed) and `frontend/src/api/contractFixtures.test.js` (6 passed). Full validation suites pass (159 backend, 49 plugin, 93 frontend; all coverage/lint/format/type/build gates met). Evidence recorded in `docs/verification/M1_CORRECTIONS_4.md`. Ready for Codex review. Real desktop cursor gate remains pending.
+
+**Fourth M1 review, 2026-09-27:** Implementation checks now pass: 155 backend + 49 plugin + 93 frontend tests, coverage gates, StrictMode startup, lint/type checks, formatter before/after tests. Remaining CS-004/023 handoff examples still send unsupported options and invent nested response fields/link behavior. Active task is contract-only correction; working product implementation is not reopened. Real desktop cursor gate remains pending. See `docs/verification/M1_CODEX_REVIEW_4.md`.
+
+**Third M1 review, 2026-09-27:** Most security/plugin/session/CI fixes implemented and regression suites pass, but M1 remains Changes required. Added real-hook startup regression reproduces StrictMode + URL scrubbing cancelling the IDE handoff indefinitely. Lovable contract accuracy/generation and fixture-mutating plugin tests still need correction. See `docs/verification/M1_CODEX_REVIEW_3.md`; active task covers these three items only. No M2 start or GUI acceptance is claimed.
+
+**Second M1 review, 2026-09-26:** Changes required. Backend session uniqueness/origin/expiry/junction probes now reject unsafe behavior and graph fixture coordinates/provenance normalize correctly. Plugin state is declared but not used to implement switching/identity checks; frontend session fixes and Lovable brief corrections were omitted. CI/plugin checks, full formatter gate (six test files) and client outcome/evidence gates remain incomplete. See `docs/verification/M1_CODEX_REVIEW_2.md`. M1 handoff corrections are mandatory now, not deferred to M3. Current task targets remaining work; do not begin M2.
+
+**Latest Codex review, 2026-09-26:** M1 first submission is Changes required, not Accepted. R1–R6 in `docs/verification/M1_CODEX_REVIEW.md` refine CS-001–004/023/026: junction scope escape, shared same-file sessions and old-token poller, incorrect Lovable contracts, stale frontend session, origin/expired outcome errors, and incomplete quality/manual gates. Do not start M2 or use the submitted Lovable brief yet. Current task is the M1 correction pass; original scope is preserved in `docs/verification/M1_original_task.md`.
+
+1. Codex writes `ANTIGRAVITY_TASK.md` for exactly one milestone.
+2. User pastes its launch line into Antigravity.
+3. Antigravity works within scope, updates `PROCESS_TRACKER.md` and adds `docs/verification/Mx.md` with tests and real application evidence.
+4. Antigravity stops with Ready for Codex review. It does not mark Accepted or begin another milestone.
+5. User sends `ready for review` to Codex. Codex checks source diff, relevant tests and actual workflow evidence; returns corrections or acceptance and the next task.
+6. The repo audit is the working copy; keep the external mirror synchronized on approved audit revisions. Never alter archived prior results to suggest tests passed.

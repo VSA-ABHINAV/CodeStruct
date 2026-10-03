@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.14"]
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install project and development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check formatting
+        run: |
+          python -m ruff format --check backend tests sample_project
+          python -m ruff format --check thonny-plugin
+
+      - name: Lint Python
+        run: |
+          python -m ruff check backend tests sample_project
+          python -m ruff check thonny-plugin
+
+      - name: Type-check the configured backend scope
+        run: python -m mypy
+
+      - name: Run unit, contract, integration, and process tests with coverage
+        run: python -m pytest -m "not performance and not slow"
+
+      - name: Run Thonny plugin tests
+        run: python -m pytest thonny-plugin/tests --no-cov
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run frontend logic, component, accessibility, and coverage checks
+        run: npm run test:coverage
+        working-directory: frontend
+
+      - name: Lint frontend
+        run: npm run lint
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+
+  windows-process:
+    name: Windows process and path semantics
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run spawned-process and platform-specific tests
+        run: python -m pytest -m "process or platform" --no-cov
+
+      - name: Run Thonny plugin tests
+        run: python -m pytest thonny-plugin/tests --no-cov
+
+  macos-smoke:
+    name: macOS package and security smoke
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run fast package, parser, graph, and path-security tests
+        run: python -m pytest -m "unit or contract or platform" --no-cov
+
+  controlled-performance:
+    name: Controlled benchmark (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and development dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run deterministic benchmark and retain results only in logs
+        run: python tests/performance/benchmark.py

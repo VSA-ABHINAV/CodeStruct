@@ -1,0 +1,2 @@
+"""Second nested package fixture."""
+

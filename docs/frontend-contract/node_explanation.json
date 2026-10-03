@@ -1,0 +1,16 @@
+{
+  "api_version": "v1",
+  "request_id": "req_canonical_expl_01",
+  "node_id": "node_pkg_service_process_fn",
+  "name": "process_request",
+  "kind": "function",
+  "role": "Entrypoint Handler",
+  "summary": "Handles incoming request processing and coordinates business logic execution.",
+  "dependencies_summary": "Depends on ServiceHandler instance and incoming request payload.",
+  "metrics_summary": "Coupling: In-degree 1, Out-degree 0.",
+  "recommendations": [
+    "Ensure input validation on payload before business processing."
+  ],
+  "prompt": null,
+  "provider": "rule-based"
+}

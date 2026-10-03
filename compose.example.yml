@@ -1,0 +1,16 @@
+services:
+  codestruct:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      CODESTRUCT_AUTHORIZED_ROOTS: "sample=/projects/sample"
+      CODESTRUCT_CORS_ORIGINS: ""
+      CODESTRUCT_DATABASE_PATH: "/data/codestruct.sqlite3"
+    volumes:
+      - codestruct-data:/data
+      - ./sample_project:/projects/sample:ro
+    restart: unless-stopped
+
+volumes:
+  codestruct-data:

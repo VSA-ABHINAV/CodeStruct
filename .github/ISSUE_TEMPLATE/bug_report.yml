@@ -1,0 +1,46 @@
+name: Bug report
+description: Report reproducible incorrect behavior in CodeStruct.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include secrets, private source code, or vulnerability details.
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe the observed behavior and why it is incorrect.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide a minimal, non-sensitive example and exact steps.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: CodeStruct revision
+      description: Commit SHA, tag, or branch name.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, Node.js version, and browser if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste sanitized logs or analyzer output.
+      render: shell

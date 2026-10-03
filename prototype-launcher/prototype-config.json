@@ -1,0 +1,17 @@
+{
+  "codeStructDirectory": "D:\\REP\\Codestruct\\Codestruct",
+  "backendPythonExecutable": "C:\\Users\\ABHINAV\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+  "frontendDirectory": "D:\\REP\\Codestruct\\Codestruct\\frontend.lovable",
+  "thonnyDirectory": "D:\\REP\\thonny",
+  "thonnyPythonExecutable": "D:\\REP\\thonny\\venv\\Scripts\\python.exe",
+  "thonnyPluginDirectory": "D:\\REP\\Codestruct\\Codestruct\\thonny-plugin",
+  "demonstrationRootId": "demo_root",
+  "demonstrationProjectDirectory": "C:\\Users\\ABHINAV\\.gemini\\antigravity-ide\\brain\\a8a9c7db-32b5-4328-86dc-c70c3cc7c882\\scratch\\demo_project",
+  "backendHost": "127.0.0.1",
+  "backendPort": 8000,
+  "frontendHost": "127.0.0.1",
+  "frontendPort": 5173,
+  "startupTimeoutSeconds": 25,
+  "databasePath": "D:\\REP\\Codestruct\\Codestruct\\prototype-launcher\\runtime\\prototype_database.sqlite3",
+  "thonnyUserProfileDirectory": "D:\\REP\\Codestruct\\Codestruct\\prototype-launcher\\runtime\\thonny_user_profile"
+}

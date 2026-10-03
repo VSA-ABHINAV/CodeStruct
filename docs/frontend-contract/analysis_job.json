@@ -1,0 +1,68 @@
+{
+  "api_version": "v1",
+  "request_id": "req_canonical_job_01",
+  "analysis_id": "ana_canonical_12345",
+  "state": "completed",
+  "terminal": true,
+  "revision": 3,
+  "progress": {
+    "phase": "completed",
+    "completed": 100,
+    "total": 100,
+    "unit": "milestone",
+    "percent": 100,
+    "message_code": "ANALYSIS_COMPLETE",
+    "updated_at": "2026-09-26T14:00:05.123456Z"
+  },
+  "created_at": "2026-09-26T14:00:00.000000Z",
+  "started_at": "2026-09-26T14:00:01.000000Z",
+  "updated_at": "2026-09-26T14:00:05.123456Z",
+  "completed_at": "2026-09-26T14:00:05.123456Z",
+  "partial": false,
+  "cache_hit": false,
+  "diagnostics_summary": {
+    "info": 0,
+    "warning": 0,
+    "error": 0
+  },
+  "result": {
+    "result_id": "res_canonical_01",
+    "graph_id": "graph_canonical_01",
+    "schema_version": "1.0.0",
+    "partial": false,
+    "cache_hit": false,
+    "summary": {
+      "source_units_total": 1,
+      "nodes_total": 3,
+      "edges_total": 2,
+      "evidence_total": 2,
+      "diagnostics_total": 0,
+      "nodes_by_kind": {
+        "module": 1,
+        "class": 1,
+        "function": 1
+      },
+      "edges_by_kind": {
+        "defines": 2
+      },
+      "edges_by_resolution": {
+        "resolved": 2
+      },
+      "edges_by_confidence": {
+        "high": 2
+      },
+      "diagnostics_by_severity": {},
+      "diagnostics_by_code": {},
+      "excluded_entries": 0,
+      "failed_files": 0,
+      "skipped_files": 0,
+      "describes_full_result": true
+    }
+  },
+  "links": {
+    "self": "/api/v1/analyses/ana_canonical_12345",
+    "graph": "/api/v1/analyses/ana_canonical_12345/graph",
+    "diagnostics": "/api/v1/analyses/ana_canonical_12345/diagnostics"
+  },
+  "duplicate_disposition": null
+}

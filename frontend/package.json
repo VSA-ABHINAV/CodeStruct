@@ -1,0 +1,40 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:logic": "vitest run src/features/architecture/architecture.test.js src/api/analysisApi.test.js",
+    "test:component": "vitest run src/App.component.test.jsx src/features/architecture/ArchitectureExplorer.component.test.jsx",
+    "test:coverage": "vitest run --coverage",
+    "test:a11y": "vitest run -t accessibility",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.11.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/coverage-v8": "^5.0.0",
+    "eslint": "^10.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.11.0",
+    "jsdom": "^30.0.1",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0",
+    "vitest-axe": "^0.1.0"
+  }
+}
