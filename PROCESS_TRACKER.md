@@ -37,6 +37,26 @@ Milestone 2 Codex Review 4 (2026-10-03): **Accepted**. Shared canonical communit
 
 ## Run log
 
+### 2026-10-03 — Antigravity Repository Bootstrap & Baseline Publication
+
+- Verified all required baseline gates on clean staged tree:
+  - Exhaustive M2 parity probe: 64 4-node and 1024 5-node graphs passed with 100% parity.
+  - Codex review probe: `app.py:1-2` location fidelity and unresolved fan-in/out 0/0 verified.
+  - Full backend pytest: 189 passed, 1 skipped, 1 warning (85.49% coverage, exceeding 84% gate).
+  - Plugin pytest: 53 passed, 1 skipped (`thonny-plugin/tests --no-cov`).
+  - Frontend vitest: 94 passed across 10 test files (`npm --prefix frontend test -- --run`).
+  - Frontend lint & production build: clean build completed in 576ms (`npm --prefix frontend run build`).
+  - Ruff check & format: 195 files cleanly formatted.
+  - Mypy: 50 source files clean (0 issues).
+  - Real backend smoke (`M2_real_smoke.py`): exit code 0.
+  - Audit mirror SHA-256 hash verified identical.
+  - Automated secret scan: 0 potential secrets found across the codebase.
+- Established version-control and per-milestone commit policy in `CONTRIBUTING.md`.
+- Created initial baseline commit `ff8a774c85fe13f7afd62a81bafc0cc7d7e9a1ee` (`chore: establish accepted M1-M2 baseline`).
+- Created private GitHub repository `VSA-ABHINAV/CodeStruct` (`https://github.com/VSA-ABHINAV/CodeStruct`).
+- Pushed local `main` with upstream tracking `origin/main`.
+- Recorded complete bootstrap evidence in `docs/verification/REPOSITORY_BOOTSTRAP.md`.
+
 ### 2026-10-03 — Codex Milestone 2 Review 4
 
 - Decision: **Accepted**. Exhaustive parity probe passed 64 four-node and 1024 five-node graphs.
