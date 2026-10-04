@@ -307,5 +307,53 @@ describe('DetailsPanel component', () => {
 
     expect(await axe(container)).toHaveNoViolations()
   })
+
+  test('fetches and renders architecture explanation when explain button is clicked', async () => {
+    const user = userEvent.setup()
+    const nodeItem = {
+      id: 'n-controller',
+      kind: 'class',
+      displayName: 'Controller',
+      qualifiedName: 'app.main.Controller',
+      classification: 'internal',
+    }
+
+    const details = {
+      type: 'node',
+      item: nodeItem,
+      incoming: [],
+      outgoing: [],
+      children: [],
+      evidence: [],
+      diagnostics: [],
+    }
+
+    const mockApi = {
+      explain: vi.fn().mockResolvedValue({
+        role: 'Central Dispatcher',
+        provider: 'static_heuristic',
+        summary: 'Coordinates request routing and execution lifecycle.',
+        dependencies_summary: 'Depends on Config and Router modules.',
+        recommendations: ['Consider breaking down into specialized handlers.'],
+      }),
+    }
+
+    const graph = {
+      metadata: { analysis_id: 'ana_expl_test' },
+      nodes: [nodeItem],
+    }
+
+    render(<DetailsPanel details={details} graph={graph} api={mockApi} />)
+
+    const explainBtn = screen.getByRole('button', { name: 'Generate architecture explanation' })
+    await user.click(explainBtn)
+
+    expect(mockApi.explain).toHaveBeenCalledWith('ana_expl_test', 'n-controller')
+    expect(await screen.findByText('Central Dispatcher')).toBeVisible()
+    expect(screen.getByText('Coordinates request routing and execution lifecycle.')).toBeVisible()
+    expect(screen.getByText(/Depends on Config and Router modules/)).toBeVisible()
+    expect(screen.getByText('Consider breaking down into specialized handlers.')).toBeVisible()
+  })
 })
+
 

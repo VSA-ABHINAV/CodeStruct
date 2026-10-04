@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { analysisApi } from '../../api/analysisApi.js'
 import {
   SearchIcon,
   FitIcon,
@@ -42,6 +43,7 @@ export default function TopToolbar({
   focusMode = false,
   onToggleFocusMode = null,
   graph = null,
+  api = analysisApi,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -115,10 +117,7 @@ export default function TopToolbar({
     let dotContent = ''
     if (analysisId) {
       try {
-        const res = await fetch(`/api/v1/analyses/${encodeURIComponent(analysisId)}/export/dot`)
-        if (res.ok) {
-          dotContent = await res.text()
-        }
+        dotContent = await api.exportDot(analysisId)
       } catch {
         // Fallback to client-side generation
       }

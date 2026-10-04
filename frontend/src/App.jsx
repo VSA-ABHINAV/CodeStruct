@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Graph from './Graph.jsx'
 import { analysisApi } from './api/analysisApi.js'
-import { requestJson } from './api/client.js'
 import { useAnalysisJob } from './features/architecture/useAnalysisJob.js'
 import './App.css'
 
@@ -150,9 +149,11 @@ function App({ api = analysisApi }) {
       message: `Navigating to ${path}:${line} in editor…`,
     })
 
-    requestJson('/api/v1/editor/navigate', {
-      method: 'POST',
-      body: JSON.stringify({ session_token: sessionToken, relative_path: path, line, column }),
+    api.navigateEditor({
+      session_token: sessionToken,
+      relative_path: path,
+      line,
+      column,
     })
       .then(() => {
         setNavigationFeedback({
@@ -166,7 +167,7 @@ function App({ api = analysisApi }) {
           message: `Editor navigation unavailable: ${err?.message || 'Connection refused or session expired'}.`,
         })
       })
-  }, [analysis.job?.analysis_id, analysis.provenance, editorSession])
+  }, [analysis.job?.analysis_id, analysis.provenance, api, editorSession])
 
   return <div className={`app-shell${analysis.graph ? ' app-shell--active' : ''}`}>
     {!analysis.graph ? (
@@ -231,6 +232,7 @@ function App({ api = analysisApi }) {
       busy={busy}
       analysisId={analysis.job?.analysis_id || ''}
       onNavigateSource={handleNavigateSource}
+      api={api}
     />
   </div>
 }

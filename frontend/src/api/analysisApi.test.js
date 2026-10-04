@@ -80,3 +80,36 @@ test('graph slices reject cross-result pages and deduplicate repeated elements',
   assert.equal(merged.edges.length, 1)
   assert.throws(() => mergeGraphSlices([{ ...base, nodes: [], edges: [], page: {} }, { ...base, metadata: { graph_id: 'other' }, nodes: [], edges: [], page: {} }]), (error) => error.code === 'MALFORMED_RESPONSE')
 })
+
+test('explain, exportDot, and navigateEditor call authoritative endpoints', async () => {
+  const calls = []
+  const api = createAnalysisApi({
+    base: 'http://localhost:8000',
+    transport: async (url, opts) => {
+      calls.push({ url, opts })
+      if (url.endsWith('/explain')) {
+        return response({ role: 'Controller', summary: 'Orchestrates calls' })
+      }
+      if (url.endsWith('/export/dot')) {
+        return { ok: true, status: 200, text: async () => 'digraph G { a -> b; }' }
+      }
+      if (url.endsWith('/editor/navigate')) {
+        return response({ status: 'ok', line: 10 })
+      }
+      return response({})
+    },
+  })
+
+  const exp = await api.explain('ana_1', 'node_a')
+  assert.equal(exp.role, 'Controller')
+  assert.equal(calls[0].url, 'http://localhost:8000/api/v1/analyses/ana_1/nodes/node_a/explain')
+
+  const dot = await api.exportDot('ana_1')
+  assert.equal(dot, 'digraph G { a -> b; }')
+  assert.equal(calls[1].url, 'http://localhost:8000/api/v1/analyses/ana_1/export/dot')
+
+  const nav = await api.navigateEditor({ session_token: 'cap_test', relative_path: 'app.py', line: 10, column: 1 })
+  assert.equal(nav.status, 'ok')
+  assert.equal(calls[2].url, 'http://localhost:8000/api/v1/editor/navigate')
+  assert.deepEqual(JSON.parse(calls[2].opts.body), { session_token: 'cap_test', relative_path: 'app.py', line: 10, column: 1 })
+})

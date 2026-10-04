@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { analysisApi } from '../../api/analysisApi.js'
 
 const NODE_KIND_LABELS = {
   project: 'Project',
@@ -130,6 +131,7 @@ export default function DetailsPanel({
   graph = null,
   onLoadMore = null,
   pageLoading = false,
+  api = analysisApi,
 }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -156,11 +158,7 @@ export default function DetailsPanel({
     setExplainLoadingMap((prev) => ({ ...prev, [selectedItemId]: true }))
     setExplainErrorMap((prev) => ({ ...prev, [selectedItemId]: null }))
     try {
-      const res = await fetch(`/api/v1/analyses/${encodeURIComponent(analysisId)}/nodes/${encodeURIComponent(selectedItemId)}/explain`)
-      if (!res.ok) {
-        throw new Error(`Failed to fetch explanation (${res.status})`)
-      }
-      const data = await res.json()
+      const data = await api.explain(analysisId, selectedItemId)
       setExplanationMap((prev) => ({ ...prev, [selectedItemId]: data }))
     } catch (err) {
       setExplainErrorMap((prev) => ({ ...prev, [selectedItemId]: err.message || 'Error generating explanation' }))

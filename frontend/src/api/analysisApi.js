@@ -1,5 +1,5 @@
 import { AnalysisApiError } from './analysisErrors.js'
-import { requestJson } from './client.js'
+import { requestJson, requestText } from './client.js'
 const STATES = new Set(['submitted', 'validating', 'queued', 'scanning', 'parsing', 'resolving', 'building_graph', 'computing_metrics', 'completed', 'partially_completed', 'failed', 'cancellation_requested', 'cancelled', 'cache_hit'])
 export function validateJob(payload) { if (!payload || payload.api_version !== 'v1' || typeof payload.analysis_id !== 'string' || !STATES.has(payload.state) || typeof payload.terminal !== 'boolean') throw new AnalysisApiError('MALFORMED_RESPONSE', 'The backend returned an invalid analysis status.'); return payload }
 export function createAnalysisApi({ transport = fetch, base } = {}) { return {
@@ -9,6 +9,9 @@ export function createAnalysisApi({ transport = fetch, base } = {}) { return {
   async graph(id, query = {}) { const parameters = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== null && value !== undefined)); const suffix = parameters.size ? `?${parameters}` : ''; return (await requestJson(`/api/v1/analyses/${encodeURIComponent(id)}/graph${suffix}`, {}, transport, base)).payload },
   async diagnostics(id) { return (await requestJson(`/api/v1/analyses/${encodeURIComponent(id)}/diagnostics`, {}, transport, base)).payload },
   async cancel(id) { return validateJob((await requestJson(`/api/v1/analyses/${encodeURIComponent(id)}`, { method: 'DELETE' }, transport, base)).payload) },
+  async explain(id, nodeId) { return (await requestJson(`/api/v1/analyses/${encodeURIComponent(id)}/nodes/${encodeURIComponent(nodeId)}/explain`, {}, transport, base)).payload },
+  async exportDot(id) { return requestText(`/api/v1/analyses/${encodeURIComponent(id)}/export/dot`, {}, transport, base) },
+  async navigateEditor({ session_token, relative_path, line, column = null }) { return (await requestJson('/api/v1/editor/navigate', { method: 'POST', body: JSON.stringify({ session_token, relative_path, line, column }) }, transport, base)).payload },
 } }
 export const analysisApi = createAnalysisApi()
 

@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    pool: 'threads',
     include: ['src/**/*.test.js', 'src/**/*.test.jsx'],
     setupFiles: ['./src/test/setup.js'],
     coverage: {

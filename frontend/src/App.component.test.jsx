@@ -31,10 +31,6 @@ vi.mock('./Graph.jsx', () => ({
   ),
 }))
 
-vi.mock('./api/client.js', () => ({
-  requestJson: vi.fn().mockResolvedValue({ payload: { status: 'queued', command_id: 'cmd_1' } }),
-}))
-
 beforeEach(() => {
   submit.mockReset()
   cancel.mockReset()
@@ -54,7 +50,13 @@ beforeEach(() => {
     load,
     setError,
   }
-  api = { projects: vi.fn().mockResolvedValue([{ id: 'team', display_name: 'Team project', available: true }, { id: 'other_proj', display_name: 'Other project', available: true }]) }
+  api = {
+    projects: vi.fn().mockResolvedValue([
+      { id: 'team', display_name: 'Team project', available: true },
+      { id: 'other_proj', display_name: 'Other project', available: true },
+    ]),
+    navigateEditor: vi.fn().mockResolvedValue({ status: 'ok' }),
+  }
   window.history.replaceState({}, '', '/')
 })
 
@@ -160,8 +162,7 @@ test('displays loaded analysis even if configured project discovery fails', asyn
 })
 
 test('handles source navigation with bound session token and displays visible feedback', async () => {
-  const { requestJson } = await import('./api/client.js')
-  requestJson.mockResolvedValueOnce({ payload: { status: 'queued' } })
+  api.navigateEditor.mockResolvedValueOnce({ status: 'queued' })
 
   window.history.replaceState({}, '', '/?analysis_id=ana_1&session_token=cap_bound_tok')
   analysis.graph = { schema_version: '1.0.0' }
@@ -173,17 +174,18 @@ test('handles source navigation with bound session token and displays visible fe
   const triggerBtn = screen.getByRole('button', { name: 'Trigger Navigation' })
   await user.click(triggerBtn)
 
-  expect(requestJson).toHaveBeenCalledWith('/api/v1/editor/navigate', {
-    method: 'POST',
-    body: JSON.stringify({ session_token: 'cap_bound_tok', relative_path: 'app.py', line: 10, column: 2 }),
+  expect(api.navigateEditor).toHaveBeenCalledWith({
+    session_token: 'cap_bound_tok',
+    relative_path: 'app.py',
+    line: 10,
+    column: 2,
   })
 
   expect(await screen.findByRole('status')).toHaveTextContent('Navigation command sent to editor (app.py:10).')
 })
 
 test('clears session token on project change so project B cannot use project A credentials', async () => {
-  const { requestJson } = await import('./api/client.js')
-  requestJson.mockReset()
+  api.navigateEditor.mockClear()
 
   window.history.replaceState({}, '', '/?analysis_id=ana_1&session_token=cap_bound_tok')
   analysis.graph = { schema_version: '1.0.0' }
@@ -203,13 +205,12 @@ test('clears session token on project change so project B cannot use project A c
   const triggerBtn = screen.getByRole('button', { name: 'Trigger Navigation' })
   await user.click(triggerBtn)
 
-  expect(requestJson).not.toHaveBeenCalled()
+  expect(api.navigateEditor).not.toHaveBeenCalled()
   expect(await screen.findByRole('alert')).toHaveTextContent('Editor navigation unavailable: No active IDE session is connected')
 })
 
 test('displays visible error alert when editor navigation request fails', async () => {
-  const { requestJson } = await import('./api/client.js')
-  requestJson.mockRejectedValueOnce(new Error('Session cap_expired is expired or invalid'))
+  api.navigateEditor.mockRejectedValueOnce(new Error('Session cap_expired is expired or invalid'))
 
   window.history.replaceState({}, '', '/?analysis_id=ana_1&session_token=cap_expired')
   analysis.graph = { schema_version: '1.0.0' }

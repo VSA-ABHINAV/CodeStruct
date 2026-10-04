@@ -110,6 +110,10 @@ class CacheIntegrationTests(unittest.TestCase):
                 self.assertTrue(job_true_warm.graph["metadata"]["metrics_computed"])
             finally:
                 service.shutdown()
+                import gc
+
+                gc.collect()
+                time.sleep(0.1)
 
 
 if __name__ == "__main__":

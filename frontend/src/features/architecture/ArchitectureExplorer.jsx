@@ -42,6 +42,7 @@ export default function ArchitectureExplorer({
   provenance = null,
   busy = false,
   analysisId = '',
+  api = null,
 }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [query, setQuery] = useState('')
@@ -237,6 +238,7 @@ export default function ArchitectureExplorer({
             focusMode={focusMode}
             onToggleFocusMode={toggleFocusMode}
             graph={normalized}
+            {...(api ? { api } : {})}
           />
 
           {/* Advanced filters (collapsed by default) */}
@@ -348,6 +350,7 @@ export default function ArchitectureExplorer({
                 graph={normalized}
                 onLoadMore={onLoadMore}
                 pageLoading={pageLoading}
+                {...(api ? { api } : {})}
               />
             )}
           </section>

@@ -1,6 +1,6 @@
 # CodeStruct process tracker
 
-Updated: 2026-10-03. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
+Updated: 2026-10-04. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
 
 Only Codex assigns Accepted after review. Antigravity records implementation and verification, then sets Ready for Codex review. Preserve earlier evidence and user files. Frontend visual creation belongs to Lovable.
 
@@ -8,8 +8,8 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 |---|---|---|---|---|---|
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
-| M3 | CS-005; design CS-007/022/026 | Lovable + user | Contract ready; design not started | `LOVABLE_FRONTEND_BRIEF.md` | Contract approved as design input; user design acceptance pending |
-| M4 | CS-006–007, integration CS-021–022 | Antigravity | Waiting for M2/M3 | — | Pending |
+| M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
+| M4 | CS-006–007, integration CS-021–022 | Antigravity | Ready for Codex review | `docs/verification/M4.md`, `docs/verification/M4_real_workflow_smoke.py` | Pending |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,16 +18,20 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 2 Codex Review 4 (2026-10-03): **Accepted**. Shared canonical community partition verified across all 64 four-node and 1024 five-node graphs. Fresh full backend suite passed 189/1 skip at 85.49% coverage; focused M2 35 pass; plugin 53 pass/1 skip; Ruff, format and mypy pass; real API/cache smoke and audit mirror verified. Evidence: `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md`.
+Milestone 4 Antigravity Integration (2026-10-04): **Ready for Codex review**. Frontend connected to real backend services across analysis lifecycle, DOT export, architecture explanations, and editor navigation. Full gates passed (backend 189 passed/1 skipped at 85.53% coverage, plugin 53 passed/1 skipped, frontend 96 passed with 75.03% statement coverage, a11y passed, Ruff, Mypy, Vite build). Real Windows workflow smoke test passed (`docs/verification/M4_real_workflow_smoke.py`). Evidence: `docs/verification/M4.md`.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-008 | Accepted | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
-| CS-009 | Accepted | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
-| CS-010 | Accepted | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
-| CS-011 | Accepted | Canonical location fidelity (`service.py:3-7`) and bounded safe evidence references verified in real smoke. | None |
-| CS-018 | Accepted | Stub-only and external type-stub scope documented and verified. | None |
-| CS-019 | Accepted | Static resolution precedence and unsupported reflection semantics documented and verified. | None |
+| CS-006 | Ready for Codex review | Connected analysis creation/polling, status transitions, cancellation, error toasts, and graph slice pagination to real API client and verified in real Windows workflow. | Codex review |
+| CS-007 | Ready for Codex review | Connected Graphviz DOT export in TopToolbar to real backend `GET /export/dot` endpoint with file download; verified valid digraph syntax. | Codex review |
+| CS-021 | Ready for Codex review | Connected architecture explanation generation in DetailsPanel to real backend `POST /explain` endpoint; rendered structured cards with graceful error handling; verified real cancellation state transitions. | Codex review |
+| CS-022 | Ready for Codex review | Connected editor navigation to real backend `POST /editor/navigate` endpoint with capability token authorization; verified Thonny dispatch/retrieval and 403 unauthorized rejection; verified frontend accessibility (a11y test suite passed). | Codex review |
+| CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
+| CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
+| CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
+| CS-011 | Accepted (M2) | Canonical location fidelity (`service.py:3-7`) and bounded safe evidence references verified in real smoke. | None |
+| CS-018 | Accepted (M2) | Stub-only and external type-stub scope documented and verified. | None |
+| CS-019 | Accepted (M2) | Static resolution precedence and unsupported reflection semantics documented and verified. | None |
 | CS-001 | Accepted (M1) | R1: `_has_link_component` before resolve + identity compare on queue/poll/resolve. R2: unique tokens per registration (`cap_` + `secrets.token_urlsafe(24)`), bounded storage (max 100), eviction. R5: origin enforcement (403 for untrusted), expiry on ack, correct status codes. 20 navigate tests pass. | None (Codex review) |
 | CS-002 | Accepted (M1) | Generation-scoped STOP messages (`("STOP", generation)`), generation-matching drain validation in `_poll_navigate`, queue flushing on session start (`_flush_nav_queue`), and live Tk text widget index `4.4` verified. Validated via `M1_review7_queue_probe.py` (True) and 53 plugin unit tests. | None (Codex review) |
 | CS-003 | Accepted (M1) | R6: Format-only remediation on test files and plugin fixtures (87/87 files pass `ruff format --check` before and after test runs). Plugin test/lint in CI/docs. Mypy 50/50 clean. All gates pass. | None (Codex review) |
@@ -36,6 +40,31 @@ Milestone 2 Codex Review 4 (2026-10-03): **Accepted**. Shared canonical communit
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-04 — Antigravity Milestone 4 Integration & Verification
+
+- Preserved Lovable visual design in `frontend/` and connected frontend components to real backend APIs:
+  - `frontend/src/api/client.js`: Added `requestText` helper for text/DOT exports.
+  - `frontend/src/api/analysisApi.js`: Implemented `explain`, `exportDot`, and `navigateEditor`.
+  - `frontend/src/features/architecture/DetailsPanel.jsx`: Connected architecture explanation generation via `api.explain`.
+  - `frontend/src/features/architecture/TopToolbar.jsx`: Connected Graphviz DOT export and download via `api.exportDot`.
+  - `frontend/src/App.jsx` & `frontend/src/Graph.jsx`: Connected editor navigation across graph and details panel via `api.navigateEditor`.
+- Configured Vitest `pool: 'threads'` in `frontend/vitest.config.js` to ensure fast, reliable test execution on Windows.
+- Verified all required verification gates:
+  - Full backend pytest suite: 189 passed, 1 skipped, 1 warning (85.53% coverage, exceeding 84% threshold).
+  - Thonny plugin pytest suite: 53 passed, 1 skipped.
+  - Frontend Vitest suite: 96 passed across 10 test files.
+  - Frontend coverage: 75.03% statements (>=70%), 65.94% branches (>=60%), 76.29% functions (>=65%), 77.76% lines (>=75%).
+  - Frontend a11y: 3 passed, 93 skipped (zero axe violations).
+  - Frontend ESLint: clean (exit code 0).
+  - Frontend production build: clean build completed in 839ms (`npm --prefix frontend run build`).
+  - Ruff check & format: 196 files clean (`ruff check .`, `ruff format --check .`).
+  - Mypy: 50 source files clean (`mypy --config-file pyproject.toml`).
+  - Milestone 2 Parity Probes: 100% parity across 64 4-node and 1024 5-node graphs.
+  - Milestone 4 Real Smoke Test: `docs/verification/M4_real_workflow_smoke.py` passed exit code 0.
+- Recorded full verification evidence in `docs/verification/M4.md`.
+- Marked Milestone 4 as **Ready for Codex review**. Milestone 5 has not been started.
+
 
 ### 2026-10-03 — Antigravity Repository Bootstrap & Baseline Publication
 
