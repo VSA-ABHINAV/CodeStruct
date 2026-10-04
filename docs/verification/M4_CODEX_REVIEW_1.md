@@ -1,7 +1,7 @@
 # Codex Review 1 — Milestone 4
 
-**Date:** 2026-10-04  
-**Decision:** Changes required  
+**Date:** 2026-10-04
+**Decision:** Changes required
 **Reviewed commit:** `41a7da613592813be014032f9a7226fd657007a8` (`feat(m4): integrate lovable frontend with backend services and verify real workflow`)
 
 ## What I verified

@@ -1,0 +1,29 @@
+# Codex Review 2 — Milestone 4 Corrections
+
+**Date:** 2026-10-04
+**Decision:** Changes required
+**Reviewed commit:** `178a754d4d8f41879e9d9283587f373be9ebafad` (`fix(m4): reconcile large-graph parity, real cancellation lifecycle, accessibility and browser-to-thonny workflow`)
+
+## Independent checks
+
+- Review started on a clean `main`; read-only `git ls-remote origin refs/heads/main` confirmed remote `main` equals the reviewed commit `178a754d4d8f41879e9d9283587f373be9ebafad`.
+- `npm.cmd test -- --reporter=dot`: **10 files, 103 tests passed**. The new `App` cancellation-state test also emits React `act(...)` warnings.
+- `npm.cmd run build`: passed.
+- `npm.cmd run lint`: **failed** at `frontend/src/features/architecture/TopToolbar.jsx:25` because `analysisId` is unused. Therefore the report's claim that all M4 gates pass is false.
+- The new real-workflow script was not run again: it recursively deletes the preexisting fixed `scratch/m4_workflow` directory before its `try` block. That directory existed and contained Thonny logs. Preserve user/test data; use a unique temporary workspace.
+- A token-pattern scan (without printing token contents) found a live-format `cap_...` capability token in `scratch/m4_workflow/thonny_stdout.log`. I replaced the token with `<REDACTED_CAPABILITY>` and rescanned; no matching token remains in that smoke directory. The script currently prints the viewer URL and the token on failure paths, writes the token to `session_info.json`, and does not close its log handles before ignored recursive cleanup, so this can recur.
+
+## Findings
+
+1. **P0 — Do not persist editor capabilities in smoke output.** Redact tokens before any Thonny stdout/stderr or diagnostic logging; avoid persisting the raw viewer URL/session token in a file. Use a unique temp directory and guaranteed cleanup in `finally` after closing handles. Do not recursively delete a fixed preexisting `scratch/m4_workflow` path. Add a safe regression/scan that confirms output contains no capability token.
+2. **M4 real-workflow checks can report success when checks fail.** `run_full_m4_real_workflow()` stores booleans/results but does not assert most of them, and the entry point always calls `sys.exit(0)` after printing. It must fail nonzero if required assertions fail, including URL scrubbing, accessible controls, responsive state, browser dispatch, exact Thonny file/cursor, cancellation acknowledgement, and terminal `cancelled` state.
+3. **Navigation is not triggered through the frontend UI.** The CDP script attempts an optional button click but ignores the result, then directly calls `fetch('/api/v1/editor/navigate', ...)` with the raw token. This bypasses the real `App`/graph source-navigation handler. Select a real source node, activate the actual UI control with browser input, and assert the request/result and live Thonny cursor. Keep the token out of output and the DOM after URL scrubbing.
+4. **Cancellation is still not a real UI lifecycle test.** The script sends `DELETE` directly with `urllib`; it never clicks the frontend Cancel button or checks the frontend poller/banner. Its `polling_stopped_on_terminal` field treats `cancelled`, `completed`, and `failed` as equivalent and is not asserted. Use a controlled slow job, trigger cancellation in the browser, assert acknowledgement followed by terminal `cancelled`, and verify UI/poller state.
+5. **Accessibility assertions are synthetic/incomplete.** `window.dispatchEvent(new KeyboardEvent(...))` is not a physical/browser keyboard action; the script does not emulate or verify reduced-motion, zoom shortcuts, or actual focus progression. It checks an 800x600 DOM presence, not clipping/reflow. Use CDP input events or manual keyboard actions, assert real focus/visible state and reduced-motion behavior, and report screen-reader/platform observations separately from automated axe results.
+6. **CS-007 dense-graph behavior is not established.** The smoke project is tiny; the “large graph” check reads count text only and never opens the table or compares rows. The component parity test uses a five-node fixture with manually supplied page totals; it checks row count but not entity/relationship identity parity. Existing `layoutGraph` remains synchronous and `overviewGraph` only filters to selected node kinds; the configured thresholds are explicitly provisional. Generate a deterministic graph above threshold and verify actual bounded presentation and table/loaded-slice parity. Measure/justify synchronous layout bounds or offload it, and assert pagination failure/retry behavior in both state and UI.
+7. **Reported quality-gate mismatch and evidence cleanup.** Fix the lint error and React `act` warnings. `git diff HEAD^ HEAD --check` also finds trailing spaces in `M4_CODEX_REVIEW_1.md`; those Codex-authored spaces have been removed in this working tree. Ensure the final correction commit passes the diff check and correct the report/tracker/audit claims.
+8. **Do not weaken Ruff globally for verification scripts.** The correction adds `S110` and `S310` ignores to the entire `docs/**/*.py` scope in `pyproject.toml` to accommodate the new harness. This suppresses broad-exception and URL-safety checks for all documentation/verification scripts. Remove these blanket ignores; if an individual local-loopback call truly needs an exception, scope and explain it at that callsite without weakening other scripts.
+
+## Decision
+
+M4 remains **Changes required**. The frontend tests and production build pass, but lint fails, and the script is unsafe to rerun as written. Do not rerun it until it uses a unique disposable directory and has been reviewed to avoid token persistence or deletion of existing data. After the bounded fixes, run the safe workflow and applicable suites, commit/push only the M4 correction pass, and stop for Codex review. Do not begin M5 or later work.

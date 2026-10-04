@@ -95,15 +95,17 @@ test('announces progress and offers cancellation for an active job', async () =>
   const user = userEvent.setup()
   analysis.job = { state: 'parsing', terminal: false, progress: { message_code: 'PARSING_FILES', percent: 40 } }
   render(<App api={api} />)
+  await screen.findByRole('option', { name: 'Team project' })
   expect(screen.getByRole('status')).toHaveTextContent('parsing files · 40%')
   expect(screen.getByRole('button', { name: 'Analyze project' })).toBeDisabled()
   await user.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(cancel).toHaveBeenCalledOnce()
 })
 
-test('CS-021: cancellation button reflects stopping state when cancellation is requested', () => {
+test('CS-021: cancellation button reflects stopping state when cancellation is requested', async () => {
   analysis.job = { state: 'cancellation_requested', terminal: false, progress: { message_code: 'CANCELLATION_REQUESTED', percent: 40 } }
   render(<App api={api} />)
+  await screen.findByRole('option', { name: 'Team project' })
   const stopBtn = screen.getByRole('button', { name: 'Stopping…' })
   expect(stopBtn).toBeDisabled()
 })

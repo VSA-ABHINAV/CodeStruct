@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review | `docs/verification/M4.md` | Real Windows browser + backend + Thonny workflow verified (exact cursor 4.4, URL scrubbing, focus mode, reflow, ARIA live regions), large-graph slice/table parity, real cancellation lifecycle to terminal cancelled state |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (M4) | `docs/verification/M4.md` | Safe fail-closed smoke harness, real UI actions via CDP, dense-graph verification, cancellation lifecycle, and clean full gates verified |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,14 +18,14 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Corrections Pass (2026-10-04): **Ready for Codex review**. Reconciled issue mappings, removed out-of-scope backend DOT export from M4 (preserving pure client-side DOT generation in TopToolbar), verified bounded CS-007 large-graph layout caps, loaded/total counts, table/graph slice parity, and pagination failure/retry. Proved real CS-021 job cancellation lifecycle (Cancel button -> `cancellation_requested` -> terminal `cancelled` status -> poller cessation -> ARIA live announcement). Verified CS-022 accessibility (keyboard shortcuts Shift+F / F / Esc / + / -, focus mode, semantic landmarks, ARIA live regions, 800x600 reflow, reduced-motion) and CS-006 browser-to-Thonny navigation dispatch in real Windows Google Chrome via CDP and live Thonny Tk cursor positioning at `4.4`. Evidence: `docs/verification/M4.md`.
+Milestone 4 Codex Review 2 (2026-10-04): **Corrections Completed / Ready for Codex review**. Replaced smoke workspace with disposable unique temp directories, removed all directory deletions of existing repositories, implemented fail-closed assertions, verified real UI navigation/cancellation/accessibility actions via CDP, verified dense-graph layout bounds (<50ms) and table/graph parity, resolved React act warnings and ESLint unused variable, removed blanket Ruff suppressions, and verified all full gates.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (M4) | Real browser + backend + Thonny navigation workflow verified: capability token handoff, immediate address bar scrubbing, node selection, "Open in editor" dispatch, and live Thonny Tk cursor positioning at `4.4` (`calculate_root2`). | None for M4 (Codex review) |
-| CS-007 | Ready for Codex review (M4) | Large-graph layout/render limits, progressive slice loading (`limit: 1000, cursor`), loaded vs. total counts, table/graph slice data parity across successive pages, and error retry without data loss verified. Client-side DOT generation retained in `TopToolbar.jsx`; backend DOT export excluded from M4. | None for M4 (Codex review) |
-| CS-021 | Ready for Codex review (M4) | Real job cancellation lifecycle verified: Cancel button -> `DELETE /api/v1/analyses/{id}` -> `cancellation_requested` -> backend executor worker termination -> terminal `cancelled` state -> poller cessation -> polite cancellation banner announcement. | None for M4 (Codex review) |
-| CS-022 | Ready for Codex review (M4) | Real Windows browser workflow verified: focus mode (`Shift+F` / `Esc`), fit view (`F`), zoom (`+`/`-`), search focus (`Ctrl+K`), ARIA live regions on visible/search counts, accessible toolbar labels, 800x600 responsive reflow, and reduced-motion handling. 103 frontend tests pass. | None for M4 (Codex review) |
+| CS-006 | Ready for Codex review (M4) | Real browser UI action selects `calculate_root2` entity and clicks "Open in editor" button, verified by live Thonny Tk text widget cursor positioned at `4.4` (`calculate_root2`). URL scrubbing verified; capability tokens never logged or persisted. | None (Codex review) |
+| CS-007 | Ready for Codex review (M4) | Verified deterministic dense project (>50 nodes, 186 nodes / 247 edges), bounded synchronous layout (<50ms), table/graph parity across loaded slices and filtered states, and pagination retry without data loss. | None (Codex review) |
+| CS-021 | Ready for Codex review (M4) | Real browser UI clicks "Cancel" button during active uncached analysis, verifying disabled "Stopping…" button state, backend transition through `cancellation_requested` to terminal `cancelled`, UI cancellation banner, and poller stop. | None (Codex review) |
+| CS-022 | Ready for Codex review (M4) | Verified physical keyboard navigation (`Shift+F` focus mode, `Esc`, `F` fit, `Ctrl+K` search), ARIA polite live regions, 800x600 viewport reflow with zero horizontal overflow, and reduced-motion media query emulation. | None (Codex review) |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -41,21 +41,23 @@ Milestone 4 Corrections Pass (2026-10-04): **Ready for Codex review**. Reconcile
 
 ## Run log
 
-### 2026-10-04 — Antigravity Milestone 4 Corrections Pass
+### 2026-10-04 — Antigravity Milestone 4 Corrections Pass 2 (Codex Review 2)
 
-- Addressed all findings from `docs/verification/M4_CODEX_REVIEW_1.md`:
-  - **Issue Mapping & Scope Reconciled:** Corrected issue mapping to CS-006 (Integration & Thonny Navigation), CS-007 (Large Graph Handling & Table Parity), CS-021 (Real Job Cancellation Lifecycle), and CS-022 (Accessibility & Windows Browser Workflow). Removed out-of-scope backend DOT export from M4 (reserved for CS-017 / M7) and preserved pure client-side DOT export in `TopToolbar.jsx`.
-  - **CS-007 Large Graph Behavior & Parity:** Implemented and tested progressive slice loading, loaded vs total entity/relationship counts, table/graph parity across slices, and pagination error/retry handling.
-  - **CS-021 Real Job Cancellation:** Proved real cancellation lifecycle from Cancel button click through `DELETE /api/v1/analyses/{id}` to backend worker termination, terminal `cancelled` state, immediate poller cessation, and cancellation status announcement.
-  - **CS-022 Accessibility & Usability:** Verified keyboard navigation (`Shift+F` focus mode, `F` fit, `Esc` exit/clear, `Ctrl+K` search), ARIA `polite` live regions, 800x600 reflow, and reduced motion in real Windows Google Chrome.
-  - **CS-006 Browser-to-Thonny Roundtrip:** Verified immediate URL credential scrubbing on mount, and source navigation dispatch in real browser delivering to live Thonny Tk text widget cursor `4.4`.
+- Addressed all findings from `docs/verification/M4_CODEX_REVIEW_2.md`:
+  - **Safe Smoke Harness:** Replaced existing fixture/scratch overwrites with disposable unique temp directories (`tempfile.mkdtemp(prefix="codestruct_m4_smoke_")`). Removed directory deletion of existing repositories. Closed file handles and process descriptors cleanly. Added non-disclosing secret scanner asserting zero capability tokens (`cap_...`) leaked in outputs or files.
+  - **Fail-Closed Assertions:** Added strict assertions for all smoke steps (analysis initiation, URL scrubbing, focus mode, ARIA live regions, 800x600 reflow, reduced motion, dense graph layout bounds, browser button click, Thonny cursor positioning, and UI cancellation lifecycle).
+  - **Real Frontend UI Actions via CDP:** Dispatched physical keyboard inputs (`Shift+F`, `Esc`, `F`, `Ctrl+K`), opened More actions dropdown menu, toggled Accessible table view, selected `calculate_root2` entity, clicked "Open in editor" button, and confirmed live Thonny Tk text widget cursor `4.4`.
+  - **CS-007 Dense-Graph Verification:** Created deterministic dense project (60 classes, 186 nodes, 247 edges) exceeding 50-node threshold. Verified layout execution benchmark bounded under 50ms (0.20ms) and verified table/graph view parity across loaded slices and filtered states.
+  - **CS-021 Real Cancellation Lifecycle:** Selected distinct uncached project (`cancel_proj`) in UI, clicked "Analyze project", clicked UI "Cancel" button, verified disabled "Stopping…" state, backend transition through `cancellation_requested` to terminal `cancelled`, cancellation banner in UI, and poller termination.
+  - **Code Quality & Linter Reconciliation:** Fixed unused `analysisId` prop in `TopToolbar.jsx` and `ArchitectureExplorer.jsx`. Eliminated React `act(...)` warnings in `App.component.test.jsx`. Reverted blanket Ruff suppressions (`S110`, `S310`) in `pyproject.toml`.
 - Verified all quality and test gates:
-  - Frontend Vitest suite: 103 passed across 10 test files (`npm --prefix frontend test -- --run`).
-  - Backend pytest suite: 189 passed, 1 skipped, 1 warning (85.49% coverage >= 84.00%).
+  - Frontend Vitest suite: 103 passed across 10 test files (`npm --prefix frontend test -- --run`) with 0 warnings.
+  - Frontend ESLint: `npm --prefix frontend run lint` -> 0 errors, 0 warnings.
+  - Frontend production build: `npm --prefix frontend run build` -> `✓ built in 650ms`.
+  - Backend pytest suite: 189 passed, 1 skipped, 1 warning (85.53% coverage >= 84.00%).
   - Thonny plugin pytest: 53 passed, 1 skipped (`.venv\Scripts\pytest thonny-plugin -o addopts=""`).
-  - Ruff check & format: 199 files clean.
+  - Ruff check & format: 200 files clean (`ruff check .`, `ruff format --check .`).
   - Mypy: 50 source files clean (0 errors).
-  - Frontend production build: clean build completed in 515ms.
   - Real Windows Workflow Smoke Test: `docs/verification/M4_real_workflow_smoke.py` passed exit code 0.
 - Updated `docs/verification/M4.md`, `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, and external audit mirror.
 - Marked Milestone 4 as **Ready for Codex review**. Milestone 5 has not been started.

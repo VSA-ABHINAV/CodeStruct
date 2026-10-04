@@ -41,7 +41,6 @@ export default function ArchitectureExplorer({
   onRefresh = null,
   provenance = null,
   busy = false,
-  analysisId = '',
   api = null,
 }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -215,7 +214,6 @@ export default function ArchitectureExplorer({
           {/* Single Vertically Aligned Header */}
           <TopToolbar
             currentIdentity={currentIdentity}
-            analysisId={analysisId || input?.metadata?.analysis_id || ''}
             projects={projects}
             projectId={projectId}
             onSelectProject={onSelectProject}

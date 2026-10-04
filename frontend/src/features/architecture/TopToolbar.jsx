@@ -22,7 +22,6 @@ import { generateDot } from './exportDot.js'
  */
 export default function TopToolbar({
   currentIdentity = 'Architecture',
-  analysisId = '',
   projects = [],
   projectId = '',
   onSelectProject = null,
