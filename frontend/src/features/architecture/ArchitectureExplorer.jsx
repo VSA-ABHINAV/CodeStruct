@@ -238,7 +238,6 @@ export default function ArchitectureExplorer({
             focusMode={focusMode}
             onToggleFocusMode={toggleFocusMode}
             graph={normalized}
-            {...(api ? { api } : {})}
           />
 
           {/* Advanced filters (collapsed by default) */}

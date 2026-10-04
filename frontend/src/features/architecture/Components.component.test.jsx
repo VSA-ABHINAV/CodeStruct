@@ -296,8 +296,6 @@ describe('Additional UI and Node Components', () => {
     await user.click(closeAboutBtn)
 
     // Open More Menu and click Export Graphviz (DOT)
-    const mockApi = { exportDot: vi.fn().mockResolvedValue('digraph G { n1; }') }
-    // Mock URL object methods
     const createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/dot-blob')
     const revokeObjectURLMock = vi.fn()
     globalThis.URL.createObjectURL = createObjectURLMock
@@ -309,15 +307,14 @@ describe('Additional UI and Node Components', () => {
         analysisId="ana_123"
         projects={[{ id: 'proj1', display_name: 'Project One', available: true }]}
         projectId="proj1"
-        graph={{ nodes: [{ id: 'n1', displayName: 'Root' }], edges: [] }}
-        api={mockApi}
+        graph={{ nodes: [{ id: 'n1', displayName: 'Root', qualifiedName: 'app.Root', kind: 'module' }], edges: [] }}
       />
     )
     const exportMoreBtn = screen.getAllByRole('button', { name: 'More actions' })[1]
     await user.click(exportMoreBtn)
     const dotExportBtn = screen.getByRole('menuitem', { name: /Export Graphviz \(DOT\)/ })
     await user.click(dotExportBtn)
-    expect(mockApi.exportDot).toHaveBeenCalledWith('ana_123')
+    expect(createObjectURLMock).toHaveBeenCalled()
 
     // Open Project Picker modal
     const pickerBtn = screen.getAllByRole('button', { name: 'Current analysis: Project One' })[0]

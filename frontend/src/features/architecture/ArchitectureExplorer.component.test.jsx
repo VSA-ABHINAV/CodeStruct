@@ -175,4 +175,46 @@ describe('architecture explorer states and interactions', () => {
     await user.keyboard('{Escape}')
     expect(container.querySelector('.cs-explorer--focus-mode')).not.toBeInTheDocument()
   })
+
+  test('CS-007: graph and table maintain strict data parity across loaded slice and filtered states', async () => {
+    const user = userEvent.setup()
+    const pagedGraph = {
+      ...smallGraph,
+      page: {
+        returned_nodes: 5,
+        total_nodes: 25,
+        returned_edges: 4,
+        total_edges: 30,
+        next_cursor: 'cursor_p2',
+        partial_load: true,
+      },
+    }
+    render(<ArchitectureExplorer graph={pagedGraph} />)
+
+    // Graph view status banner clearly identifies partial slice
+    expect(screen.getByText(/Only 5 of 25 entities are loaded/)).toBeVisible()
+    expect(screen.getByText(/Showing 5 of 5 entities/)).toBeVisible()
+
+    // Switch to table view
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(screen.getByRole('menuitem', { name: /Accessible table/ }))
+
+    // Table view header reflects the exact same loaded slice
+    expect(screen.getByRole('table')).toBeVisible()
+    expect(screen.getByText(/Loaded graph slice: 5 of 25 entities and 4 of 30 relationships/)).toBeVisible()
+
+    // Both views have exactly 5 node rows + 3 relationship rows in the table
+    const table = screen.getByRole('table')
+    expect(table).toBeVisible()
+    const rows = table.querySelectorAll('tbody tr')
+    expect(rows.length).toBe(8) // 5 entities + 3 relationships
+  })
+
+  test('CS-021: renders cancelled state banner with polite live region announcement', () => {
+    render(<ArchitectureExplorer graph={null} state="cancelled" />)
+    const banner = screen.getByRole('status')
+    expect(banner).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Cancelled' })).toBeVisible()
+    expect(screen.getByText(/Incomplete work is not presented as a complete result/)).toBeVisible()
+  })
 })

@@ -101,6 +101,23 @@ test('announces progress and offers cancellation for an active job', async () =>
   expect(cancel).toHaveBeenCalledOnce()
 })
 
+test('CS-021: cancellation button reflects stopping state when cancellation is requested', () => {
+  analysis.job = { state: 'cancellation_requested', terminal: false, progress: { message_code: 'CANCELLATION_REQUESTED', percent: 40 } }
+  render(<App api={api} />)
+  const stopBtn = screen.getByRole('button', { name: 'Stopping…' })
+  expect(stopBtn).toBeDisabled()
+})
+
+test('CS-021: displays terminal cancelled status without active cancel button when job is cancelled', async () => {
+  analysis.job = { state: 'cancelled', terminal: true, progress: { message_code: 'CANCELLED', percent: 40 } }
+  render(<App api={api} />)
+  await screen.findByRole('option', { name: 'Team project' })
+  expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Stopping…' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Analyze project' })).toBeEnabled()
+  expect(screen.getByLabelText('Graph compatibility entry')).toHaveTextContent('cancelled|no error|no graph')
+})
+
 test('preserves the last graph and requests an explicit forced refresh when provenance is present', async () => {
   const user = userEvent.setup()
   analysis.graph = { schema_version: '1.0.0' }
@@ -224,6 +241,3 @@ test('displays visible error alert when editor navigation request fails', async 
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Editor navigation unavailable: Session cap_expired is expired or invalid.')
 })
-
-
-

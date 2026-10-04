@@ -215,4 +215,121 @@ test('newer load action cancels older in-flight response (race protection)', asy
   expect(result.current.graph.nodes.map((n) => n.id)).toEqual(['node-ana-second'])
 })
 
+test('CS-007: loadMore handles page fetch failure and allows subsequent retry', async () => {
+  const initialPage = page([{ id: 'node-1' }], 'cursor-page-2')
+  const secondPage = page([{ id: 'node-1' }, { id: 'node-2' }], null)
 
+  const api = {
+    submit: vi.fn().mockResolvedValue({ job }),
+    status: vi.fn().mockResolvedValue(job),
+    diagnostics: vi.fn().mockResolvedValue({ items: [] }),
+    graph: vi.fn()
+      .mockResolvedValueOnce(initialPage)
+      .mockRejectedValueOnce(new AnalysisApiError('PAGE_FETCH_ERROR', 'Network error loading page 2', 500, true))
+      .mockResolvedValueOnce(secondPage),
+    cancel: vi.fn(),
+  }
+
+  const { result } = renderHook(() => useAnalysisJob(api))
+  await act(async () => result.current.submit({ root_id: 'team', relative_path: '.' }))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)) })
+
+  expect(result.current.graph.nodes.map((n) => n.id)).toEqual(['node-1'])
+  expect(result.current.hasMore).toBe(true)
+
+  // First loadMore attempt fails
+  await act(async () => result.current.loadMore())
+  expect(result.current.pageLoading).toBe(false)
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.error.message).toContain('Network error')
+  // Graph slice remains intact
+  expect(result.current.graph.nodes.map((n) => n.id)).toEqual(['node-1'])
+  expect(result.current.hasMore).toBe(true)
+
+  // Retry loadMore succeeds
+  await act(async () => result.current.loadMore())
+  expect(result.current.pageLoading).toBe(false)
+  expect(result.current.graph.nodes.map((n) => n.id)).toEqual(['node-1', 'node-2'])
+  expect(result.current.hasMore).toBe(false)
+})
+
+test('CS-021: cancel requests cancellation and poller tracks transition to terminal cancelled state', async () => {
+  const activeJob = {
+    api_version: 'v1',
+    analysis_id: 'ana-cancel-test',
+    state: 'resolving',
+    terminal: false,
+    progress: { percent: 50, message_code: 'RESOLVING_SYMBOLS' },
+  }
+  const cancelAckJob = {
+    api_version: 'v1',
+    analysis_id: 'ana-cancel-test',
+    state: 'cancellation_requested',
+    terminal: false,
+    progress: { percent: 50, message_code: 'CANCELLATION_REQUESTED' },
+  }
+  const cancelledTerminalJob = {
+    api_version: 'v1',
+    analysis_id: 'ana-cancel-test',
+    state: 'cancelled',
+    terminal: true,
+    progress: { percent: 50, message_code: 'JOB_CANCELLED' },
+  }
+
+  let statusCallCount = 0
+  const api = {
+    submit: vi.fn().mockResolvedValue({ job: activeJob }),
+    status: vi.fn().mockImplementation(() => {
+      statusCallCount += 1
+      if (statusCallCount === 1) return Promise.resolve(cancelAckJob)
+      return Promise.resolve(cancelledTerminalJob)
+    }),
+    diagnostics: vi.fn().mockResolvedValue({ items: [] }),
+    graph: vi.fn(),
+    cancel: vi.fn().mockResolvedValue(cancelAckJob),
+  }
+
+  const { result } = renderHook(() => useAnalysisJob(api))
+  await act(async () => result.current.submit({ root_id: 'sample', relative_path: '.' }))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)) })
+
+  expect(result.current.job.state).toBe('resolving')
+  expect(result.current.job.terminal).toBe(false)
+
+  // Trigger cancel
+  await act(async () => result.current.cancel())
+  expect(api.cancel).toHaveBeenCalledWith('ana-cancel-test')
+  expect(result.current.job.state).toBe('cancellation_requested')
+
+  // Allow poller to tick and receive terminal cancelled state
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2000)) })
+  expect(result.current.job.state).toBe('cancelled')
+  expect(result.current.job.terminal).toBe(true)
+  expect(result.current.graph).toBeNull()
+  expect(api.graph).not.toHaveBeenCalled()
+})
+
+test('CS-021: cancel handles network failure gracefully without throwing', async () => {
+  const activeJob = {
+    api_version: 'v1',
+    analysis_id: 'ana-cancel-fail',
+    state: 'parsing',
+    terminal: false,
+  }
+  const api = {
+    submit: vi.fn().mockResolvedValue({ job: activeJob }),
+    status: vi.fn().mockResolvedValue(activeJob),
+    diagnostics: vi.fn().mockResolvedValue({ items: [] }),
+    graph: vi.fn(),
+    cancel: vi.fn().mockRejectedValue(new AnalysisApiError('CANCEL_ERROR', 'Cancellation service unavailable', 500, true)),
+  }
+
+  const { result } = renderHook(() => useAnalysisJob(api))
+  await act(async () => result.current.submit({ root_id: 'sample', relative_path: '.' }))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)) })
+
+  await act(async () => result.current.cancel())
+  expect(result.current.cancelling).toBe(false)
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.error.message).toContain('Cancellation service unavailable')
+})

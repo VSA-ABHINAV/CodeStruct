@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006–007, integration CS-021–022 | Antigravity | Ready for Codex review | `docs/verification/M4.md`, `docs/verification/M4_real_workflow_smoke.py` | Pending |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review | `docs/verification/M4.md` | Real Windows browser + backend + Thonny workflow verified (exact cursor 4.4, URL scrubbing, focus mode, reflow, ARIA live regions), large-graph slice/table parity, real cancellation lifecycle to terminal cancelled state |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,14 +18,14 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Antigravity Integration (2026-10-04): **Ready for Codex review**. Frontend connected to real backend services across analysis lifecycle, DOT export, architecture explanations, and editor navigation. Full gates passed (backend 189 passed/1 skipped at 85.53% coverage, plugin 53 passed/1 skipped, frontend 96 passed with 75.03% statement coverage, a11y passed, Ruff, Mypy, Vite build). Real Windows workflow smoke test passed (`docs/verification/M4_real_workflow_smoke.py`). Evidence: `docs/verification/M4.md`.
+Milestone 4 Corrections Pass (2026-10-04): **Ready for Codex review**. Reconciled issue mappings, removed out-of-scope backend DOT export from M4 (preserving pure client-side DOT generation in TopToolbar), verified bounded CS-007 large-graph layout caps, loaded/total counts, table/graph slice parity, and pagination failure/retry. Proved real CS-021 job cancellation lifecycle (Cancel button -> `cancellation_requested` -> terminal `cancelled` status -> poller cessation -> ARIA live announcement). Verified CS-022 accessibility (keyboard shortcuts Shift+F / F / Esc / + / -, focus mode, semantic landmarks, ARIA live regions, 800x600 reflow, reduced-motion) and CS-006 browser-to-Thonny navigation dispatch in real Windows Google Chrome via CDP and live Thonny Tk cursor positioning at `4.4`. Evidence: `docs/verification/M4.md`.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review | Connected analysis creation/polling, status transitions, cancellation, error toasts, and graph slice pagination to real API client and verified in real Windows workflow. | Codex review |
-| CS-007 | Ready for Codex review | Connected Graphviz DOT export in TopToolbar to real backend `GET /export/dot` endpoint with file download; verified valid digraph syntax. | Codex review |
-| CS-021 | Ready for Codex review | Connected architecture explanation generation in DetailsPanel to real backend `POST /explain` endpoint; rendered structured cards with graceful error handling; verified real cancellation state transitions. | Codex review |
-| CS-022 | Ready for Codex review | Connected editor navigation to real backend `POST /editor/navigate` endpoint with capability token authorization; verified Thonny dispatch/retrieval and 403 unauthorized rejection; verified frontend accessibility (a11y test suite passed). | Codex review |
+| CS-006 | Ready for Codex review (M4) | Real browser + backend + Thonny navigation workflow verified: capability token handoff, immediate address bar scrubbing, node selection, "Open in editor" dispatch, and live Thonny Tk cursor positioning at `4.4` (`calculate_root2`). | None for M4 (Codex review) |
+| CS-007 | Ready for Codex review (M4) | Large-graph layout/render limits, progressive slice loading (`limit: 1000, cursor`), loaded vs. total counts, table/graph slice data parity across successive pages, and error retry without data loss verified. Client-side DOT generation retained in `TopToolbar.jsx`; backend DOT export excluded from M4. | None for M4 (Codex review) |
+| CS-021 | Ready for Codex review (M4) | Real job cancellation lifecycle verified: Cancel button -> `DELETE /api/v1/analyses/{id}` -> `cancellation_requested` -> backend executor worker termination -> terminal `cancelled` state -> poller cessation -> polite cancellation banner announcement. | None for M4 (Codex review) |
+| CS-022 | Ready for Codex review (M4) | Real Windows browser workflow verified: focus mode (`Shift+F` / `Esc`), fit view (`F`), zoom (`+`/`-`), search focus (`Ctrl+K`), ARIA live regions on visible/search counts, accessible toolbar labels, 800x600 responsive reflow, and reduced-motion handling. 103 frontend tests pass. | None for M4 (Codex review) |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -40,6 +40,25 @@ Milestone 4 Antigravity Integration (2026-10-04): **Ready for Codex review**. Fr
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-04 — Antigravity Milestone 4 Corrections Pass
+
+- Addressed all findings from `docs/verification/M4_CODEX_REVIEW_1.md`:
+  - **Issue Mapping & Scope Reconciled:** Corrected issue mapping to CS-006 (Integration & Thonny Navigation), CS-007 (Large Graph Handling & Table Parity), CS-021 (Real Job Cancellation Lifecycle), and CS-022 (Accessibility & Windows Browser Workflow). Removed out-of-scope backend DOT export from M4 (reserved for CS-017 / M7) and preserved pure client-side DOT export in `TopToolbar.jsx`.
+  - **CS-007 Large Graph Behavior & Parity:** Implemented and tested progressive slice loading, loaded vs total entity/relationship counts, table/graph parity across slices, and pagination error/retry handling.
+  - **CS-021 Real Job Cancellation:** Proved real cancellation lifecycle from Cancel button click through `DELETE /api/v1/analyses/{id}` to backend worker termination, terminal `cancelled` state, immediate poller cessation, and cancellation status announcement.
+  - **CS-022 Accessibility & Usability:** Verified keyboard navigation (`Shift+F` focus mode, `F` fit, `Esc` exit/clear, `Ctrl+K` search), ARIA `polite` live regions, 800x600 reflow, and reduced motion in real Windows Google Chrome.
+  - **CS-006 Browser-to-Thonny Roundtrip:** Verified immediate URL credential scrubbing on mount, and source navigation dispatch in real browser delivering to live Thonny Tk text widget cursor `4.4`.
+- Verified all quality and test gates:
+  - Frontend Vitest suite: 103 passed across 10 test files (`npm --prefix frontend test -- --run`).
+  - Backend pytest suite: 189 passed, 1 skipped, 1 warning (85.49% coverage >= 84.00%).
+  - Thonny plugin pytest: 53 passed, 1 skipped (`.venv\Scripts\pytest thonny-plugin -o addopts=""`).
+  - Ruff check & format: 199 files clean.
+  - Mypy: 50 source files clean (0 errors).
+  - Frontend production build: clean build completed in 515ms.
+  - Real Windows Workflow Smoke Test: `docs/verification/M4_real_workflow_smoke.py` passed exit code 0.
+- Updated `docs/verification/M4.md`, `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Marked Milestone 4 as **Ready for Codex review**. Milestone 5 has not been started.
 
 ### 2026-10-04 — Antigravity Milestone 4 Integration & Verification
 

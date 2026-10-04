@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { analysisApi } from '../../api/analysisApi.js'
 import {
   SearchIcon,
   FitIcon,
@@ -43,7 +42,6 @@ export default function TopToolbar({
   focusMode = false,
   onToggleFocusMode = null,
   graph = null,
-  api = analysisApi,
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -112,19 +110,9 @@ export default function TopToolbar({
   }
 
   // Working DOT export action
-  async function handleExportDot() {
+  function handleExportDot() {
     if (!graph) return
-    let dotContent = ''
-    if (analysisId) {
-      try {
-        dotContent = await api.exportDot(analysisId)
-      } catch {
-        // Fallback to client-side generation
-      }
-    }
-    if (!dotContent) {
-      dotContent = generateDot(graph)
-    }
+    const dotContent = generateDot(graph)
     const blob = new Blob([dotContent], { type: 'text/vnd.graphviz' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
