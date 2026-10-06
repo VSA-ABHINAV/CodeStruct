@@ -169,7 +169,7 @@ function App({ api = analysisApi }) {
       })
   }, [analysis.job?.analysis_id, analysis.provenance, api, editorSession])
 
-  return <div className={`app-shell${analysis.graph ? ' app-shell--active' : ''}`}>
+  return <div className={`app-shell${analysis.graph ? ' app-shell--active' : ''}`} data-analysis-id={analysis.job?.analysis_id || ''} data-job-state={analysis.job?.state || ''}>
     {!analysis.graph ? (
       <header className="application-header">
         <div><h1>CodeStruct</h1><p>Analyze an authorized Python project and explore its architecture.</p><p className="version">Version {__CODESTRUCT_VERSION__}</p></div>

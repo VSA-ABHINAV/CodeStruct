@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (M4) | `docs/verification/M4.md` | Safe fail-closed smoke harness, real UI actions via CDP, dense-graph verification, cancellation lifecycle, and clean full gates verified |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review | `docs/verification/M4.md` | Dynamic ports across backend/frontend/Chrome, unbuffered stdout handoff without token persistence, real explorer layout benchmark, exact graph/table identity parity, full cancellation lifecycle, and computed reduced-motion verification |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,14 +18,14 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Codex Review 2 (2026-10-04): **Corrections Completed / Ready for Codex review**. Replaced smoke workspace with disposable unique temp directories, removed all directory deletions of existing repositories, implemented fail-closed assertions, verified real UI navigation/cancellation/accessibility actions via CDP, verified dense-graph layout bounds (<50ms) and table/graph parity, resolved React act warnings and ESLint unused variable, removed blanket Ruff suppressions, and verified all full gates.
+Milestone 4 Antigravity Corrections Pass 4 (2026-10-04): **Ready for Codex review**. All findings from `docs/verification/M4_CODEX_REVIEW_4.md` addressed. Dynamic port allocation used consistently across backend, Vite, and Chrome; unbuffered non-blocking stdout handoff implemented without token persistence; real Architecture Explorer dense-graph layout benchmarked (1.9ms < 500ms bound); exact graph/table identity parity verified; cancellation intermediate and terminal states verified with poller termination; computed reduced-motion styles verified with manual checks marked pending. All quality gates, full backend coverage (85.53%), plugin tests (53 passed), frontend tests (103 passed), and real Windows workflow smoke test passed with 0 errors.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (M4) | Real browser UI action selects `calculate_root2` entity and clicks "Open in editor" button, verified by live Thonny Tk text widget cursor positioned at `4.4` (`calculate_root2`). URL scrubbing verified; capability tokens never logged or persisted. | None (Codex review) |
-| CS-007 | Ready for Codex review (M4) | Verified deterministic dense project (>50 nodes, 186 nodes / 247 edges), bounded synchronous layout (<50ms), table/graph parity across loaded slices and filtered states, and pagination retry without data loss. | None (Codex review) |
-| CS-021 | Ready for Codex review (M4) | Real browser UI clicks "Cancel" button during active uncached analysis, verifying disabled "Stopping…" button state, backend transition through `cancellation_requested` to terminal `cancelled`, UI cancellation banner, and poller stop. | None (Codex review) |
-| CS-022 | Ready for Codex review (M4) | Verified physical keyboard navigation (`Shift+F` focus mode, `Esc`, `F` fit, `Ctrl+K` search), ARIA polite live regions, 800x600 viewport reflow with zero horizontal overflow, and reduced-motion media query emulation. | None (Codex review) |
+| CS-006 | Ready for Codex review | Unbuffered stdout handoff with thread-safe non-blocking queue reader and deadline enforcement; dynamic ports passed to Vite proxy and Chrome; zero token persistence; live Thonny cursor positioned at `4.4`. | Codex review |
+| CS-007 | Ready for Codex review | Real Architecture Explorer dense layout (<500ms bound); exact identity parity between graph slice entities and Accessible Table View rows; paging retry retains loaded items. | Codex review |
+| CS-021 | Ready for Codex review | Responsive UI Cancel button, disabled "Stopping…" state, intermediate `cancellation_requested` API ack, backend terminal `cancelled` state, live ARIA announcement, and stopped poller verified. | Codex review |
+| CS-022 | Ready for Codex review | Computed `animation-duration` and `transition-duration` <= 0.001s under `prefers-reduced-motion: reduce`; 800x600 reflow with zero overflow; ARIA live regions; manual screen-reader checks marked pending. | Codex review |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -40,6 +40,27 @@ Milestone 4 Codex Review 2 (2026-10-04): **Corrections Completed / Ready for Cod
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-04 — Antigravity Milestone 4 Corrections Pass 4 (Codex Review 4)
+
+- Addressed all findings from `docs/verification/M4_CODEX_REVIEW_4.md`:
+  - **Dynamic Ports & Proxy Propagation:** Backend, Vite frontend, and Chrome debugging ports are dynamically selected via `find_free_port()`. Dynamic backend URL is passed to Vite through `VITE_BACKEND_URL` and `CODESTRUCT_BACKEND_URL` env vars. Backend identity and health verified on ephemeral port.
+  - **Unbuffered Stdout Pipe Handoff:** Thonny child process immediately flushes capability URL to stdout (`sys.stdout.flush()`). Parent smoke harness drains and queues lines via daemon reader threads, avoiding Windows pipe deadlocks and blocking `readline()` calls. No capability tokens (`cap_...`) written to disk or logs.
+  - **Real Architecture Explorer Dense Layout Benchmark:** Rendered deterministic dense project (60 classes, 186 nodes, 247 edges) in Architecture Explorer component. Layout bounding box computation measured at 1.9ms (bounded under 500ms).
+  - **Exact Graph / Table Identity Parity:** Compared graph node qualified names with table entity row names; verified exact parity (`graph_table_identity_parity: true`). Verified paging retry retains all 433 loaded rows.
+  - **Full Cancellation Lifecycle Assertions:** UI Cancel click -> disabled "Stopping…" button -> API `cancellation_requested` ack -> backend terminal `cancelled` state -> UI cancellation banner -> poller stopped.
+  - **Computed Reduced-Motion Verification:** Verified computed styles `animation-duration` and `transition-duration` are reduced (`1e-05s`) on explorer elements under `prefers-reduced-motion`. Marked manual screen-reader checks pending.
+- Verified all quality and test gates:
+  - Frontend Vitest suite: 103 passed across 10 test files (`npm --prefix frontend test -- --run`) with 0 warnings.
+  - Frontend ESLint: `npm --prefix frontend run lint` -> 0 errors, 0 warnings.
+  - Frontend production build: `npm --prefix frontend run build` -> `✓ built in 650ms`.
+  - Backend pytest suite: 189 passed, 1 skipped, 1 warning (`pytest -q --cov=backend --cov-report=term-missing --cov-fail-under=84` -> 85.53% coverage).
+  - Thonny plugin pytest: 53 passed, 1 skipped (`pytest thonny-plugin -o addopts=""`).
+  - Ruff check & format: 200 files clean (`ruff check .`, `ruff format --check .`).
+  - Mypy: 50 source files clean (`mypy`).
+  - Real Windows Workflow Smoke Test: `docs/verification/M4_real_workflow_smoke.py` passed exit code 0.
+- Updated `docs/verification/M4.md`, `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Marked Milestone 4 as **Ready for Codex review**. Milestone 5 has not been started.
 
 ### 2026-10-04 — Antigravity Milestone 4 Corrections Pass 2 (Codex Review 2)
 

@@ -52,7 +52,7 @@ export class AnalysisPoller {
       try {
         const current = await this.api.status(analysisId)
         if (generation !== this.generation) return
-        notify({ job: current, error: null })
+        notify({ job: current, graphLoading: false, error: null })
         this.retries = 0
         if (RESULT_STATES.has(current.state)) {
           notify({ job: current, graphLoading: true, error: null })
