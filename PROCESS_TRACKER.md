@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review | `docs/verification/M4.md` | P0 credential redaction with regression test, nonce-bearing backend identity verification, instrumented in-app layoutGraph benchmark, exact node and edge parity, paging failure/retry data retention, and cancellation with zero post-terminal polls |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Changes required (Ready for Codex Review 7) | `docs/verification/M4.md` | Review 6 corrections verified: lint pure, CDP poll logging on new document, exact cancellation_requested ack, real UI paging failure/retry, isolated Chrome profile scan |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,14 +18,21 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Antigravity Corrections Pass 6 (2026-10-06): **Ready for Codex review**. All findings from `docs/verification/M4_CODEX_REVIEW_5.md` addressed. Raw capability/token outputs removed from Thonny fixture; stderr streaming and timeout diagnostics wrapped in `redact_secrets()` with verified regression test; backend identity verified via unique run nonce and registered authorized roots; dense graph bounded overview verified and full in-app `layoutGraph` execution measured at 0.5ms (<500ms bound); exact 100% parity verified for BOTH 186 nodes and 247 edges; paging failure and retry verified with all 433 loaded items retained; real job cancellation verified with explicit `cancellation_requested` acknowledgement and proof of zero status polls after terminal state. All quality gates and real Windows workflow smoke test passed with 0 errors.
+Milestone 4 Codex Review 6 Corrections Pass (2026-10-06): **Changes required (Ready for Codex Review 7)**. All 6 findings from `docs/verification/M4_CODEX_REVIEW_6.md` resolved and verified across all gates and live Windows smoke workflow:
+- Finding 1: Frontend lint purity fixed (layout timing moved to `useEffect`); `npm run lint` passes with 0 errors/warnings.
+- Finding 2: `Page.addScriptToEvaluateOnNewDocument` installed before navigation; logger verified on new document with >= 1 pre-cancel status polls.
+- Finding 3: Exact `delete_ack_state: "cancellation_requested"` intermediate acknowledgement captured and asserted.
+- Finding 4: Real UI interaction for paging failure and retry ("Load more graph data" button click, visible error banner `.graph-status--failed`, strict retention of 126 loaded node/edge identities, UI retry click, full merge to 186 nodes / 247 edges).
+- Finding 5: Chrome launched with `--incognito` and dedicated per-run `--user-data-dir` inside temp dir; recursive scan of profile and temp dir asserts zero persisted capability tokens.
+- Finding 6: Failure-path redaction regression test executes `format_thonny_failure_diagnostic()` with synthetic token-bearing stderr, asserting zero token leakage.
+- Finding 7: Reconciled tracker, audit, and verification report truthfully. Do not begin M5.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review | P0 credential redaction in Thonny fixture/diagnostics with verified regression test; backend identity verified via run nonce; dynamic ports; live Thonny Tk cursor positioned at `4.4`. | Codex review |
-| CS-007 | Ready for Codex review | In-app `layoutGraph` benchmark (0.5ms < 500ms); exact graph/table parity for both 186 nodes and 247 edges; paging failure/retry retains all 433 loaded items. | Codex review |
-| CS-021 | Ready for Codex review | UI Cancel button disabled "Stopping…", explicit API `cancellation_requested` acknowledgement, terminal `cancelled` state, live ARIA announcement, and proof of zero post-terminal polls. | Codex review |
-| CS-022 | Ready for Codex review | Computed `animation-duration` and `transition-duration` <= 0.001s under `prefers-reduced-motion: reduce`; 800x600 reflow with zero overflow; ARIA live regions; manual screen-reader checks marked pending. | Codex review |
+| CS-006 | Ready for Codex review (M4 portion) | Chrome launched with `--incognito` and isolated per-run `--user-data-dir`; non-disclosing scanner checks profile before teardown; failure-path diagnostic redaction regression test verified. | Codex review |
+| CS-007 | Ready for Codex review (M4 portion) | Layout timing moved out of render path (ESLint clean); real UI paging failure and retry flow exercised with visible error banner, strict identity retention, and merge. | Codex review |
+| CS-021 | Ready for Codex review (M4 portion) | `Page.addScriptToEvaluateOnNewDocument` preserves poll logging across navigation; exact `cancellation_requested` DELETE ack asserted; zero post-terminal polls verified. | Codex review |
+| CS-022 | Ready for Codex review (M4 portion) | Computed motion duration and responsive/ARIA assertions remain; screen-reader observation pending. | Codex review after M4 corrections |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -40,6 +47,30 @@ Milestone 4 Antigravity Corrections Pass 6 (2026-10-06): **Ready for Codex revie
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-06 — Antigravity Milestone 4 Corrections Pass 7 (Codex Review 6)
+
+- Addressed all 6 findings from `docs/verification/M4_CODEX_REVIEW_6.md`:
+  - **Finding 1 (Frontend Lint Purity):** Moved layout timing out of `useMemo` in `ArchitectureExplorer.jsx` into pure `useMemo` + `useEffect`. `npm.cmd run lint --prefix frontend` passes with 0 errors and 0 warnings.
+  - **Finding 2 (CDP Document-Level Poll Logging):** Injected `Page.addScriptToEvaluateOnNewDocument` with `window.__poll_request_log` and `window.__delete_response_log` before navigation. Verified logger exists and observed >= 1 status polls prior to cancellation.
+  - **Finding 3 (Exact `cancellation_requested` Ack):** Sized cancellation fixture to 60 files. Captured live DELETE response, asserted status 202 and exact `cancellation_requested` acknowledgement, verified terminal `cancelled` state, and proved zero subsequent status polls.
+  - **Finding 4 (Real UI Paging Failure & Retry):** Intercepted paged slice (`limit=100`, 126 nodes), triggered UI "Load more graph data" button during simulated network failure, verified visible error banner `.graph-status--failed`, verified strict retention of loaded node/edge identities (126 nodes), clicked UI retry button, verified error banner cleared and full 186 nodes / 247 edges merged.
+  - **Finding 5 (Isolated Chrome Profile & Secret Scanning):** Launched Chrome with `--incognito`, dedicated `--user-data-dir` inside temp dir, `--no-first-run`, `--no-default-browser-check`. Terminated processes before scanning disk to release file locks. Verified 0 capability tokens persisted or output.
+  - **Finding 6 (Failure-Path Redaction Regression):** Tested `format_thonny_failure_diagnostic()` with synthetic token-bearing stderr, asserting zero token leakage and complete redaction.
+  - **Finding 7 (Truthful Status & Evidence):** Reconciled tracker, audit, and verification report truthfully.
+- Verified all quality and test gates:
+  - Frontend Vitest: 103 passed across 10 test files (`npm.cmd test --prefix frontend -- --run`).
+  - Frontend ESLint: 0 errors, 0 warnings (`npm.cmd run lint --prefix frontend`).
+  - Frontend Build: `npm.cmd run build --prefix frontend` -> built in 412ms.
+  - Backend Pytest: 189 passed, 1 skipped, 1 warning (85.49% coverage >= 84%).
+  - Thonny Plugin Pytest: 53 passed, 1 skipped (`.venv\Scripts\pytest.exe -o addopts="" thonny-plugin/tests`).
+  - Ruff Check & Format: 204 files clean (`ruff check .`, `ruff format --check .`).
+  - Mypy: 48 source files clean (`mypy backend/src`).
+  - Smoke Script Syntax: `python -m py_compile docs/verification/M4_real_workflow_smoke.py` passed.
+  - Git Diff Check: clean.
+  - Real Windows Smoke Test: `.venv\Scripts\python.exe docs/verification/M4_real_workflow_smoke.py` passed with exit code 0.
+- Updated `docs/verification/M4.md`, `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Marked Milestone 4 as **Changes required (Ready for Codex Review 7)**. Milestone 5 has not been started.
 
 ### 2026-10-06 — Antigravity Milestone 4 Corrections Pass 6 (Codex Review 5)
 

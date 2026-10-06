@@ -88,16 +88,20 @@ export default function ArchitectureExplorer({
     () => (isLarge && !renderLargeGraph ? overviewGraph(withView) : withView),
     [withView, isLarge, renderLargeGraph]
   )
-  const positioned = useMemo(() => {
-    const t0 = typeof performance !== 'undefined' ? performance.now() : 0
-    const res = layoutGraph(presentation.nodes, presentation.edges)
-    const t1 = typeof performance !== 'undefined' ? performance.now() : 0
+  const positioned = useMemo(
+    () => layoutGraph(presentation.nodes, presentation.edges),
+    [presentation.nodes, presentation.edges]
+  )
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
+      const t0 = typeof performance !== 'undefined' ? performance.now() : 0
+      layoutGraph(presentation.nodes, presentation.edges)
+      const t1 = typeof performance !== 'undefined' ? performance.now() : 0
       window.__codestruct_last_layout_ms = t1 - t0
       window.__codestruct_layout_node_count = presentation.nodes.length
       window.__codestruct_layout_edge_count = presentation.edges.length
     }
-    return res
   }, [presentation.nodes, presentation.edges])
   const details = useMemo(() => selectElementDetails(normalized, selection), [normalized, selection])
 

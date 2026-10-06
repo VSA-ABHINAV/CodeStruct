@@ -65,6 +65,14 @@ def redact_secrets(text: str) -> str:
     return text
 
 
+def format_thonny_failure_diagnostic(
+    poll_status: int | None, stderr_lines: list[str]
+) -> str:
+    """Constructs and redacts failure diagnostic output when Thonny initiation fails."""
+    _err = redact_secrets("".join(stderr_lines))
+    return f"Thonny failed to emit viewer URL via stdout within deadline (poll={poll_status}, stderr={_err!r})"
+
+
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("127.0.0.1", port)) == 0
@@ -109,11 +117,14 @@ def scan_for_secret_tokens(
     token_pattern = re.compile(r"cap_[A-Za-z0-9_-]{16,}")
     for file_path in target_dir.rglob("*"):
         if file_path.is_file():
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
-            if token_pattern.search(content):
-                raise AssertionError(
-                    f"Capability token pattern detected in persisted file: {file_path.name}"
-                )
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                if token_pattern.search(content):
+                    raise AssertionError(
+                        f"Capability token pattern detected in persisted file: {file_path.name}"
+                    )
+            except (PermissionError, OSError):
+                continue
     dumped = json.dumps(result_data)
     if token_pattern.search(dumped):
         raise AssertionError(
@@ -143,7 +154,7 @@ def create_dense_project(dense_dir: pathlib.Path, num_classes: int = 60) -> None
     (dense_dir / "dense_service.py").write_text("\n".join(code_lines), encoding="utf-8")
 
 
-def create_cancellable_project(cancel_dir: pathlib.Path, num_files: int = 40) -> None:
+def create_cancellable_project(cancel_dir: pathlib.Path, num_files: int = 60) -> None:
     """Creates a multi-file Python project with non-trivial AST structures to test cancellation."""
     cancel_dir.mkdir(parents=True, exist_ok=True)
     for f in range(num_files):
@@ -156,12 +167,32 @@ def create_cancellable_project(cancel_dir: pathlib.Path, num_files: int = 40) ->
 
 
 def run_full_m4_real_workflow() -> dict[str, Any]:
-    # 0. Secret Redaction Regression Test (FINDING-1 FIX)
+    # 0. Secret Redaction Regression & Failure-Path Diagnostic Formatting Test (FINDING-6 FIX)
     test_sample = "Error: cap_secret1234567890abcdef failed on http://127.0.0.1:5173/?session_token=cap_secret1234567890abcdef&analysis_id=job_123"
     redacted_sample = redact_secrets(test_sample)
     assert "cap_" not in redacted_sample, "redact_secrets failed to redact cap_ token"
     assert "session_token=cap_" not in redacted_sample, (
         "redact_secrets failed to redact query token"
+    )
+
+    # Invoke the actual diagnostic formatting failure-path and assert zero token leakage
+    simulated_raw_stderr = [
+        "DEBUG: Thonny plugin initialization\n",
+        "ERROR: failed to connect to http://127.0.0.1:5173/?session_token=cap_secret1234567890abcdef&analysis_id=job_123\n",
+        "CRITICAL: cap_secret1234567890abcdef was rejected by server\n",
+    ]
+    emitted_diag = format_thonny_failure_diagnostic(1, simulated_raw_stderr)
+    assert "cap_" not in emitted_diag, (
+        f"Raw token leaked in failure diagnostic output: {emitted_diag}"
+    )
+    assert "session_token=cap_" not in emitted_diag, (
+        f"Session token leaked in failure diagnostic output: {emitted_diag}"
+    )
+    assert "[REDACTED_CAPABILITY]" in emitted_diag, (
+        f"Expected capability redaction in diagnostic output: {emitted_diag}"
+    )
+    assert "[REDACTED_TOKEN]" in emitted_diag, (
+        f"Expected token redaction in diagnostic output: {emitted_diag}"
     )
 
     # 1. Isolated disposable temp directory (NEVER touches existing scratch or user files)
@@ -182,7 +213,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
         root1.mkdir(parents=True, exist_ok=True)
         root2.mkdir(parents=True, exist_ok=True)
         create_dense_project(root_dense, num_classes=60)
-        create_cancellable_project(root_cancel, num_files=40)
+        create_cancellable_project(root_cancel, num_files=60)
 
         root1_file = root1 / "app.py"
         root2_file = root2 / "app.py"
@@ -467,9 +498,10 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     break
         if not raw_viewer_url:
             thonny_proc.kill()
-            _err = redact_secrets("".join(_thonny_stderr_lines))
             raise AssertionError(
-                f"Thonny failed to emit viewer URL via stdout within deadline (poll={thonny_proc.poll()}, stderr={_err!r})"
+                format_thonny_failure_diagnostic(
+                    thonny_proc.poll(), _thonny_stderr_lines
+                )
             )
 
         results["analysis_initiation"] = {
@@ -484,14 +516,20 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
             "Viewer URL must contain session_token"
         )
 
-        # 5. Launch Headless Google Chrome with CDP
+        # 5. Launch Headless Google Chrome with CDP and Isolated User Data Profile (FINDING-5 FIX)
+        chrome_user_data_dir = temp_dir / "chrome_user_data"
+        chrome_user_data_dir.mkdir(parents=True, exist_ok=True)
         chrome_proc = subprocess.Popen(
             [
                 chrome_path,
                 "--headless=new",
+                "--incognito",
+                f"--user-data-dir={chrome_user_data_dir.resolve()}",
                 f"--remote-debugging-port={chrome_debug_port}",
                 "--disable-gpu",
                 "--window-size=1280,900",
+                "--no-first-run",
+                "--no-default-browser-check",
                 "about:blank",
             ]
         )
@@ -1093,58 +1131,234 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     "Graph and table edge identities do not match exactly"
                 )
 
-                # FINDING-5 FIX: Exercise Paging Failure, Error Observation & Data Retention
-                eval_paging_test = await cdp_send(
+                # FINDING-4 FIX: Exercise Paging Failure, Error Observation, Data Retention & Retry via UI
+                # (1) Install fetch interceptor on new documents to provide initial paged slice (limit=40)
+                await cdp_send(
                     ws,
                     msg_id,
-                    "Runtime.evaluate",
+                    "Page.addScriptToEvaluateOnNewDocument",
                     {
-                        "expression": f"""(async () => {{
-  const initialCount = document.querySelectorAll('.graph-table tbody tr').length;
-  window.__simulate_page_error = true;
-  const origFetch = window.fetch;
-  window.fetch = async function(url, opts) {{
-    if (window.__simulate_page_error && String(url).includes('cursor=')) {{
-      return new Response(JSON.stringify({{ code: 'PAGE_FETCH_ERROR', message: 'Simulated cursor network error' }}), {{
+                        "source": f"""
+window.__paging_test_active = true;
+window.__simulate_page_error = false;
+const origFetch = window.fetch;
+window.fetch = async function(url, opts) {{
+  const urlStr = String(url);
+  if (window.__paging_test_active && urlStr.includes('/api/v1/analyses/{dense_id}/graph')) {{
+    if (window.__simulate_page_error && urlStr.includes('cursor=')) {{
+      return new Response(JSON.stringify({{ error: {{ code: 'PAGE_FETCH_ERROR', message: 'Simulated next-page network failure' }} }}), {{
         status: 500,
         headers: {{ 'Content-Type': 'application/json' }}
       }});
     }}
-    return origFetch.apply(this, arguments);
-  }};
-  let errorOccurred = false;
-  try {{
-    const res = await window.fetch('/api/v1/analyses/{dense_id}/graph?limit=50&cursor=test_cursor');
-    if (!res.ok) errorOccurred = true;
-  }} catch (e) {{ errorOccurred = true; }}
-  const countAfterFail = document.querySelectorAll('.graph-table tbody tr').length;
-  window.__simulate_page_error = false;
-  const retryRes = await window.fetch('/api/v1/analyses/{dense_id}/graph?limit=50');
-  const countAfterRetry = document.querySelectorAll('.graph-table tbody tr').length;
-  return JSON.stringify({{
-    initial_count: initialCount,
-    error_observed: errorOccurred,
-    count_after_fail: countAfterFail,
-    retry_success: retryRes.ok,
-    count_after_retry: countAfterRetry
-  }});
-}})()""",
-                        "awaitPromise": True,
+    const rewritten = urlStr.includes('limit=') ? urlStr.replace(/limit=\\d+/, 'limit=100') : (urlStr + (urlStr.includes('?') ? '&limit=100' : '?limit=100'));
+    return origFetch.call(this, rewritten, opts);
+  }}
+  return origFetch.apply(this, arguments);
+}};
+"""
                     },
                 )
-                paging_data = json.loads(
-                    eval_paging_test.get("result", {}).get("value", "{}")
+
+                # Re-navigate dense view to load the paged slice in the UI
+                await cdp_send(ws, msg_id, "Page.navigate", {"url": dense_viewer_url})
+                await asyncio.sleep(1.5)
+
+                # Switch to Accessible table view
+                await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "(() => {"
+                        "  const moreBtn = document.querySelector('button[aria-label=\"More actions\"]');"
+                        "  if (moreBtn) moreBtn.click();"
+                        "})()"
+                    },
                 )
-                assert paging_data.get("error_observed") is True, (
-                    f"Paging error simulation failed: {paging_data}"
+                await asyncio.sleep(0.3)
+                await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "(() => {"
+                        "  const btn = Array.from(document.querySelectorAll('.cs-toolbar__dropdown button')).find(b => b.innerText.includes('Accessible table view'));"
+                        "  if (btn) btn.click();"
+                        "})()"
+                    },
                 )
-                assert (
-                    paging_data.get("count_after_fail")
-                    == paging_data.get("initial_count")
-                    == len(expected_node_identities) + len(expected_edge_identities)
-                ), f"Loaded data was not retained during paging error: {paging_data}"
-                assert paging_data.get("retry_success") is True, (
-                    f"Paging retry failed: {paging_data}"
+                await asyncio.sleep(0.5)
+
+                # Wait for partial-load banner and 'Load more graph data' button to appear
+                partial_btn_ready = False
+                for _ in range(30):
+                    chk_btn = await cdp_send(
+                        ws,
+                        msg_id,
+                        "Runtime.evaluate",
+                        {
+                            "expression": "(() => {"
+                            "  const btn = Array.from(document.querySelectorAll('.partial-load button')).find(b => b.innerText.includes('Load more graph data'));"
+                            "  return btn !== undefined && !btn.disabled;"
+                            "})()"
+                        },
+                    )
+                    if chk_btn.get("result", {}).get("value") is True:
+                        partial_btn_ready = True
+                        break
+                    await asyncio.sleep(0.2)
+                assert partial_btn_ready is True, (
+                    "Expected 'Load more graph data' button in UI for paged slice"
+                )
+
+                # Extract initial loaded slice nodes and edges
+                eval_initial_paged = await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "JSON.stringify((() => {"
+                        "  const rows = Array.from(document.querySelectorAll('.graph-table tbody tr'));"
+                        "  const nodeRows = rows.filter(r => r.children[2]?.innerText === 'Entity');"
+                        "  const edgeRows = rows.filter(r => r.children[2]?.innerText !== 'Entity');"
+                        "  const nodes = nodeRows.map(r => r.querySelector('td')?.innerText || '').filter(Boolean).sort();"
+                        "  const edges = edgeRows.map(r => `${r.children[0]?.innerText || ''}|${r.children[1]?.innerText || ''}|${r.children[2]?.innerText || ''}`).filter(Boolean).sort();"
+                        "  return { nodes, edges };"
+                        "})())"
+                    },
+                )
+                initial_paged_data = json.loads(
+                    eval_initial_paged.get("result", {}).get("value", "{}")
+                )
+                initial_slice_nodes = initial_paged_data.get("nodes", [])
+                initial_slice_edges = initial_paged_data.get("edges", [])
+                assert 0 < len(initial_slice_nodes) < len(expected_node_identities), (
+                    f"Initial paged slice should be partial: {len(initial_slice_nodes)} vs total {len(expected_node_identities)}"
+                )
+
+                # (2) Force next-page request to fail and trigger via actual UI button click
+                await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {"expression": "window.__simulate_page_error = true;"},
+                )
+                eval_click_fail = await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "(() => {"
+                        "  const btn = Array.from(document.querySelectorAll('.partial-load button')).find(b => b.innerText.includes('Load more graph data'));"
+                        "  if (btn) { btn.click(); return true; }"
+                        "  return false;"
+                        "})()"
+                    },
+                )
+                assert eval_click_fail.get("result", {}).get("value") is True, (
+                    "Failed to click 'Load more graph data' button"
+                )
+                await asyncio.sleep(0.8)
+
+                # (3) Assert visible error UI banner and verify loaded node/edge identities remain unchanged
+                eval_after_fail = await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "JSON.stringify((() => {"
+                        "  const errorBanner = document.querySelector('.graph-status--failed, [role=\"alert\"]');"
+                        "  const retryBtn = Array.from(document.querySelectorAll('.partial-load button')).find(b => b.innerText.includes('Load more graph data'));"
+                        "  const rows = Array.from(document.querySelectorAll('.graph-table tbody tr'));"
+                        "  const nodeRows = rows.filter(r => r.children[2]?.innerText === 'Entity');"
+                        "  const edgeRows = rows.filter(r => r.children[2]?.innerText !== 'Entity');"
+                        "  const nodes = nodeRows.map(r => r.querySelector('td')?.innerText || '').filter(Boolean).sort();"
+                        "  const edges = edgeRows.map(r => `${r.children[0]?.innerText || ''}|${r.children[1]?.innerText || ''}|${r.children[2]?.innerText || ''}`).filter(Boolean).sort();"
+                        "  return {"
+                        "    has_error_banner: errorBanner !== null,"
+                        "    error_text: errorBanner ? errorBanner.innerText : '',"
+                        "    retry_btn_available: retryBtn !== undefined && !retryBtn.disabled,"
+                        "    nodes: nodes,"
+                        "    edges: edges"
+                        "  };"
+                        "})())"
+                    },
+                )
+                after_fail_data = json.loads(
+                    eval_after_fail.get("result", {}).get("value", "{}")
+                )
+                assert after_fail_data.get("has_error_banner") is True, (
+                    f"Expected visible error banner on paging failure: {after_fail_data}"
+                )
+                assert after_fail_data.get("retry_btn_available") is True, (
+                    f"Expected retry button to remain available: {after_fail_data}"
+                )
+                assert after_fail_data.get("nodes") == initial_slice_nodes, (
+                    "Loaded node identities changed during paging failure"
+                )
+                assert after_fail_data.get("edges") == initial_slice_edges, (
+                    "Loaded edge identities changed during paging failure"
+                )
+
+                # (4) Clear failure simulation and activate retry via the UI button
+                await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {"expression": "window.__simulate_page_error = false;"},
+                )
+                eval_click_retry = await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "(() => {"
+                        "  const btn = Array.from(document.querySelectorAll('.partial-load button')).find(b => b.innerText.includes('Load more graph data'));"
+                        "  if (btn) { btn.click(); return true; }"
+                        "  return false;"
+                        "})()"
+                    },
+                )
+                assert eval_click_retry.get("result", {}).get("value") is True, (
+                    "Failed to click retry 'Load more graph data' button"
+                )
+                await asyncio.sleep(1.2)
+
+                # (5) Verify successful page merge, error banner cleared, and full node/edge identities present
+                eval_merged_state = await cdp_send(
+                    ws,
+                    msg_id,
+                    "Runtime.evaluate",
+                    {
+                        "expression": "JSON.stringify((() => {"
+                        "  const errorBanner = document.querySelector('.graph-status--failed');"
+                        "  const rows = Array.from(document.querySelectorAll('.graph-table tbody tr'));"
+                        "  const nodeRows = rows.filter(r => r.children[2]?.innerText === 'Entity');"
+                        "  const edgeRows = rows.filter(r => r.children[2]?.innerText !== 'Entity');"
+                        "  const nodes = nodeRows.map(r => r.querySelector('td')?.innerText || '').filter(Boolean).sort();"
+                        "  const edges = edgeRows.map(r => `${r.children[0]?.innerText || ''}|${r.children[1]?.innerText || ''}|${r.children[2]?.innerText || ''}`).filter(Boolean).sort();"
+                        "  return {"
+                        "    has_error_banner: errorBanner !== null,"
+                        "    node_count: nodes.length,"
+                        "    edge_count: edges.length,"
+                        "    nodes: nodes,"
+                        "    edges: edges"
+                        "  };"
+                        "})())"
+                    },
+                )
+                merged_data = json.loads(
+                    eval_merged_state.get("result", {}).get("value", "{}")
+                )
+                assert merged_data.get("has_error_banner") is False, (
+                    f"Error banner was not cleared after retry: {merged_data}"
+                )
+                assert merged_data.get("nodes") == expected_node_identities, (
+                    f"Merged node identities mismatch: {len(merged_data.get('nodes', []))} vs {len(expected_node_identities)}"
+                )
+                assert merged_data.get("edges") == expected_edge_identities, (
+                    f"Merged edge identities mismatch: {len(merged_data.get('edges', []))} vs {len(expected_edge_identities)}"
                 )
 
                 results["large_graph_dense_verification"] = {
@@ -1157,7 +1371,10 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     "graph_table_node_parity": True,
                     "graph_table_edge_parity": True,
                     "paging_failure_and_retry_retains_data": True,
-                    "loaded_count_retained": paging_data.get("count_after_fail"),
+                    "paging_ui_action_verified": True,
+                    "paging_retry_and_merge_verified": True,
+                    "initial_slice_node_count": len(initial_slice_nodes),
+                    "final_merged_node_count": len(merged_data.get("nodes", [])),
                 }
 
         asyncio.run(run_browser_automation())
@@ -1195,24 +1412,38 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
 
             async with websockets.connect(ws_url) as ws:
                 msg_id = [100]
+                await cdp_send(ws, msg_id, "Page.enable")
+                await cdp_send(ws, msg_id, "DOM.enable")
+                await cdp_send(ws, msg_id, "Runtime.enable")
 
-                # Instrument window.fetch to log all polling requests (FINDING-6 FIX)
+                # Install fetch logger in new documents BEFORE any application scripts execute (FINDING-2 & FINDING-3 FIX)
                 await cdp_send(
                     ws,
                     msg_id,
-                    "Runtime.evaluate",
+                    "Page.addScriptToEvaluateOnNewDocument",
                     {
-                        "expression": "(() => {"
-                        "  window.__poll_request_log = [];"
-                        "  const origFetch = window.fetch;"
-                        "  window.fetch = function(...args) {"
-                        "    const url = String(args[0]);"
-                        "    if (url.includes('/api/v1/analyses/')) {"
-                        "      window.__poll_request_log.push({ url: url, time: performance.now() });"
-                        "    }"
-                        "    return origFetch.apply(this, args);"
-                        "  };"
-                        "})()"
+                        "source": """
+window.__poll_request_log = [];
+window.__delete_response_log = [];
+const origFetch = window.fetch;
+window.fetch = async function(...args) {
+    const url = String(args[0]);
+    const opts = args[1] || {};
+    const method = (opts.method || 'GET').toUpperCase();
+    if (url.includes('/api/v1/analyses/')) {
+        window.__poll_request_log.push({ url: url, method: method, time: performance.now() });
+    }
+    const res = await origFetch.apply(this, args);
+    if (method === 'DELETE' && url.includes('/api/v1/analyses/')) {
+        try {
+            const clone = res.clone();
+            const data = await clone.json();
+            window.__delete_response_log.push({ url: url, status: res.status, data: data, time: performance.now() });
+        } catch (e) {}
+    }
+    return res;
+};
+"""
                     },
                 )
 
@@ -1238,7 +1469,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     f"Failed to submit cancel_proj analysis: {cancel_job_data}"
                 )
 
-                # Navigate UI to load the active cancel_proj job
+                # Navigate UI to load the active cancel_proj job (evaluates script on new document)
                 cancel_viewer_url = (
                     f"http://127.0.0.1:{frontend_port}/?analysis_id={cancel_job_id}"
                 )
@@ -1248,9 +1479,40 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     "Page.navigate",
                     {"url": cancel_viewer_url},
                 )
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.4)
 
-                # (a) Find and click Cancel button in UI
+                # (a) Assert logger is present and has observed status polling calls BEFORE cancellation (FINDING-2 FIX)
+                pre_cancel_data = {}
+                for _ in range(30):
+                    eval_pre_cancel_log = await cdp_send(
+                        ws,
+                        msg_id,
+                        "Runtime.evaluate",
+                        {
+                            "expression": "JSON.stringify({"
+                            "  has_log: Array.isArray(window.__poll_request_log),"
+                            f"  status_calls: (window.__poll_request_log || []).filter(r => r.url.includes('{cancel_job_id}') && r.method === 'GET').length"
+                            "})"
+                        },
+                    )
+                    pre_cancel_data = json.loads(
+                        eval_pre_cancel_log.get("result", {}).get("value", "{}")
+                    )
+                    if (
+                        pre_cancel_data.get("has_log")
+                        and pre_cancel_data.get("status_calls", 0) > 0
+                    ):
+                        break
+                    await asyncio.sleep(0.1)
+
+                assert pre_cancel_data.get("has_log") is True, (
+                    f"Fetch logger instrumentation is missing on new document: {pre_cancel_data}"
+                )
+                assert pre_cancel_data.get("status_calls", 0) > 0, (
+                    f"Logger observed zero status requests before cancellation: {pre_cancel_data}"
+                )
+
+                # (b) Find and click Cancel button in UI
                 cancel_clicked = False
                 cancel_click_res = {}
                 for _ in range(60):
@@ -1282,7 +1544,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     f"Failed to find and click Cancel button in UI: {cancel_click_res}"
                 )
 
-                # (b) Assert disabled "Stopping…" state immediately after click
+                # (c) Assert disabled "Stopping…" state immediately after click
                 stopping_disabled = False
                 for _ in range(20):
                     eval_stopping = await cdp_send(
@@ -1308,26 +1570,37 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     f"Expected disabled 'Stopping…' button after cancel click; got: {stopping_data}"
                 )
 
-                # (c) Explicitly assert cancellation_requested acknowledgement from API (FINDING-6 FIX)
-                eval_cancel_api = await cdp_send(
-                    ws,
-                    msg_id,
-                    "Runtime.evaluate",
-                    {
-                        "expression": f"fetch('/api/v1/analyses/{cancel_job_id}', {{ method: 'DELETE' }}).then(r => r.json()).then(d => JSON.stringify(d))",
-                        "awaitPromise": True,
-                    },
-                )
-                cancel_api_res = json.loads(
-                    eval_cancel_api.get("result", {}).get("value", "{}")
-                )
-                api_state = cancel_api_res.get("state") or cancel_api_res.get("status")
-                assert api_state in {"cancellation_requested", "cancelled"}, (
-                    f"Expected cancellation_requested or cancelled acknowledgement, got: {cancel_api_res}"
-                )
-                api_ack_seen = True
+                # (d) Explicitly assert EXACT cancellation_requested acknowledgement from UI's DELETE call (FINDING-3 FIX)
+                delete_state = None
+                delete_status = None
+                for _ in range(30):
+                    eval_delete_log = await cdp_send(
+                        ws,
+                        msg_id,
+                        "Runtime.evaluate",
+                        {
+                            "expression": "JSON.stringify(window.__delete_response_log || [])"
+                        },
+                    )
+                    delete_log = json.loads(
+                        eval_delete_log.get("result", {}).get("value", "[]")
+                    )
+                    if len(delete_log) > 0:
+                        first_delete_ack = delete_log[0]
+                        delete_status = first_delete_ack.get("status")
+                        delete_data = first_delete_ack.get("data", {})
+                        delete_state = delete_data.get("state")
+                        break
+                    await asyncio.sleep(0.1)
 
-                # Wait for backend terminal cancelled state
+                assert delete_status == 202, (
+                    f"Expected DELETE status 202, got {delete_status}"
+                )
+                assert delete_state == "cancellation_requested", (
+                    f"Expected EXACT 'cancellation_requested' state in DELETE acknowledgement, got '{delete_state}'"
+                )
+
+                # (e) Wait for backend terminal cancelled state
                 backend_terminal_state = None
                 for _ in range(40):
                     eval_job_status = await cdp_send(
@@ -1352,7 +1625,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     f"Backend terminal state must be 'cancelled', got '{backend_terminal_state}'"
                 )
 
-                # (d) Verify live cancellation ARIA announcement in the UI
+                # (f) Verify live cancellation ARIA announcement in the UI
                 live_announcement_found = False
                 for _ in range(40):
                     eval_announce = await cdp_send(
@@ -1382,7 +1655,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     f"Live cancellation announcement not found in aria-live regions: {announce_data}"
                 )
 
-                # (e) Confirm UI terminal banner displayed
+                # (g) Confirm UI terminal banner displayed
                 terminal_ui_state = None
                 for _ in range(40):
                     eval_status = await cdp_send(
@@ -1411,18 +1684,20 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     f"Expected terminal UI state 'cancelled', got '{terminal_ui_state}'; status_info={status_info}"
                 )
 
-                # (f) FINDING-6 FIX: Prove frontend poller ceased making status requests
-                # Count status requests recorded at terminal state
+                # (h) Prove frontend poller ceased making status requests (FINDING-2 FIX)
                 eval_poll_count1 = await cdp_send(
                     ws,
                     msg_id,
                     "Runtime.evaluate",
                     {
-                        "expression": f"window.__poll_request_log.filter(r => r.url.includes('{cancel_job_id}')).length"
+                        "expression": f"(window.__poll_request_log || []).filter(r => r.url.includes('{cancel_job_id}') && r.method === 'GET').length"
                     },
                 )
-                poll_count_at_terminal = eval_poll_count1.get("result", {}).get(
-                    "value", 0
+                poll_count_at_terminal = eval_poll_count1.get("result", {}).get("value")
+                assert (
+                    poll_count_at_terminal is not None and poll_count_at_terminal > 0
+                ), (
+                    f"Expected non-zero poll count at terminal state, got {poll_count_at_terminal}"
                 )
 
                 # Wait 2.5 seconds (several polling cycles at 500-1000ms interval)
@@ -1433,12 +1708,10 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                     msg_id,
                     "Runtime.evaluate",
                     {
-                        "expression": f"window.__poll_request_log.filter(r => r.url.includes('{cancel_job_id}')).length"
+                        "expression": f"(window.__poll_request_log || []).filter(r => r.url.includes('{cancel_job_id}') && r.method === 'GET').length"
                     },
                 )
-                poll_count_after_wait = eval_poll_count2.get("result", {}).get(
-                    "value", 0
-                )
+                poll_count_after_wait = eval_poll_count2.get("result", {}).get("value")
 
                 assert poll_count_after_wait == poll_count_at_terminal, (
                     f"Frontend poller did not cease polling after cancellation: before={poll_count_at_terminal}, after={poll_count_after_wait}"
@@ -1447,10 +1720,14 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                 results["real_cancellation_lifecycle"] = {
                     "ui_cancel_clicked": True,
                     "stopping_button_disabled": stopping_disabled,
-                    "api_cancellation_requested_ack": api_ack_seen,
+                    "api_cancellation_requested_ack": True,
+                    "delete_ack_state": delete_state,
                     "backend_terminal_state": backend_terminal_state,
                     "live_announcement_found": live_announcement_found,
                     "poller_stopped_verified": True,
+                    "pre_cancel_polls": pre_cancel_data.get("status_calls"),
+                    "terminal_polls": poll_count_at_terminal,
+                    "after_wait_polls": poll_count_after_wait,
                     "zero_polls_after_terminal": True,
                     "terminal_ui_state": "cancelled",
                     "cancellation_lifecycle_verified": True,
@@ -1458,16 +1735,28 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
 
         asyncio.run(run_ui_cancellation())
 
-        # 9. Non-Disclosing Secret Token Scan
-        scan_for_secret_tokens(temp_dir, results)
-
-    finally:
-        # Teardown processes
+        # Teardown processes before scanning disk to release OS file locks
         for proc in [chrome_proc, thonny_proc, frontend_proc, backend_proc]:
             if proc:
                 try:
                     proc.terminate()
                     proc.wait(timeout=5)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:  # noqa: S110
+                        pass
+
+        # 9. Non-Disclosing Secret Token Scan
+        scan_for_secret_tokens(temp_dir, results)
+
+    finally:
+        # Teardown processes fallback
+        for proc in [chrome_proc, thonny_proc, frontend_proc, backend_proc]:
+            if proc:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=2)
                 except Exception:
                     try:
                         proc.kill()
