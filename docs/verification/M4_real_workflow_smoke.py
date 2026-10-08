@@ -28,6 +28,8 @@ Executes a complete, safe, fail-closed real integration workflow on Windows loop
 from __future__ import annotations
 
 import asyncio
+import ctypes
+import ctypes.wintypes
 import json
 import os
 import pathlib
@@ -52,6 +54,112 @@ base_dir = pathlib.Path(r"D:\REP\Codestruct\Codestruct")
 chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 backend_python = str((base_dir / ".venv" / "Scripts" / "python.exe").resolve())
 thonny_python = r"d:\REP\thonny\venv\Scripts\python.exe"
+
+TH32CS_SNAPPROCESS = 0x00000002
+INVALID_HANDLE_VALUE = (
+    ctypes.wintypes.HANDLE(-1).value if sys.platform == "win32" else -1
+)
+
+
+class PROCESSENTRY32W(ctypes.Structure):
+    _fields_ = [
+        ("dwSize", ctypes.wintypes.DWORD),
+        ("cntUsage", ctypes.wintypes.DWORD),
+        ("th32ProcessID", ctypes.wintypes.DWORD),
+        ("th32DefaultHeapID", ctypes.POINTER(ctypes.wintypes.ULONG)),
+        ("th32ModuleID", ctypes.wintypes.DWORD),
+        ("cntThreads", ctypes.wintypes.DWORD),
+        ("th32ParentProcessID", ctypes.wintypes.DWORD),
+        ("pcPriClassBase", ctypes.wintypes.LONG),
+        ("dwFlags", ctypes.wintypes.DWORD),
+        ("szExeFile", ctypes.c_wchar * 260),
+    ]
+
+
+kernel32 = ctypes.windll.kernel32 if sys.platform == "win32" else None
+if kernel32:
+    CreateToolhelp32Snapshot = kernel32.CreateToolhelp32Snapshot
+    CreateToolhelp32Snapshot.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.DWORD]
+    CreateToolhelp32Snapshot.restype = ctypes.wintypes.HANDLE
+    CloseHandle = kernel32.CloseHandle
+    CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+    CloseHandle.restype = ctypes.wintypes.BOOL
+    Process32FirstW = kernel32.Process32FirstW
+    Process32FirstW.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+    Process32FirstW.restype = ctypes.wintypes.BOOL
+    Process32NextW = kernel32.Process32NextW
+    Process32NextW.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+    Process32NextW.restype = ctypes.wintypes.BOOL
+
+
+def get_windows_process_tree_pids(root_pid: int) -> set[int]:
+    """Discovers root_pid and all its descendant PIDs using Win32 Toolhelp snapshot."""
+    if sys.platform != "win32" or not kernel32:
+        return {root_pid}
+    h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if h == INVALID_HANDLE_VALUE:
+        return {root_pid}
+    try:
+        pe = PROCESSENTRY32W()
+        pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        if not Process32FirstW(h, ctypes.byref(pe)):
+            return {root_pid}
+        parent_map: dict[int, list[int]] = {}
+        while True:
+            parent_map.setdefault(pe.th32ParentProcessID, []).append(pe.th32ProcessID)
+            if not Process32NextW(h, ctypes.byref(pe)):
+                break
+        descendants = {root_pid}
+        queue_pids = [root_pid]
+        while queue_pids:
+            curr = queue_pids.pop(0)
+            for child in parent_map.get(curr, []):
+                if child not in descendants:
+                    descendants.add(child)
+                    queue_pids.append(child)
+        return descendants
+    finally:
+        CloseHandle(h)
+
+
+def get_all_active_pids_win32() -> set[int]:
+    """Returns set of all currently active PIDs in the system."""
+    if sys.platform != "win32" or not kernel32:
+        return set()
+    h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if h == INVALID_HANDLE_VALUE:
+        return set()
+    try:
+        pe = PROCESSENTRY32W()
+        pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        pids: set[int] = set()
+        if not Process32FirstW(h, ctypes.byref(pe)):
+            return pids
+        while True:
+            pids.add(pe.th32ProcessID)
+            if not Process32NextW(h, ctypes.byref(pe)):
+                break
+        return pids
+    finally:
+        CloseHandle(h)
+
+
+def is_reparse_or_link(entry: pathlib.Path) -> bool:
+    """Returns True if the path is a symlink, Windows junction, or reparse point."""
+    if entry.is_symlink():
+        return True
+    if getattr(entry, "is_junction", lambda: False)():
+        return True
+    if sys.platform == "win32":
+        try:
+            st = os.lstat(entry)
+            FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+            attrs = getattr(st, "st_file_attributes", 0)
+            if attrs & FILE_ATTRIBUTE_REPARSE_POINT:
+                return True
+        except Exception:
+            return True
+    return False
 
 
 def redact_secrets(text: str) -> str:
@@ -115,7 +223,10 @@ def stop_process_tree_and_wait(proc: Any, name: str = "process") -> None:
     if proc is None:
         return
     pid = getattr(proc, "pid", None)
+    tree_pids: set[int] = set()
     if pid is not None and sys.platform == "win32":
+        # Capture all descendant PIDs before teardown
+        tree_pids = get_windows_process_tree_pids(pid)
         is_alive = True
         if hasattr(proc, "poll") and proc.poll() is not None:
             is_alive = False
@@ -155,28 +266,36 @@ def stop_process_tree_and_wait(proc: Any, name: str = "process") -> None:
             f"Process {name} (PID {pid}) did not exit after teardown"
         )
 
-    # On Windows, verify that the process is completely removed from tasklist
-    if pid is not None and sys.platform == "win32":
-        try:
-            tl_res = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            output_lines = [line for line in tl_res.stdout.splitlines() if line.strip()]
-            for line in output_lines:
-                parts = line.split()
-                if len(parts) >= 2 and parts[1] == str(pid):
-                    raise RuntimeError(
-                        f"Fail-closed process tree verification failed: process {name} (PID {pid}) is still active in tasklist"
-                    )
-        except Exception as e:
-            if not isinstance(e, RuntimeError):
+    # On Windows, verify that EVERY descendant PID (and root PID) has exited completely
+    if sys.platform == "win32" and tree_pids:
+        deadline = time.time() + 5.0
+        surviving: set[int] = tree_pids
+        while time.time() < deadline:
+            active = get_all_active_pids_win32()
+            surviving = tree_pids.intersection(active)
+            if not surviving:
+                break
+            time.sleep(0.05)
+        if surviving:
+            # Issue direct taskkill on any remaining descendant PIDs
+            for spid in surviving:
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", str(spid)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            deadline2 = time.time() + 5.0
+            while time.time() < deadline2:
+                active = get_all_active_pids_win32()
+                surviving = tree_pids.intersection(active)
+                if not surviving:
+                    break
+                time.sleep(0.05)
+            if surviving:
                 raise RuntimeError(
-                    f"Fail-closed process tree verification error checking tasklist for {name} (PID {pid}): {e}"
-                ) from None
-            raise
+                    f"Fail-closed process tree verification failed: {name} (PID {pid}) descendant PIDs still active: {sorted(surviving)}"
+                )
 
 
 def scan_for_secret_tokens(
@@ -186,6 +305,7 @@ def scan_for_secret_tokens(
     token_pattern = re.compile(r"cap_[A-Za-z0-9_-]{16,}")
     scanned_dir_count = 0
     scanned_file_count = 0
+    resolved_target_root = target_dir.resolve(strict=True)
 
     def _traverse(directory: pathlib.Path) -> None:
         nonlocal scanned_dir_count, scanned_file_count
@@ -199,18 +319,32 @@ def scan_for_secret_tokens(
 
         for entry in entries:
             try:
+                is_rep_or_link = is_reparse_or_link(entry)
                 is_dir = entry.is_dir()
                 is_file = entry.is_file()
-                is_symlink = entry.is_symlink()
             except Exception as e:
                 raise AssertionError(
                     f"Fail-closed scan error: unable to inspect entry '{entry.name}' ({type(e).__name__})"
                 ) from None
 
-            if is_symlink:
+            if is_rep_or_link:
                 raise AssertionError(
                     f"Fail-closed scan error: unexpected symlink or reparse point '{entry.name}'"
                 )
+
+            # Prove canonical containment within target_dir
+            try:
+                resolved_entry = entry.resolve(strict=True)
+                if not resolved_entry.is_relative_to(resolved_target_root):
+                    raise AssertionError(
+                        f"Fail-closed scan error: entry '{entry.name}' resolves outside target root"
+                    )
+            except Exception as e:
+                if isinstance(e, AssertionError):
+                    raise
+                raise AssertionError(
+                    f"Fail-closed scan error: unable to resolve entry '{entry.name}' ({type(e).__name__})"
+                ) from None
 
             if is_dir:
                 _traverse(entry)
@@ -308,21 +442,36 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
         f"Expected token redaction in diagnostic output: {emitted_diag}"
     )
 
-    # 0b. Process-Tree Teardown & Secret Scanner Fail-Closed Regressions (CODEX REVIEW 9 FIX)
-    # (i) Test real process tree shutdown
-    test_spawn = subprocess.Popen(
-        [
-            sys.executable,
-            "-c",
-            "import time, subprocess; p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); time.sleep(30)",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    # 0b. Process-Tree Teardown & Secret Scanner Fail-Closed Regressions (CODEX REVIEW 10 FIX)
+    # (i) Test real process tree shutdown asserting both parent and descendant child PID exit
+    child_spawn_script = "import time; time.sleep(30)"
+    parent_spawn_script = (
+        f"import subprocess, sys, time; "
+        f"c = subprocess.Popen([sys.executable, '-c', {child_spawn_script!r}]); "
+        f"print(c.pid, flush=True); time.sleep(30)"
     )
+    test_spawn = subprocess.Popen(
+        [sys.executable, "-c", parent_spawn_script],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    assert test_spawn.stdout is not None
+    test_child_pid_line = test_spawn.stdout.readline().strip()
+    assert test_child_pid_line.isdigit(), (
+        f"Failed to read child PID: {test_child_pid_line!r}"
+    )
+    test_child_pid = int(test_child_pid_line)
+
     stop_process_tree_and_wait(test_spawn, "test_spawn_tree")
     assert test_spawn.poll() is not None, "Test process tree parent failed to exit"
+    if sys.platform == "win32":
+        active_pids_after_teardown = get_all_active_pids_win32()
+        assert test_child_pid not in active_pids_after_teardown, (
+            f"Test child PID {test_child_pid} was not terminated by process tree shutdown"
+        )
 
-    # (ii) Test scanner fail-closed on token leak and special/unreadable entries
+    # (ii) Test scanner fail-closed on token leak, special entries, and Windows junction/reparse points
     test_scan_dir = pathlib.Path(tempfile.mkdtemp(prefix="codestruct_scan_test_"))
     try:
         (test_scan_dir / "valid.txt").write_text("clean content", encoding="utf-8")
@@ -341,6 +490,40 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                 leak_detected = True
         assert leak_detected is True, "Scanner failed to detect secret token pattern"
         (test_scan_dir / "leaked.txt").unlink()
+
+        # Test Windows junction / reparse point rejection
+        junc_target = test_scan_dir / "junc_target"
+        junc_target.mkdir()
+        (junc_target / "nested.txt").write_text("inside target", encoding="utf-8")
+        junc_link = test_scan_dir / "junc_link"
+        junc_created = False
+        if sys.platform == "win32":
+            subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junc_link), str(junc_target)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if junc_link.exists() and is_reparse_or_link(junc_link):
+                junc_created = True
+
+        if junc_created:
+            reparse_detected = False
+            try:
+                scan_for_secret_tokens(test_scan_dir, {"ok": True})
+            except AssertionError as rep_err:
+                if "unexpected symlink or reparse point" in str(rep_err):
+                    reparse_detected = True
+            assert reparse_detected is True, (
+                "Scanner failed to reject Windows junction reparse point"
+            )
+            # Remove junction using rmdir
+            subprocess.run(
+                ["cmd", "/c", "rmdir", str(junc_link)],
+                capture_output=True,
+                check=False,
+            )
+        shutil.rmtree(junc_target, ignore_errors=True)
     finally:
         shutil.rmtree(test_scan_dir, ignore_errors=True)
 
@@ -1740,7 +1923,7 @@ window.fetch = async function(...args) {
 
                 # (e) Wait for backend terminal cancelled state
                 backend_terminal_state = None
-                backend_error_code = None
+                backend_phase = None
                 backend_message_code = None
                 backend_terminal_job_data: dict[str, Any] = {}
                 for _ in range(40):
@@ -1759,7 +1942,7 @@ window.fetch = async function(...args) {
                     state = job_data.get("state", "")
                     if job_data.get("terminal"):
                         backend_terminal_state = state
-                        backend_error_code = job_data.get("error_code")
+                        backend_phase = (job_data.get("progress") or {}).get("phase")
                         backend_message_code = (job_data.get("progress") or {}).get(
                             "message_code"
                         )
@@ -1769,8 +1952,8 @@ window.fetch = async function(...args) {
 
                 assert backend_terminal_state == "cancelled", (
                     f"Backend terminal state must be 'cancelled', got '{backend_terminal_state}' "
-                    f"(error_code={backend_error_code!r}, message_code={backend_message_code!r}, "
-                    f"progress={backend_terminal_job_data.get('progress')}, raw_job={backend_terminal_job_data})"
+                    f"(phase={backend_phase!r}, message_code={backend_message_code!r}, "
+                    f"progress={backend_terminal_job_data.get('progress')})"
                 )
 
                 # (f) Verify live cancellation ARIA announcement in the UI

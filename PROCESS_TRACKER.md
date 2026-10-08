@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 10) | `docs/verification/M4.md` | Resolved cancellation race in executor.py; fail-closed process-tree shutdown & secret scanner; 3 repeated smoke runs passed |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 11) | `docs/verification/M4.md` | Descendant process exit asserted via Win32 Toolhelp snapshot; Windows junction/reparse points detected & fail-closed; sanitized cancellation diagnostics |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,18 +18,18 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Codex Review 9 Corrections Pass (2026-10-08): **Ready for Codex Review (Pass 10)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_9.md`:
-- Finding 1: Fixed cancellation race condition in `executor.py` so jobs in `CANCELLATION_REQUESTED` state or with `cancel.is_set()` transition to `CANCELLED` at every supervisory and post-loop stage. Captured sanitized diagnostic fields on failure; verified stability across 3 consecutive smoke runs.
-- Finding 2: Upgraded `stop_process_tree_and_wait()` to fail closed on taskkill failure, wait for process exit, and verify PID quiescence against `tasklist`. Added automated child process tree teardown regression.
-- Finding 3: Upgraded `scan_for_secret_tokens()` to inspect every entry, failing closed on symlinks, reparse points, or unsupported special entries. Added automated regression tests.
-- Finding 4: Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, and external mirror. All gates pass. Do not begin M5.
+Milestone 4 Codex Review 10 Corrections Pass (2026-10-08): **Ready for Codex Review (Pass 11)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_10.md`:
+- Finding 1: Implemented Win32 Toolhelp snapshot process tree descendant tracking (`get_windows_process_tree_pids`, `get_all_active_pids_win32`) in `stop_process_tree_and_wait()`. Asserts all descendant PIDs have completely exited before disk scanning. Extended step 0 regression to assert child PID is dead.
+- Finding 2: Implemented `is_reparse_or_link()` detecting symlinks, junctions, and `FILE_ATTRIBUTE_REPARSE_POINT` (0x400) plus canonical containment check (`is_relative_to`) before recursion in `scan_for_secret_tokens()`. Added automated step 0 regression creating and rejecting real Windows junctions via `mklink /J`.
+- Finding 3: Sanitized cancellation failure diagnostics in `M4_real_workflow_smoke.py`, formatting `progress.phase` and `progress.message_code` without claiming non-existent top-level `error_code`.
+- Finding 4: Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external mirror. All gates pass. Do not begin M5.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (Pass 10) | Fail-closed process-tree shutdown (`taskkill` return code validation + `tasklist` unlisted check) and fail-closed recursive scanner on every entry; verified across 3 repeated smoke runs. | Codex review |
-| CS-007 | Ready for Codex review (Pass 10) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark + 3 repeated smoke runs with 100% graph/table parity and deterministic cancellation. | Codex review |
-| CS-021 | Ready for Codex review (Pass 10) | Fail-safe cancellation handling in `executor.py`; exact `cancellation_requested` acknowledgement; terminal `cancelled` state; 0 post-terminal polls verified in 3 repeated runs. | Codex review |
-| CS-022 | Ready for Codex review (Pass 10) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Codex review |
+| CS-006 | Ready for Codex review (Pass 11) | Win32 Toolhelp snapshot captures all descendant PIDs and asserts complete quiescence before profile scanning; reparse points and junctions fail closed; step 0 regressions pass. | Review M4 evidence |
+| CS-007 | Ready for Codex review (Pass 11) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; two smoke runs confirm 100% graph/table parity. | Review M4 integration |
+| CS-021 | Ready for Codex review (Pass 11) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and 0 post-terminal polls verified. | Review M4 integration |
+| CS-022 | Ready for Codex review (Pass 11) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Review M4 evidence |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -44,6 +44,25 @@ Milestone 4 Codex Review 9 Corrections Pass (2026-10-08): **Ready for Codex Revi
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-08 — Antigravity Milestone 4 Corrections Pass 11 (Codex Review 10)
+
+- Addressed all 4 findings from `docs/verification/M4_CODEX_REVIEW_10.md`:
+  - **Finding 1 (Win32 Process-Tree Descendant Quiescence):** Implemented Win32 Toolhelp snapshot API functions (`get_windows_process_tree_pids`, `get_all_active_pids_win32`) in `M4_real_workflow_smoke.py`. Updated `stop_process_tree_and_wait()` to discover descendant PIDs before killing root, execute `taskkill /F /T`, verify root exit, and loop until all descendant PIDs have exited (with targeted PID killing for any lingering descendants). Extended step 0 regression to assert child PID is dead.
+  - **Finding 2 (Windows Junction/Reparse Detection & Canonical Containment):** Implemented `is_reparse_or_link()` detecting symlinks, junctions, and `FILE_ATTRIBUTE_REPARSE_POINT` (0x400) plus canonical containment check (`entry.resolve().is_relative_to(target.resolve())`) in `scan_for_secret_tokens()`. Added automated step 0 regression verifying fail-closed rejection of real Windows directory junctions (`mklink /J`).
+  - **Finding 3 (Sanitized Cancellation Failure Diagnostics):** Sanitized diagnostic assertions in `run_ui_cancellation()` to report schema-supported `progress.phase` and `progress.message_code` without claiming non-existent top-level `error_code`.
+  - **Finding 4 (Handoff & Audit Reconciliation):** Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Verified all quality and test gates:
+  - Frontend Vitest: 104 passed across 10 test files (`npm.cmd test --prefix frontend -- --run`).
+  - Frontend ESLint: 0 errors, 0 warnings (`npm.cmd run lint --prefix frontend`).
+  - Frontend Production Build: `npm.cmd run build --prefix frontend` -> built in 464ms.
+  - Backend Pytest: 189 passed, 1 skipped, 1 warning (85.34% coverage >= 84%).
+  - Thonny Plugin Pytest: 53 passed, 1 skipped (`.venv\Scripts\pytest.exe -o addopts="" thonny-plugin/tests`).
+  - Ruff Check & Format: 208 files clean (`ruff check .`, `ruff format --check .`).
+  - Mypy: 48 source files clean (`mypy backend/src`).
+  - Git Diff Check: clean (0 whitespace errors).
+  - Real Windows Smoke Test: 2 consecutive runs passed with exit 0 (nonce `850996b9` and `c56e55ab`).
+- Marked Milestone 4 as **Ready for Codex review (Pass 11)**. Milestone 5 has not been started.
 
 ### 2026-10-08 — Antigravity Milestone 4 Corrections Pass 10 (Codex Review 9)
 
