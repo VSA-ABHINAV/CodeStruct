@@ -1,20 +1,20 @@
-# Antigravity task: Milestone 4 corrections — Codex Review 8
+# Antigravity task: Milestone 4 corrections — Codex Review 9
 
 Date: 2026-10-08. Repository: `D:\REP\Codestruct\Codestruct`.
 
-Read `docs/verification/M4_CODEX_REVIEW_8.md`, prior M4 reviews, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, and `docs/codestruct_audit.md`. M4 remains **Changes required** at `fe3b863`. Work only on Review 8 findings. Preserve accepted milestones and the completed Lovable frontend. Do not begin M5.
+Read `docs/verification/M4_CODEX_REVIEW_9.md`, prior M4 reviews, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, and `docs/codestruct_audit.md`. M4 remains **Changes required** at `8d0810b`. Work only on Review 9 findings. Preserve accepted milestones and the completed Lovable frontend. Do not begin M5.
 
 ## Required corrections
 
-1. Keep `layoutGraph()` pure during React render. Preserve one product layout execution and expose real layout timing/count evidence only through explicit test/benchmark instrumentation that does not write globals during render. Keep the actual dense-graph layout assertion meaningful.
-2. Make secret scanning fail closed for directory enumeration and file reads. Replace traversal that can suppress filesystem errors with traversal that surfaces every inaccessible directory/entry. Ensure Chrome and all descendants have exited and the isolated profile is quiescent before scanning; do not claim zero persisted tokens unless the entire temp tree was enumerated and inspected.
-3. Investigate and resolve the flaky full-suite `CacheIntegrationTests.test_cold_warm_refresh_and_restart` result. It failed in the full coverage run but passed alone; full suite must pass reliably.
-4. Reconcile audit, tracker, M4 report, and review evidence with the actual changes and gates.
+1. Diagnose the real smoke cancellation failure (`backend_terminal_state == "failed"` on the first Codex run, `cancelled` on a second run). Fix the underlying cause, expose sanitized `error_code`/`message_code` diagnostics when a terminal assertion fails, and demonstrate repeatable real-workflow success.
+2. Make process-tree teardown fail closed. Do not suppress `taskkill` launch/exit failures or treat parent exit as proof that descendants are gone. Verify the entire process tree is quiescent before scanning; add a focused failure-path regression.
+3. Make the recursive secret scanner fail closed on every entry. Do not silently skip entries that are neither regular files nor directories; handle reparse/special entries safely or fail with a sanitized error. Keep directory/file counts truthful.
+4. Reconcile `ANTIGRAVITY_TASK.md`, tracker, M4 report, audit history, and CS-006/CS-007 status with this review and actual verification evidence.
 
 ## Required verification and stop condition
 
-Run full backend coverage, plugin tests, frontend tests/lint/build, Ruff check/format, mypy, smoke-script syntax, `git diff --check`, and the real Windows backend/browser/Thonny workflow against the resulting commit. Record sanitized output, including traversal coverage and process-tree cleanup evidence. Commit/push only after every required gate passes; verify clean worktree and remote parity, then stop for Codex review. Do not begin Milestone 5.
+Run full backend coverage, plugin tests, frontend tests/lint/build, Ruff check/format, mypy, smoke-script syntax, `git diff --check`, and repeated real Windows backend/browser/Thonny workflow runs. Record sanitized cancellation diagnostics and process-tree proof. Commit/push only after all gates pass and repeated workflow runs are stable; verify clean worktree and remote parity, then stop for Codex review. Do not begin Milestone 5.
 
 ## Launch prompt
 
-<span style="color:green">&gt; 🟢 Read ANTIGRAVITY_TASK.md and docs/verification/M4_CODEX_REVIEW_8.md. Implement only the listed M4 corrections, keep layoutGraph pure during React render while preserving one real layout pass and testable timing evidence, make complete temp/profile scanning and Chrome descendant shutdown fail closed, resolve the flaky full-suite cache test, run every required gate plus the real Windows backend/browser/Thonny workflow, update PROCESS_TRACKER.md and audit/report evidence, commit and verify remote parity only after all gates pass, then stop for Codex review. Do not begin Milestone 5.</span>
+<span style="color:green">&gt; 🟢 Read ANTIGRAVITY_TASK.md and docs/verification/M4_CODEX_REVIEW_9.md. Implement only the listed M4 corrections: diagnose and eliminate the real cancellation workflow failure with sanitized failure details, make process-tree shutdown and every filesystem scan entry fail closed, reconcile the task/tracker/audit/report, run all required gates and repeated real Windows backend/browser/Thonny workflows until stable, record evidence, commit and verify remote parity only after all gates pass, then stop for Codex review. Do not begin Milestone 5.</span>

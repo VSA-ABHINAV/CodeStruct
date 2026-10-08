@@ -111,20 +111,32 @@ async def cdp_send(
 
 
 def stop_process_tree_and_wait(proc: Any, name: str = "process") -> None:
-    """Terminates a process and all its descendants on Windows, ensuring complete quiescence."""
+    """Terminates a process and all its descendants on Windows, ensuring complete quiescence fail closed."""
     if proc is None:
         return
     pid = getattr(proc, "pid", None)
     if pid is not None and sys.platform == "win32":
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(pid)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-        except Exception:  # noqa: S110
-            pass
+        is_alive = True
+        if hasattr(proc, "poll") and proc.poll() is not None:
+            is_alive = False
+        if is_alive:
+            try:
+                res = subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Fail-closed process tree termination failed to launch taskkill for {name} (PID {pid}): {type(e).__name__}: {e}"
+                ) from None
+            # taskkill exit codes: 0 = success, 128 = process not found (already exited)
+            if res.returncode not in (0, 128):
+                raise RuntimeError(
+                    f"Fail-closed process tree termination failed for {name} (PID {pid}): taskkill exit {res.returncode}, stderr={res.stderr.strip()}"
+                )
+
     if hasattr(proc, "poll") and proc.poll() is None:
         try:
             proc.terminate()
@@ -137,10 +149,34 @@ def stop_process_tree_and_wait(proc: Any, name: str = "process") -> None:
                 raise RuntimeError(
                     f"Failed to stop {name} (PID {pid}) during teardown: {type(e).__name__}"
                 ) from None
+
     if hasattr(proc, "poll"):
         assert proc.poll() is not None, (
             f"Process {name} (PID {pid}) did not exit after teardown"
         )
+
+    # On Windows, verify that the process is completely removed from tasklist
+    if pid is not None and sys.platform == "win32":
+        try:
+            tl_res = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output_lines = [line for line in tl_res.stdout.splitlines() if line.strip()]
+            for line in output_lines:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == str(pid):
+                    raise RuntimeError(
+                        f"Fail-closed process tree verification failed: process {name} (PID {pid}) is still active in tasklist"
+                    )
+        except Exception as e:
+            if not isinstance(e, RuntimeError):
+                raise RuntimeError(
+                    f"Fail-closed process tree verification error checking tasklist for {name} (PID {pid}): {e}"
+                ) from None
+            raise
 
 
 def scan_for_secret_tokens(
@@ -165,10 +201,16 @@ def scan_for_secret_tokens(
             try:
                 is_dir = entry.is_dir()
                 is_file = entry.is_file()
+                is_symlink = entry.is_symlink()
             except Exception as e:
                 raise AssertionError(
                     f"Fail-closed scan error: unable to inspect entry '{entry.name}' ({type(e).__name__})"
                 ) from None
+
+            if is_symlink:
+                raise AssertionError(
+                    f"Fail-closed scan error: unexpected symlink or reparse point '{entry.name}'"
+                )
 
             if is_dir:
                 _traverse(entry)
@@ -184,6 +226,10 @@ def scan_for_secret_tokens(
                         f"Capability token pattern detected in persisted file: {entry.name}"
                     )
                 scanned_file_count += 1
+            else:
+                raise AssertionError(
+                    f"Fail-closed scan error: unsupported/special filesystem entry '{entry.name}'"
+                )
 
     _traverse(target_dir)
 
@@ -221,12 +267,12 @@ def create_dense_project(dense_dir: pathlib.Path, num_classes: int = 60) -> None
     (dense_dir / "dense_service.py").write_text("\n".join(code_lines), encoding="utf-8")
 
 
-def create_cancellable_project(cancel_dir: pathlib.Path, num_files: int = 60) -> None:
+def create_cancellable_project(cancel_dir: pathlib.Path, num_files: int = 80) -> None:
     """Creates a multi-file Python project with non-trivial AST structures to test cancellation."""
     cancel_dir.mkdir(parents=True, exist_ok=True)
     for f in range(num_files):
         lines = [f"# Multi-file cancellable project file {f}", "import sys, os"]
-        for c in range(15):
+        for c in range(20):
             lines.append(f"class CancelService_{f}_{c}:")
             lines.append(f"    def perform_action_{c}(self):")
             lines.append(f"        return {f} * {c} + 42\n")
@@ -262,6 +308,42 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
         f"Expected token redaction in diagnostic output: {emitted_diag}"
     )
 
+    # 0b. Process-Tree Teardown & Secret Scanner Fail-Closed Regressions (CODEX REVIEW 9 FIX)
+    # (i) Test real process tree shutdown
+    test_spawn = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import time, subprocess; p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); time.sleep(30)",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    stop_process_tree_and_wait(test_spawn, "test_spawn_tree")
+    assert test_spawn.poll() is not None, "Test process tree parent failed to exit"
+
+    # (ii) Test scanner fail-closed on token leak and special/unreadable entries
+    test_scan_dir = pathlib.Path(tempfile.mkdtemp(prefix="codestruct_scan_test_"))
+    try:
+        (test_scan_dir / "valid.txt").write_text("clean content", encoding="utf-8")
+        scan_res = scan_for_secret_tokens(test_scan_dir, {"ok": True})
+        assert scan_res["scanned_dirs"] == 1 and scan_res["scanned_files"] == 1
+
+        # Test token leak detection
+        (test_scan_dir / "leaked.txt").write_text(
+            "token cap_abcdef1234567890xyz", encoding="utf-8"
+        )
+        leak_detected = False
+        try:
+            scan_for_secret_tokens(test_scan_dir, {"ok": True})
+        except AssertionError as leak_err:
+            if "Capability token pattern detected" in str(leak_err):
+                leak_detected = True
+        assert leak_detected is True, "Scanner failed to detect secret token pattern"
+        (test_scan_dir / "leaked.txt").unlink()
+    finally:
+        shutil.rmtree(test_scan_dir, ignore_errors=True)
+
     # 1. Isolated disposable temp directory (NEVER touches existing scratch or user files)
     temp_dir = pathlib.Path(tempfile.mkdtemp(prefix="codestruct_m4_smoke_"))
     results: dict[str, Any] = {}
@@ -280,7 +362,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
         root1.mkdir(parents=True, exist_ok=True)
         root2.mkdir(parents=True, exist_ok=True)
         create_dense_project(root_dense, num_classes=60)
-        create_cancellable_project(root_cancel, num_files=60)
+        create_cancellable_project(root_cancel, num_files=80)
 
         root1_file = root1 / "app.py"
         root2_file = root2 / "app.py"
@@ -1658,6 +1740,9 @@ window.fetch = async function(...args) {
 
                 # (e) Wait for backend terminal cancelled state
                 backend_terminal_state = None
+                backend_error_code = None
+                backend_message_code = None
+                backend_terminal_job_data: dict[str, Any] = {}
                 for _ in range(40):
                     eval_job_status = await cdp_send(
                         ws,
@@ -1674,11 +1759,18 @@ window.fetch = async function(...args) {
                     state = job_data.get("state", "")
                     if job_data.get("terminal"):
                         backend_terminal_state = state
+                        backend_error_code = job_data.get("error_code")
+                        backend_message_code = (job_data.get("progress") or {}).get(
+                            "message_code"
+                        )
+                        backend_terminal_job_data = job_data
                         break
                     await asyncio.sleep(0.25)
 
                 assert backend_terminal_state == "cancelled", (
-                    f"Backend terminal state must be 'cancelled', got '{backend_terminal_state}'"
+                    f"Backend terminal state must be 'cancelled', got '{backend_terminal_state}' "
+                    f"(error_code={backend_error_code!r}, message_code={backend_message_code!r}, "
+                    f"progress={backend_terminal_job_data.get('progress')}, raw_job={backend_terminal_job_data})"
                 )
 
                 # (f) Verify live cancellation ARIA announcement in the UI

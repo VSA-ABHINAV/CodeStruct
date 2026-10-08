@@ -177,6 +177,18 @@ class SpawnJobExecutor:
                     continue
                 break
             process.join(1)
+            if (
+                cancel.is_set()
+                or self._shutdown.is_set()
+                or (
+                    (curr := self.registry.get(analysis_id))
+                    and curr.state is JobState.CANCELLATION_REQUESTED
+                )
+            ):
+                self.registry.transition(
+                    analysis_id, JobState.CANCELLED, message_code="ANALYSIS_CANCELLED"
+                )
+                return
             # A fast worker can finish before the supervising thread observes
             # every milestone. Drain those ordered messages before committing
             # the terminal result so state transitions remain valid.
@@ -188,16 +200,50 @@ class SpawnJobExecutor:
                     )
             except Empty:
                 pass
+            if (
+                cancel.is_set()
+                or self._shutdown.is_set()
+                or (
+                    (curr := self.registry.get(analysis_id))
+                    and curr.state is JobState.CANCELLATION_REQUESTED
+                )
+            ):
+                self.registry.transition(
+                    analysis_id, JobState.CANCELLED, message_code="ANALYSIS_CANCELLED"
+                )
+                return
             if result is None:
                 try:
                     result = output.get(timeout=0.2)
                 except Empty:
+                    if (
+                        cancel.is_set()
+                        or self._shutdown.is_set()
+                        or (
+                            (curr := self.registry.get(analysis_id))
+                            and curr.state is JobState.CANCELLATION_REQUESTED
+                        )
+                    ):
+                        self.registry.transition(
+                            analysis_id,
+                            JobState.CANCELLED,
+                            message_code="ANALYSIS_CANCELLED",
+                        )
+                        return
                     result = {
                         "kind": "error",
                         "code": "WORKER_EXITED",
                         "message": "The analysis worker exited before producing a result.",
                     }
-            if result["kind"] == "cancelled":
+            if (
+                result["kind"] == "cancelled"
+                or cancel.is_set()
+                or self._shutdown.is_set()
+                or (
+                    (curr := self.registry.get(analysis_id))
+                    and curr.state is JobState.CANCELLATION_REQUESTED
+                )
+            ):
                 self.registry.transition(
                     analysis_id, JobState.CANCELLED, message_code="ANALYSIS_CANCELLED"
                 )
@@ -289,13 +335,28 @@ class SpawnJobExecutor:
                 error,
             )
             try:
-                self.registry.transition(
-                    analysis_id,
-                    JobState.FAILED,
-                    message_code="EXECUTOR_FAILED",
-                    error_code="EXECUTOR_FAILED",
-                    error_message="The analysis executor could not complete safely.",
-                )
+                if (
+                    cancel.is_set()
+                    or self._shutdown.is_set()
+                    or (
+                        (rec := self.registry.get(analysis_id))
+                        and rec.state
+                        in (JobState.CANCELLATION_REQUESTED, JobState.CANCELLED)
+                    )
+                ):
+                    self.registry.transition(
+                        analysis_id,
+                        JobState.CANCELLED,
+                        message_code="ANALYSIS_CANCELLED",
+                    )
+                else:
+                    self.registry.transition(
+                        analysis_id,
+                        JobState.FAILED,
+                        message_code="EXECUTOR_FAILED",
+                        error_code="EXECUTOR_FAILED",
+                        error_message="The analysis executor could not complete safely.",
+                    )
             except (KeyError, InvalidTransitionError):
                 pass
         finally:
