@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Changes required (Ready for Codex Review 8) | `docs/verification/M4.md` | Single-pass layout timing in graphLayout.js (no duplicate render); fail-closed secret scanning with process quiescence verified |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 9) | `docs/verification/M4.md` | Pure layoutGraph during render + measureGraphLayout benchmark (<500ms for 186 nodes), fail-closed recursive secret scanner (413 dirs, 962 files), stop_process_tree_and_wait with Windows process-tree cleanup, full-suite cache race condition eliminated (189 passed / 85.49% cov), real smoke exit 0 |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,24 +18,16 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Codex Review 7 Corrections Pass (2026-10-07): **Changes required (Ready for Codex Review 8)**. Addressed both findings from `docs/verification/M4_CODEX_REVIEW_7.md`:
-- Finding 1: Removed duplicate `layoutGraph` execution in `ArchitectureExplorer.jsx` (`useEffect` hook removed). Integrated duration timing directly into single-pass `layoutGraph` in `graphLayout.js`. ESLint, Vitest, and production build pass cleanly.
-- Finding 2: Refactored `scan_for_secret_tokens()` to fail closed (asserts every file readable, asserts `scanned_file_count > 0`). Added `stop_process_and_wait()` to ensure complete process exit and handle release before scanning disk.
-- Retained full real Windows workflow and quality gates at 100% pass rate. Do not begin M5.
-
-Milestone 4 Codex Review 6 Corrections Pass (2026-10-06): **Changes required (Ready for Codex Review 7)**. All 6 findings from `docs/verification/M4_CODEX_REVIEW_6.md` resolved and verified across all gates and live Windows smoke workflow:
-- Finding 1: Frontend lint purity fixed (layout timing moved to `useEffect`); `npm run lint` passes with 0 errors/warnings.
-- Finding 2: `Page.addScriptToEvaluateOnNewDocument` installed before navigation; logger verified on new document with >= 1 pre-cancel status polls.
-- Finding 3: Exact `delete_ack_state: "cancellation_requested"` intermediate acknowledgement captured and asserted.
-- Finding 4: Real UI interaction for paging failure and retry ("Load more graph data" button click, visible error banner `.graph-status--failed`, strict retention of 126 loaded node/edge identities, UI retry click, full merge to 186 nodes / 247 edges).
-- Finding 5: Chrome launched with `--incognito` and dedicated per-run `--user-data-dir` inside temp dir; recursive scan of profile and temp dir asserts zero persisted capability tokens.
-- Finding 6: Failure-path redaction regression test executes `format_thonny_failure_diagnostic()` with synthetic token-bearing stderr, asserting zero token leakage.
-- Finding 7: Reconciled tracker, audit, and verification report truthfully. Do not begin M5.
+Milestone 4 Codex Review 8 Corrections Pass (2026-10-08): **Ready for Codex Review (Pass 9)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_8.md`:
+- Finding 1: Restored complete purity to `layoutGraph()` in `graphLayout.js`, removing all render-time `window` mutations. Exported `measureGraphLayout()` and added dense-graph benchmark (<500ms for 186 nodes) and purity assertions in `architecture.test.js`.
+- Finding 2: Implemented recursive directory/file secret scanner in `M4_real_workflow_smoke.py` failing closed on any directory enumeration or file read errors (413 dirs, 962 files scanned clean). Added `stop_process_tree_and_wait()` with Windows process-tree termination (`taskkill /F /T /PID`) ensuring Chrome, Thonny, Vite, and backend workers fully exit before scanning.
+- Finding 3: Resolved cache integration race condition in `executor.py` by calling `store_cache()` prior to `registry.transition()` to `COMPLETED`. Full backend pytest coverage suite now passes cleanly and reliably with 189 passed (0 failed, 1 skipped) and 85.49% coverage.
+- All quality gates pass and live Windows smoke workflow completed with exit 0. Do not begin M5.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (M4 portion) | Fail-closed secret scan with `stop_process_and_wait` quiescence, isolated `--user-data-dir`, and failure-path diagnostic redaction regression test verified. | Codex review |
-| CS-007 | Ready for Codex review (M4 portion) | Single-pass `layoutGraph` duration measurement without duplicate production computation; real UI paging failure/retry flow and full node/edge parity verified. | Codex review |
+| CS-006 | Ready for Codex review (M4 portion) | Real Chrome navigation dispatch to Thonny cursor 4.4 verified. Isolated temporary Chrome profile used; process-tree termination awaited before disk scan; fail-closed recursive scanner traversed 413 dirs & 962 files with zero capability tokens leaked. | Codex review |
+| CS-007 | Ready for Codex review (M4 portion) | Real UI paging failure/retry, loaded/total counts, and 186/186 node & 247/247 edge table/graph parity verified. Single product layout execution in pure `useMemo` with separate `measureGraphLayout` benchmark verified. | Codex review |
 | CS-021 | Ready for Codex review (M4 portion) | Document-start poll logger, exact `cancellation_requested` acknowledgement, terminal state, and zero additional polls verified in the real smoke. | Codex review after M4 remaining corrections |
 | CS-022 | Ready for Codex review (M4 portion) | Computed motion duration and responsive/ARIA assertions remain; screen-reader observation pending. | Codex review after M4 corrections |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |

@@ -3,7 +3,6 @@ export const DEFAULT_LAYOUT_OPTIONS = Object.freeze({ columnGap: 340, rowGap: 16
 // Replaceable zero-dependency fallback until the approved Dagre adapter can be
 // installed and benchmarked; presentation coordinates never enter graph data.
 export function layoutGraph(nodes, edges, options = {}) {
-  const t0 = typeof performance !== 'undefined' ? performance.now() : 0
   const config = { ...DEFAULT_LAYOUT_OPTIONS, ...options }
   const ids = new Set(nodes.map((node) => node.id))
   const incoming = new Map(nodes.map((node) => [node.id, 0]))
@@ -33,18 +32,24 @@ export function layoutGraph(nodes, edges, options = {}) {
   nodes.filter((node) => !visited.has(node.id)).sort((a, b) => a.id.localeCompare(b.id))
     .forEach((node, index) => level.set(node.id, maxLevel + 1 + (index % 2)))
   const rows = new Map()
-  const result = [...nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || a.qualifiedName?.localeCompare(b.qualifiedName || '') || a.id.localeCompare(b.id))
+  return [...nodes].sort((a, b) => level.get(a.id) - level.get(b.id) || a.qualifiedName?.localeCompare(b.qualifiedName || '') || a.id.localeCompare(b.id))
     .map((node) => {
       const column = level.get(node.id)
       const row = rows.get(column) || 0
       rows.set(column, row + 1)
       return { ...node, position: { x: config.originX + column * config.columnGap, y: config.originY + row * config.rowGap } }
     })
+}
+
+// Explicit test/benchmark instrumentation that does not mutate globals during render.
+export function measureGraphLayout(nodes, edges, options = {}) {
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0
+  const positioned = layoutGraph(nodes, edges, options)
   const t1 = typeof performance !== 'undefined' ? performance.now() : 0
-  if (typeof window !== 'undefined') {
-    window.__codestruct_last_layout_ms = t1 - t0
-    window.__codestruct_layout_node_count = nodes.length
-    window.__codestruct_layout_edge_count = edges.length
+  return {
+    nodes: positioned,
+    durationMs: t1 - t0,
+    nodeCount: nodes.length,
+    edgeCount: edges.length,
   }
-  return result
 }

@@ -208,28 +208,11 @@ class SpawnJobExecutor:
                     if result["partial"]
                     else JobState.COMPLETED
                 )
-                completed = self.registry.transition(
-                    analysis_id,
-                    state,
-                    percent=100,
-                    message_code="ANALYSIS_PARTIAL"
-                    if result["partial"]
-                    else "ANALYSIS_COMPLETED",
-                    graph=graph,
-                    diagnostics=list(graph.get("diagnostics", [])),
-                )
-                summary = graph.get("summary", {})
-                logger.info(
-                    "codestruct.analysis.completed analysis_id=%s state=%s files=%s nodes=%s edges=%s",
-                    analysis_id,
-                    state.value,
-                    summary.get("source_units_total"),
-                    summary.get("nodes_total"),
-                    summary.get("edges_total"),
-                )
+                current_record = self.registry.get(analysis_id)
                 if (
                     not result["partial"]
-                    and completed.cache_key
+                    and current_record
+                    and current_record.cache_key
                     and hasattr(self.registry, "store_cache")
                 ):
                     policy_hash = policy_fingerprint(policy)
@@ -252,16 +235,37 @@ class SpawnJobExecutor:
                             except ValueError:
                                 continue
                     expected = cache_key(
-                        completed.root_id, relative, current_project_hash, policy_hash
+                        current_record.root_id,
+                        relative,
+                        current_project_hash,
+                        policy_hash,
                     )
-                    if expected == completed.cache_key:
+                    if expected == current_record.cache_key:
                         self.registry.store_cache(
-                            completed.cache_key,
+                            current_record.cache_key,
                             graph,
                             policy_hash,
                             current_project_hash,
                         )
+                self.registry.transition(
+                    analysis_id,
+                    state,
+                    percent=100,
+                    message_code="ANALYSIS_PARTIAL"
+                    if result["partial"]
+                    else "ANALYSIS_COMPLETED",
+                    graph=graph,
+                    diagnostics=list(graph.get("diagnostics", [])),
+                )
                 summary = graph.get("summary", {})
+                logger.info(
+                    "codestruct.analysis.completed analysis_id=%s state=%s files=%s nodes=%s edges=%s",
+                    analysis_id,
+                    state.value,
+                    summary.get("source_units_total"),
+                    summary.get("nodes_total"),
+                    summary.get("edges_total"),
+                )
                 logger.info(
                     "event=analysis_completed analysis_id=%s stage=completed cache_hit=false files=%s nodes=%s edges=%s",
                     analysis_id,

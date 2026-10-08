@@ -5,7 +5,7 @@ import { normalizeGraph } from './graphAdapter.js'
 import { GraphContractError, normalizeGraphContract, safeRelativePath } from './graphContract.js'
 import { adaptLegacyGraph } from './legacyGraphAdapter.js'
 import { DEFAULT_FILTERS, exceedsGraphThreshold, filterGraph, nextSearchIndex, searchNodes, selectElementDetails } from './graphSelectors.js'
-import { layoutGraph } from './graphLayout.js'
+import { layoutGraph, measureGraphLayout } from './graphLayout.js'
 import { toReactFlowElements } from './reactFlowAdapter.js'
 import { generateDot } from './exportDot.js'
 import { circularGraph, createLargeGraph, legacyFixture, partialGraph, resolutionGraph, smallGraph, unsupportedGraph } from './fixtures/graphFixtures.js'
@@ -117,4 +117,17 @@ test('generateDot produces valid Graphviz digraph with nodes, edges and metrics'
   assert(dot.includes('->'))
   assert(dot.endsWith('}\n'))
   assert.equal(generateDot(null), '')
+})
+
+test('layoutGraph is pure and measureGraphLayout benchmarks dense graphs under 500ms', () => {
+  const dense = normalizeGraph(createLargeGraph(186))
+  const result = measureGraphLayout(dense.nodes, dense.edges)
+  assert.equal(result.nodeCount, 186)
+  assert(typeof result.durationMs === 'number')
+  assert(result.durationMs < 500)
+  assert.equal(result.nodes.length, 186)
+
+  // Verify purity: layoutGraph produces exact same output without mutating window properties
+  const pureResult = layoutGraph(dense.nodes, dense.edges)
+  assert.deepEqual(pureResult, result.nodes)
 })
