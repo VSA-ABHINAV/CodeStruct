@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Changes required (Ready for Codex Review 7) | `docs/verification/M4.md` | Review 6 corrections verified: lint pure, CDP poll logging on new document, exact cancellation_requested ack, real UI paging failure/retry, isolated Chrome profile scan |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Changes required (Ready for Codex Review 8) | `docs/verification/M4.md` | Single-pass layout timing in graphLayout.js (no duplicate render); fail-closed secret scanning with process quiescence verified |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -17,6 +17,11 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
+
+Milestone 4 Codex Review 7 Corrections Pass (2026-10-07): **Changes required (Ready for Codex Review 8)**. Addressed both findings from `docs/verification/M4_CODEX_REVIEW_7.md`:
+- Finding 1: Removed duplicate `layoutGraph` execution in `ArchitectureExplorer.jsx` (`useEffect` hook removed). Integrated duration timing directly into single-pass `layoutGraph` in `graphLayout.js`. ESLint, Vitest, and production build pass cleanly.
+- Finding 2: Refactored `scan_for_secret_tokens()` to fail closed (asserts every file readable, asserts `scanned_file_count > 0`). Added `stop_process_and_wait()` to ensure complete process exit and handle release before scanning disk.
+- Retained full real Windows workflow and quality gates at 100% pass rate. Do not begin M5.
 
 Milestone 4 Codex Review 6 Corrections Pass (2026-10-06): **Changes required (Ready for Codex Review 7)**. All 6 findings from `docs/verification/M4_CODEX_REVIEW_6.md` resolved and verified across all gates and live Windows smoke workflow:
 - Finding 1: Frontend lint purity fixed (layout timing moved to `useEffect`); `npm run lint` passes with 0 errors/warnings.
@@ -29,9 +34,9 @@ Milestone 4 Codex Review 6 Corrections Pass (2026-10-06): **Changes required (Re
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (M4 portion) | Chrome launched with `--incognito` and isolated per-run `--user-data-dir`; non-disclosing scanner checks profile before teardown; failure-path diagnostic redaction regression test verified. | Codex review |
-| CS-007 | Ready for Codex review (M4 portion) | Layout timing moved out of render path (ESLint clean); real UI paging failure and retry flow exercised with visible error banner, strict identity retention, and merge. | Codex review |
-| CS-021 | Ready for Codex review (M4 portion) | `Page.addScriptToEvaluateOnNewDocument` preserves poll logging across navigation; exact `cancellation_requested` DELETE ack asserted; zero post-terminal polls verified. | Codex review |
+| CS-006 | Ready for Codex review (M4 portion) | Fail-closed secret scan with `stop_process_and_wait` quiescence, isolated `--user-data-dir`, and failure-path diagnostic redaction regression test verified. | Codex review |
+| CS-007 | Ready for Codex review (M4 portion) | Single-pass `layoutGraph` duration measurement without duplicate production computation; real UI paging failure/retry flow and full node/edge parity verified. | Codex review |
+| CS-021 | Ready for Codex review (M4 portion) | Document-start poll logger, exact `cancellation_requested` acknowledgement, terminal state, and zero additional polls verified in the real smoke. | Codex review after M4 remaining corrections |
 | CS-022 | Ready for Codex review (M4 portion) | Computed motion duration and responsive/ARIA assertions remain; screen-reader observation pending. | Codex review after M4 corrections |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
@@ -47,6 +52,25 @@ Milestone 4 Codex Review 6 Corrections Pass (2026-10-06): **Changes required (Re
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-07 — Antigravity Milestone 4 Corrections Pass 8 (Codex Review 7)
+
+- Addressed both findings from `docs/verification/M4_CODEX_REVIEW_7.md`:
+  - **Finding 1 (Single-Pass Layout Timing):** Removed duplicate `layoutGraph` execution from `ArchitectureExplorer.jsx` (`useEffect` hook removed). Single-pass layout duration and metadata are measured directly inside `layoutGraph` in `graphLayout.js`. `npm.cmd run lint --prefix frontend` passes with 0 errors and 0 warnings.
+  - **Finding 2 (Fail-Closed Secret Scan & Quiescence):** Refactored `scan_for_secret_tokens()` to fail closed (asserts every file in target dir can be read, asserts `scanned_file_count > 0`). Added `stop_process_and_wait()` helper to ensure all subprocesses (Chrome, Thonny, frontend, backend) and child processes are fully terminated and file handles released before disk scanning.
+- Verified all quality and test gates:
+  - Frontend Vitest: 103 passed across 10 test files (`npm.cmd test --prefix frontend -- --run`).
+  - Frontend ESLint: 0 errors, 0 warnings (`npm.cmd run lint --prefix frontend`).
+  - Frontend Production Build: `npm.cmd run build --prefix frontend` -> built in 393ms.
+  - Backend Pytest: 189 passed, 1 skipped, 1 warning (85.49% coverage >= 84%).
+  - Thonny Plugin Pytest: 53 passed, 1 skipped (`.venv\Scripts\pytest.exe -o addopts="" thonny-plugin/tests`).
+  - Ruff Check & Format: 205 files clean (`ruff check .`, `ruff format --check .`).
+  - Mypy: 48 source files clean (`mypy backend/src`).
+  - Smoke Script Syntax: `python -m py_compile docs/verification/M4_real_workflow_smoke.py` passed.
+  - Git Diff Check: clean.
+  - Real Windows Smoke Test: `.venv\Scripts\python.exe docs/verification/M4_real_workflow_smoke.py` passed with exit code 0.
+- Updated `docs/verification/M4.md`, `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Marked Milestone 4 as **Changes required (Ready for Codex Review 8)**. Milestone 5 has not been started.
 
 ### 2026-10-06 — Antigravity Milestone 4 Corrections Pass 7 (Codex Review 6)
 

@@ -110,21 +110,48 @@ async def cdp_send(
             return data.get("result", {})
 
 
+def stop_process_and_wait(proc: Any, name: str = "process") -> None:
+    """Terminates and waits for process quiescence, escalating to kill if needed."""
+    if proc is None:
+        return
+    if proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+                proc.wait(timeout=5)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to stop {name} during teardown: {type(e).__name__}"
+                ) from None
+    assert proc.poll() is not None, f"Process {name} did not exit after teardown"
+
+
 def scan_for_secret_tokens(
     target_dir: pathlib.Path, result_data: dict[str, Any]
 ) -> None:
-    """Non-disclosing scanner that asserts no raw capability tokens are persisted or output."""
+    """Non-disclosing fail-closed scanner that asserts no raw capability tokens are persisted or output."""
     token_pattern = re.compile(r"cap_[A-Za-z0-9_-]{16,}")
+    scanned_file_count = 0
     for file_path in target_dir.rglob("*"):
         if file_path.is_file():
             try:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
-                if token_pattern.search(content):
-                    raise AssertionError(
-                        f"Capability token pattern detected in persisted file: {file_path.name}"
-                    )
-            except (PermissionError, OSError):
-                continue
+            except Exception as e:
+                raise AssertionError(
+                    f"Fail-closed scan error: unable to read file for credential verification: {file_path.name} ({type(e).__name__})"
+                ) from None
+            if token_pattern.search(content):
+                raise AssertionError(
+                    f"Capability token pattern detected in persisted file: {file_path.name}"
+                )
+            scanned_file_count += 1
+
+    assert scanned_file_count > 0, (
+        "Fail-closed scan error: zero files found in target directory"
+    )
     dumped = json.dumps(result_data)
     if token_pattern.search(dumped):
         raise AssertionError(
@@ -1735,33 +1762,33 @@ window.fetch = async function(...args) {
 
         asyncio.run(run_ui_cancellation())
 
-        # Teardown processes before scanning disk to release OS file locks
-        for proc in [chrome_proc, thonny_proc, frontend_proc, backend_proc]:
-            if proc:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=5)
-                except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:  # noqa: S110
-                        pass
+        # Teardown processes and ensure full quiescence before scanning disk
+        for proc, name in [
+            (chrome_proc, "Chrome"),
+            (thonny_proc, "Thonny"),
+            (frontend_proc, "Frontend"),
+            (backend_proc, "Backend"),
+        ]:
+            stop_process_and_wait(proc, name)
+
+        # Brief pause to allow OS file system handles to fully close
+        time.sleep(0.5)
 
         # 9. Non-Disclosing Secret Token Scan
         scan_for_secret_tokens(temp_dir, results)
 
     finally:
         # Teardown processes fallback
-        for proc in [chrome_proc, thonny_proc, frontend_proc, backend_proc]:
-            if proc:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=2)
-                except Exception:
-                    try:
-                        proc.kill()
-                    except Exception:  # noqa: S110
-                        pass
+        for proc, name in [
+            (chrome_proc, "Chrome"),
+            (thonny_proc, "Thonny"),
+            (frontend_proc, "Frontend"),
+            (backend_proc, "Backend"),
+        ]:
+            try:
+                stop_process_and_wait(proc, name)
+            except Exception:  # noqa: S110
+                pass
 
         # Clean up temporary disposable directory ONLY
         try:

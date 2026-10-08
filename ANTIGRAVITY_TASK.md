@@ -1,24 +1,21 @@
-# Antigravity task: Milestone 4 corrections — Codex Review 6
+# Antigravity task: Milestone 4 corrections — Codex Review 7
 
-Date: 2026-10-06. Repository: `D:\REP\Codestruct\Codestruct`.
+Date: 2026-10-07. Repository: `D:\REP\Codestruct\Codestruct`.
 
-Read `docs/verification/M4_CODEX_REVIEW_6.md`, prior M4 reviews, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, and `docs/codestruct_audit.md`. M4 remains **Changes required** at `640534e`. Work only on Review 6; preserve earlier accepted milestones and the frontend design. Do not begin M5.
+Read `docs/verification/M4_CODEX_REVIEW_7.md`, prior M4 reviews, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, and `docs/codestruct_audit.md`. M4 remains **Changes required** at `83d88ba`. Work only on Review 7. Preserve earlier accepted milestones and frontend design. Do not begin M5.
 
 ## Required corrections
 
-1. Move `layoutGraph` timing out of React render/`useMemo` so lint passes and the measurement still reports the actual product layout work.
-2. Fix the cancellation poller probe: its current instrumentation is installed before a full-page navigation and is discarded. Install the fetch/network instrumentation in the new document before app code (or use CDP Network events), assert it records status calls before cancellation, and prove no new status calls occur after terminal. Fail if instrumentation is absent or its count is zero before cancellation.
-3. Make the cancellation fixture reliably slow and require the UI's actual DELETE acknowledgement state to be exactly `cancellation_requested`; remove any acceptance of a response already in terminal `cancelled` as the acknowledgement. Then verify backend terminal `cancelled` and live UI announcement.
-4. Exercise pagination through the actual Architecture Explorer action. Force its next-page request to fail, assert the visible error/retry UI and unchanged loaded node/edge identities, activate retry, and verify it succeeds and merges the expected page.
-5. Isolate Chrome with a unique `--user-data-dir` under the smoke temp directory (or give equally concrete evidence the raw viewer URL cannot be persisted). Scan the isolated profile for the capability before deleting it. Keep tokens out of all diagnostics and add a failure-path test of the actual formatted output path, not only the redaction helper.
-6. Correct `docs/verification/M4.md`, `PROCESS_TRACKER.md`, and `docs/codestruct_audit.md` to match actual test evidence. Keep M4 Changes Required until every gate and the real workflow pass.
+1. Remove the second production `layoutGraph()` execution currently performed in `useEffect` after the same graph was already laid out in `useMemo`. Keep useful actual-layout evidence through a test-only instrumentation path or another approach that does not duplicate normal product work. Preserve React purity and rerun frontend lint/tests/build plus the real layout smoke assertion.
+2. Make `scan_for_secret_tokens()` fail closed: do not continue when a profile/temp file cannot be inspected. Report a sanitized error without file contents or secrets. Ensure Chrome and any child processes have fully exited before scanning; if a process must be killed, wait for termination before scanning. Claim zero persisted tokens only if the entire isolated profile and temp directory were readable and scanned.
+3. Reconcile M4 report, tracker, and audit with the actual resulting assertions and gates.
 
 ## Required verification and stop condition
 
-Run full backend coverage, plugin tests, frontend tests/lint/build, Ruff check/format, mypy, smoke-script syntax, `git diff --check`, and the real Windows backend/browser/Thonny workflow. Capture sanitized output. Do not claim completion for a skipped or failed gate. Commit/push only this bounded M4 correction after all gates pass, verify clean worktree and remote parity, then stop for Codex review. Do not begin M5.
+Run full backend coverage, plugin tests, frontend tests/lint/build, Ruff check/format, mypy, smoke-script syntax, `git diff --check`, and the real Windows backend/browser/Thonny workflow. Capture sanitized output and distinguish any unreadable-file or process-cleanup failure. Commit/push only after every required gate passes, verify clean worktree and remote parity, then stop for Codex review. Do not begin M5.
 
 ## Launch prompt
 
 ```text
-Read ANTIGRAVITY_TASK.md and docs/verification/M4_CODEX_REVIEW_6.md. Implement only the listed M4 corrections, run all required gates and the real Windows backend/browser/Thonny workflow with an isolated Chrome profile and no capability in any output, update verification evidence and tracker/audit truthfully, commit/push only after all gates pass, verify clean worktree and remote parity, then stop for Codex review. Do not begin Milestone 5.
+Read ANTIGRAVITY_TASK.md and docs/verification/M4_CODEX_REVIEW_7.md. Implement only the listed M4 corrections, preserve the real layout measurement without a second production layout computation, make secret scanning fail closed and wait for Chrome/profile quiescence, run all required gates and the real Windows workflow, update evidence and tracker/audit truthfully, commit/push only after all gates pass, verify clean worktree and remote parity, then stop for Codex review. Do not begin Milestone 5.
 ```

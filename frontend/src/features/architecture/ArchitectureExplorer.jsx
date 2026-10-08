@@ -93,16 +93,6 @@ export default function ArchitectureExplorer({
     [presentation.nodes, presentation.edges]
   )
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const t0 = typeof performance !== 'undefined' ? performance.now() : 0
-      layoutGraph(presentation.nodes, presentation.edges)
-      const t1 = typeof performance !== 'undefined' ? performance.now() : 0
-      window.__codestruct_last_layout_ms = t1 - t0
-      window.__codestruct_layout_node_count = presentation.nodes.length
-      window.__codestruct_layout_edge_count = presentation.edges.length
-    }
-  }, [presentation.nodes, presentation.edges])
   const details = useMemo(() => selectElementDetails(normalized, selection), [normalized, selection])
 
   const activeState = contract.error?.code === 'UNSUPPORTED_SCHEMA'
