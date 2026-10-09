@@ -9,7 +9,9 @@ import re
 import secrets
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 from codestruct.settings import Settings
@@ -21,6 +23,7 @@ from codestruct.storage.cache_keys import (
 )
 from codestruct.storage.errors import CorruptCacheEntryError
 from codestruct.storage.interfaces import JobRepository
+from codestruct.storage.models import RuntimeSessionRecord
 
 from .executor import QueueFullError, SpawnJobExecutor
 from .models import TERMINAL_STATES, JobRecord, JobState
@@ -631,6 +634,124 @@ class AnalysisService:
             )
         self.executor.cancel(analysis_id)
         return record
+
+    def execute_runtime_session(
+        self,
+        analysis_id: str,
+        target_file: str,
+        *,
+        entry_function: str | None = None,
+        args: Sequence[str] = (),
+        timeout_seconds: float = 10.0,
+        max_events: int = 50000,
+    ) -> tuple[RuntimeSessionRecord, dict[str, object]]:
+        record = self.get(analysis_id)
+        if record is None:
+            raise ProjectSelectionError(
+                "JOB_NOT_FOUND", "The requested analysis does not exist or has expired."
+            )
+        if record.graph is None or record.state not in (
+            JobState.COMPLETED,
+            JobState.PARTIALLY_COMPLETED,
+        ):
+            raise ProjectSelectionError(
+                "RESULT_UNAVAILABLE",
+                "Runtime execution requires a completed static analysis result.",
+            )
+
+        from codestruct.analysis.dynamic_tracer import (
+            merge_runtime_trace_into_graph,
+            trace_project_target,
+        )
+        from codestruct.graph.enums import NodeKind
+        from codestruct.graph.serialization import graph_from_dict, graph_to_dict
+
+        project_root = Path(record.project_root).resolve()
+        target_path = (
+            project_root / target_file
+            if not Path(target_file).is_absolute()
+            else Path(target_file)
+        ).resolve()
+        if not target_path.is_relative_to(project_root):
+            raise ProjectSelectionError(
+                "RUNTIME_PATH_OUTSIDE_PROJECT",
+                f"Target file '{target_file}' is outside authorized project root.",
+            )
+        if not target_path.is_file():
+            raise ProjectSelectionError(
+                "TARGET_NOT_FOUND",
+                f"Target file does not exist: '{target_file}'",
+            )
+
+        success, trace, error_msg = trace_project_target(
+            project_root,
+            target_path,
+            entry_function=entry_function,
+            args=args,
+            timeout_seconds=timeout_seconds,
+            max_events=max_events,
+        )
+
+        graph_res = graph_from_dict(record.graph)
+        merged_res = merge_runtime_trace_into_graph(graph_res, trace)
+        merged_dict = graph_to_dict(merged_res)
+
+        # Update in-memory / persistent record
+        if hasattr(self.registry, "update_analysis_graph"):
+            self.registry.update_analysis_graph(analysis_id, merged_dict)
+
+        # Calculate coverage stats
+        target_kinds = (
+            NodeKind.FUNCTION,
+            NodeKind.METHOD,
+            NodeKind.ASYNC_FUNCTION,
+            NodeKind.ASYNC_METHOD,
+        )
+        total_nodes = len([n for n in merged_res.nodes if n.kind in target_kinds])
+        covered_nodes = len(
+            [
+                n
+                for n in merged_res.nodes
+                if n.kind in target_kinds
+                and (
+                    dict(n.attributes).get("runtime_invocations")
+                    or dict(n.attributes).get("runtime_calls_out")
+                )
+            ]
+        )
+        coverage_percent = (
+            round(100.0 * covered_nodes / max(1, total_nodes), 2)
+            if total_nodes > 0
+            else 0.0
+        )
+
+        session_id = "rts_" + secrets.token_urlsafe(12)
+        session = RuntimeSessionRecord(
+            session_id=session_id,
+            analysis_id=analysis_id,
+            target_file=target_file,
+            entry_function=entry_function,
+            status="completed" if success else "failed",
+            total_calls=trace.total_calls,
+            execution_time_seconds=trace.execution_time_seconds,
+            overhead_seconds=trace.overhead_seconds,
+            covered_nodes=covered_nodes,
+            total_nodes=total_nodes,
+            coverage_percent=coverage_percent,
+            trace_events_count=len(trace.events),
+            created_at=datetime.now(timezone.utc).isoformat(),
+            error_message=error_msg,
+        )
+
+        if hasattr(self.registry, "save_runtime_session"):
+            self.registry.save_runtime_session(session)
+
+        return session, merged_dict
+
+    def get_runtime_sessions(self, analysis_id: str) -> list[RuntimeSessionRecord]:
+        if hasattr(self.registry, "get_runtime_sessions"):
+            return self.registry.get_runtime_sessions(analysis_id)
+        return []
 
     def shutdown(self) -> None:
         self.executor.shutdown()

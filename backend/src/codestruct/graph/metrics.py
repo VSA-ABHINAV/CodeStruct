@@ -531,12 +531,30 @@ def get_algorithm_port(force_adapter: str | None = None) -> GraphAlgorithmPort:
         return DefaultAlgorithmAdapter()
 
 
+METRIC_ATTRIBUTE_KEYS = frozenset(
+    {
+        "centrality",
+        "community",
+        "component",
+        "fan_in",
+        "fan_out",
+        "in_cycle",
+        "instability",
+        "ca",
+        "ce",
+        "module_instability",
+        "cohesion",
+        "relational_density",
+    }
+)
+
+
 def enrich_nodes_with_metrics(
     nodes: tuple[GraphNode, ...],
     edges: tuple[GraphEdge, ...],
     port: GraphAlgorithmPort | None = None,
 ) -> tuple[GraphNode, ...]:
-    """Compute structural metrics and attach them to node attributes."""
+    """Compute structural metrics and attach them to node attributes, refreshing existing metric values."""
     if not nodes:
         return nodes
 
@@ -550,11 +568,10 @@ def enrich_nodes_with_metrics(
             enriched.append(node)
             continue
 
-        existing_keys = {k for k, _ in node.attributes}
-        new_attrs = list(node.attributes)
-        for key, val in m.to_attributes():
-            if key not in existing_keys:
-                new_attrs.append((key, val))
+        non_metric_attrs = [
+            (k, v) for k, v in node.attributes if k not in METRIC_ATTRIBUTE_KEYS
+        ]
+        new_attrs = non_metric_attrs + list(m.to_attributes())
 
         enriched.append(
             GraphNode(

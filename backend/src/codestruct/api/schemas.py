@@ -143,3 +143,50 @@ class NodeExplanationResponse(StrictModel):
     recommendations: list[str]
     prompt: str | None = None
     provider: str = "rule-based"
+
+
+class ExecuteRuntimeRequest(StrictModel):
+    target_file: str = Field(default="main.py", min_length=1, max_length=4096)
+    entry_function: str | None = Field(default=None, max_length=256)
+    args: list[str] = Field(default_factory=list)
+    timeout_seconds: float = Field(default=10.0, ge=0.5, le=30.0)
+    max_events: int = Field(default=50000, ge=100, le=500000)
+
+    @field_validator("target_file")
+    @classmethod
+    def no_nul(cls, value: str) -> str:
+        if "\x00" in value:
+            raise ValueError("path contains an invalid character")
+        return value.strip()
+
+
+class RuntimeSessionSummary(StrictModel):
+    session_id: str
+    analysis_id: str
+    target_file: str
+    entry_function: str | None = None
+    status: str
+    total_calls: int
+    execution_time_seconds: float
+    overhead_seconds: float
+    covered_nodes: int
+    total_nodes: int
+    coverage_percent: float
+    trace_events_count: int
+    created_at: str
+    error_message: str | None = None
+
+
+class ExecuteRuntimeResponse(StrictModel):
+    api_version: Literal["v1"] = "v1"
+    request_id: str
+    session: RuntimeSessionSummary
+    graph_updated: bool = True
+    links: Links
+
+
+class RuntimeSessionsResponse(StrictModel):
+    api_version: Literal["v1"] = "v1"
+    request_id: str
+    analysis_id: str
+    sessions: list[RuntimeSessionSummary]

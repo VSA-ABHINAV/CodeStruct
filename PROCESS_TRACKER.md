@@ -1,4 +1,3 @@
-# CodeStruct process tracker
 
 Updated: 2026-10-09. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
 
@@ -9,14 +8,22 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 13) | `docs/verification/M4.md` | Thonny environment minny.target compatibility restored, workbench & CodeStruct plugin startup verified, live editor cursor verified, full gates & repeated clean real smoke runs pass |
-| M5 | CS-012–014 | Antigravity | Not started | — | Pending |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
+| M5 | CS-012-CS-014 | Antigravity | Ready for Codex review (Pass 1) | `docs/verification/M5.md` | Explicit runtime execution, attribution/disambiguation with ambiguity retained, recursion self-loops, repeated run metric re-enrichment |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
+
+Milestone 5 Antigravity Pass 1, 2026-10-09: **Ready for Codex Review (Pass 1)**. Implemented issues CS-012, CS-013, and CS-014:
+- **CS-012 (Explicit Opt-In Runtime Analysis):** Added `POST /api/v1/analyses/{analysis_id}/runtime` and `GET /api/v1/analyses/{analysis_id}/runtime` endpoints; enforced authorized root path containment and escaping path rejection (`RUNTIME_PATH_OUTSIDE_PROJECT`); preserved strict non-execution for static analysis.
+- **CS-013 (Attribution, Disambiguation & Ambiguity Retention):** Implemented line-span matching with ambiguity retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`); captured multithreading profiling (`sys.setprofile` + `threading.setprofile`) with clean hook restoration; handled generator/coroutine suspension without false exception flags; added recursive self-loop edge support (`recursive: "true"`).
+- **CS-014 (Repeat Runs & Derived Metric Re-enrichment):** Implemented cumulative `runtime_calls` on edges and node-level stats (`runtime_invocations`, `runtime_calls_out`, `runtime_exception`); updated `enrich_nodes_with_metrics` to recompute and overwrite stale graph metrics over combined edges without losing custom node attributes.
+- **Verification & Gates:** All quality gates pass (196 backend pytest / 84.79% coverage, 53 plugin pytest, 104 frontend vitest, ruff check/format clean, mypy clean, clean frontend build, deterministic M5 runner exit 0). Evidence recorded in `docs/verification/M5.md`. Do not begin M6.
+
+Milestone 4 Codex Review 13, 2026-10-09: **Accepted.** Independent backend tests pass at 85.34% coverage, plugin tests pass, frontend tests/lint/build pass, Ruff and mypy pass, and the real Windows backend/browser/Thonny smoke completed with live editor cursor `4.4`. Review evidence is in `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md`. Manual screen-reader observation remains pending under CS-022; M5 is the next authorized implementation milestone.
 
 Milestone 4 Codex Review 12 Corrections Pass (2026-10-09): **Ready for Codex Review (Pass 13)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_12.md`:
 - Finding 1 (Thonny Environment Compatibility & Workbench Startup): Repaired `D:\REP\thonny\venv` by providing `minny.target` module stub in site-packages and runtime dynamic fallback in smoke harness. Proved Thonny workbench startup, CodeStruct plugin loading, and live Tk text widget cursor navigation (`4.4`) across repeated clean live workflow smoke runs.
@@ -29,10 +36,13 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (Pass 13) | Thonny venv minny.target compatibility restored, workbench & CodeStruct plugin startup verified, Toolhelp snapshot & enumeration error modes fail closed, mandatory Windows junction & containment regressions passing, live Tk cursor 4.4 verified. | Review M4 integration |
-| CS-007 | Ready for Codex review (Pass 13) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; smoke runs confirm 100% graph/table parity. | Review M4 integration |
-| CS-021 | Ready for Codex review (Pass 13) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and 0 post-terminal polls verified. | Review M4 integration |
-| CS-022 | Ready for Codex review (Pass 13) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Review M4 evidence |
+| CS-012 | Ready for Codex review (Pass 1) | Explicit bounded runtime analysis endpoints (`POST /api/v1/analyses/{id}/runtime`, `GET /api/v1/analyses/{id}/runtime`) implemented; static non-execution preserved; authorized containment enforced. | None for M5 (Codex review) |
+| CS-013 | Ready for Codex review (Pass 1) | Line-span matching with ambiguity retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`); multithreading profile capture; generator suspension exception exclusion; recursive self-loops. | None for M5 (Codex review) |
+| CS-014 | Ready for Codex review (Pass 1) | Repeated-run merging with cumulative call counts, node-level stats (`runtime_invocations`, `runtime_calls_out`, `runtime_exception`), and re-enrichment overwriting stale graph metrics. | None for M5 (Codex review) |
+| CS-006 | Accepted (M4) | Thonny compatibility harness, actual CodeStruct plugin analysis, browser-to-editor dispatch, and live Tk cursor `4.4` independently verified; Toolhelp and junction regressions pass. | None for M4 |
+| CS-007 | Accepted (M4 portion) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; live smoke confirms graph/table parity. | None for M4; future issue work remains separately tracked |
+| CS-021 | Accepted (M4 portion) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and zero post-terminal polls verified. | None for M4 |
+| CS-022 | Accepted (M4 automated portion) | Reduced-motion computed durations, responsive reflow, ARIA regions, and keyboard controls verified. | Manual screen-reader observation remains pending |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -47,8 +57,13 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+### 2026-10-09 - Codex Milestone 4 Review 13
 
-### 2026-10-09 — Antigravity Milestone 4 Corrections Pass 13 (Codex Review 12)
+- Accepted M4 after independent backend coverage, plugin, frontend, static-analysis, and real Windows backend/browser/Thonny workflow verification.
+- Recorded that manual screen-reader observation remains pending under CS-022 and remote Git parity could not be independently verified because GitHub was unreachable.
+- Prepared the bounded M5 handoff for CS-012-CS-014. M5 implementation has not started.
+
+### Antigravity M4 Pass 13 (Codex Review 12)
 
 - Addressed all findings from `docs/verification/M4_CODEX_REVIEW_12.md`:
   - **Finding 1 (Thonny Environment & Workbench Compatibility):** Repaired `D:\REP\thonny\venv` by providing `minny.target` module stub in site-packages and added defensive runtime fallback in `run_thonny.py` harness template. Verified that Thonny workbench initializes, loads `thonnycontrib.codestruct`, starts analysis, dispatches navigation from CDP browser click, and updates live Tk insert cursor to line `4.4` (`def calculate_root2(self):`).

@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from copy import deepcopy
 from threading import RLock
+from typing import Any
 
 from .models import TERMINAL_STATES, JobRecord, JobState, utc_now
 
@@ -66,6 +67,7 @@ _ALLOWED = {
 class JobRegistry:
     def __init__(self, retention_seconds: int) -> None:
         self._records: dict[str, JobRecord] = {}
+        self._runtime_sessions: dict[str, list[Any]] = {}
         self._expired: set[str] = set()
         self._lock = RLock()
         self._retention = retention_seconds
@@ -143,9 +145,29 @@ class JobRegistry:
             ]
             for key in expired:
                 del self._records[key]
+                if key in self._runtime_sessions:
+                    del self._runtime_sessions[key]
                 self._expired.add(key)
             return len(expired)
 
     def is_expired(self, analysis_id: str) -> bool:
         with self._lock:
             return analysis_id in self._expired
+
+    def save_runtime_session(self, session: Any) -> None:
+        with self._lock:
+            if session.analysis_id not in self._runtime_sessions:
+                self._runtime_sessions[session.analysis_id] = []
+            self._runtime_sessions[session.analysis_id].append(deepcopy(session))
+
+    def get_runtime_sessions(self, analysis_id: str) -> list[Any]:
+        with self._lock:
+            return deepcopy(self._runtime_sessions.get(analysis_id, []))
+
+    def update_analysis_graph(self, analysis_id: str, graph: dict[str, object]) -> None:
+        with self._lock:
+            record = self._records.get(analysis_id)
+            if record is not None:
+                record.graph = deepcopy(graph)
+                record.updated_at = utc_now()
+                record.revision += 1

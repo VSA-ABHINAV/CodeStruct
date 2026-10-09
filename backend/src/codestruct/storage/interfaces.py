@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from codestruct.jobs.models import JobRecord, JobState
 
@@ -24,6 +24,11 @@ class JobRepository(Protocol):
     ) -> JobRecord: ...
     def cleanup_expired(self) -> int: ...
     def is_expired(self, analysis_id: str) -> bool: ...
+    def save_runtime_session(self, session: Any) -> None: ...
+    def get_runtime_sessions(self, analysis_id: str) -> list[Any]: ...
+    def update_analysis_graph(
+        self, analysis_id: str, graph: dict[str, object]
+    ) -> None: ...
 
 
 class CacheRepository(Protocol):

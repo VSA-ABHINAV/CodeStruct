@@ -19,7 +19,7 @@ from codestruct.jobs.registry import _ALLOWED, InvalidTransitionError
 
 from .errors import CorruptCacheEntryError, StorageError
 from .migrations import migrate
-from .models import CacheEntry
+from .models import CacheEntry, RuntimeSessionRecord
 
 
 class SQLiteRepository:
@@ -352,3 +352,60 @@ class SQLiteRepository:
                 total -= row["stored_size"]
                 removed += 1
         return removed
+
+    def save_runtime_session(self, session: RuntimeSessionRecord) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO runtime_sessions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    session.session_id,
+                    session.analysis_id,
+                    session.target_file,
+                    session.entry_function,
+                    session.status,
+                    session.total_calls,
+                    session.execution_time_seconds,
+                    session.overhead_seconds,
+                    session.covered_nodes,
+                    session.total_nodes,
+                    session.coverage_percent,
+                    session.trace_events_count,
+                    session.created_at,
+                    session.error_message,
+                ),
+            )
+
+    def get_runtime_sessions(self, analysis_id: str) -> list[RuntimeSessionRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM runtime_sessions WHERE analysis_id=? ORDER BY created_at",
+                (analysis_id,),
+            ).fetchall()
+            return [
+                RuntimeSessionRecord(
+                    session_id=row["session_id"],
+                    analysis_id=row["analysis_id"],
+                    target_file=row["target_file"],
+                    entry_function=row["entry_function"],
+                    status=row["status"],
+                    total_calls=row["total_calls"],
+                    execution_time_seconds=row["execution_time_seconds"],
+                    overhead_seconds=row["overhead_seconds"],
+                    covered_nodes=row["covered_nodes"],
+                    total_nodes=row["total_nodes"],
+                    coverage_percent=row["coverage_percent"],
+                    trace_events_count=row["trace_events_count"],
+                    created_at=row["created_at"],
+                    error_message=row["error_message"],
+                )
+                for row in rows
+            ]
+
+    def update_analysis_graph(self, analysis_id: str, graph: dict[str, object]) -> None:
+        raw = json.dumps(graph, sort_keys=True, separators=(",", ":"))
+        now = utc_now()
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE jobs SET graph_json=?, updated_at=? WHERE analysis_id=?",
+                (raw, now, analysis_id),
+            )

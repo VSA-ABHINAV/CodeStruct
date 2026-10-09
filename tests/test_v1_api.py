@@ -224,6 +224,65 @@ class ApiIntegrationTests(unittest.TestCase):
         finally:
             service.shutdown()
 
+    def test_runtime_analysis_opt_in_execution_and_session_retrieval(self):
+        from fastapi.testclient import TestClient
+
+        app = create_app(self.settings(SAMPLE))
+        try:
+            with TestClient(app) as client:
+                create_resp = client.post(
+                    "/api/v1/analyses",
+                    json={"project": {"root_id": "sample", "relative_path": "."}},
+                )
+                self.assertEqual(create_resp.status_code, 202)
+                analysis_id = create_resp.json()["analysis_id"]
+
+                # Wait for static analysis completion
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    status_resp = client.get(f"/api/v1/analyses/{analysis_id}")
+                    if status_resp.json()["state"] == "completed":
+                        break
+                    time.sleep(0.05)
+
+                # Ensure initial runtime sessions are empty
+                sessions_resp = client.get(f"/api/v1/analyses/{analysis_id}/runtime")
+                self.assertEqual(sessions_resp.status_code, 200)
+                self.assertEqual(sessions_resp.json()["sessions"], [])
+
+                # Execute bounded runtime analysis session
+                runtime_resp = client.post(
+                    f"/api/v1/analyses/{analysis_id}/runtime",
+                    json={
+                        "target_file": "main.py",
+                        "args": [],
+                        "timeout_seconds": 5.0,
+                    },
+                )
+                self.assertEqual(runtime_resp.status_code, 200)
+                body = runtime_resp.json()
+                self.assertEqual(body["session"]["analysis_id"], analysis_id)
+                self.assertEqual(body["session"]["target_file"], "main.py")
+                self.assertGreaterEqual(body["session"]["trace_events_count"], 1)
+                self.assertGreaterEqual(body["session"]["total_calls"], 1)
+
+                # Check runtime sessions listing now includes the completed session
+                sessions_resp2 = client.get(f"/api/v1/analyses/{analysis_id}/runtime")
+                self.assertEqual(sessions_resp2.status_code, 200)
+                self.assertEqual(len(sessions_resp2.json()["sessions"]), 1)
+
+                # Test escaping target path rejection
+                bad_resp = client.post(
+                    f"/api/v1/analyses/{analysis_id}/runtime",
+                    json={"target_file": "../outside.py"},
+                )
+                self.assertEqual(bad_resp.status_code, 400)
+                self.assertEqual(
+                    bad_resp.json()["error"]["code"], "RUNTIME_PATH_OUTSIDE_PROJECT"
+                )
+        finally:
+            app.state.analysis_service.shutdown()
+
 
 if __name__ == "__main__":
     unittest.main()

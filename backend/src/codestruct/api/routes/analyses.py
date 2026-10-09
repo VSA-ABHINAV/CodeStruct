@@ -19,10 +19,14 @@ from ..pagination import slice_graph
 from ..schemas import (
     CreateAnalysisRequest,
     DiagnosticsResponse,
+    ExecuteRuntimeRequest,
+    ExecuteRuntimeResponse,
     JobResponse,
     Links,
     NodeExplanationResponse,
     Progress,
+    RuntimeSessionsResponse,
+    RuntimeSessionSummary,
 )
 
 router = APIRouter(prefix="/api/v1/analyses", tags=["analyses"])
@@ -336,3 +340,104 @@ def cancel_analysis(
         )
     response.status_code = 200 if updated.state is JobState.CANCELLED else 202
     return _job(updated, request.state.request_id, service.settings.polling_interval_ms)
+
+
+@router.post(
+    "/{analysis_id}/runtime",
+    response_model=ExecuteRuntimeResponse,
+    status_code=200,
+)
+def execute_runtime(
+    analysis_id: str,
+    body: ExecuteRuntimeRequest,
+    request: Request,
+    service: AnalysisService = Depends(analysis_service),
+) -> ExecuteRuntimeResponse:
+    try:
+        session, _ = service.execute_runtime_session(
+            analysis_id,
+            body.target_file,
+            entry_function=body.entry_function,
+            args=body.args,
+            timeout_seconds=body.timeout_seconds,
+            max_events=body.max_events,
+        )
+    except ProjectSelectionError as error:
+        status_code = 404
+        if error.code in (
+            "PROJECT_UNAUTHORIZED",
+            "SCOPE_UNAUTHORIZED",
+            "SESSION_UNAUTHORIZED",
+        ):
+            status_code = 403
+        elif error.code in ("RUNTIME_PATH_OUTSIDE_PROJECT", "TARGET_NOT_FOUND"):
+            status_code = 400
+        elif error.code == "RESULT_UNAVAILABLE":
+            status_code = 409
+        raise ApiError(status_code, error.code, str(error)) from None
+    except (ValueError, FileNotFoundError) as error:
+        raise ApiError(400, "INVALID_TARGET", str(error)) from None
+
+    base = f"/api/v1/analyses/{analysis_id}"
+    summary = RuntimeSessionSummary(
+        session_id=session.session_id,
+        analysis_id=session.analysis_id,
+        target_file=session.target_file,
+        entry_function=session.entry_function,
+        status=session.status,
+        total_calls=session.total_calls,
+        execution_time_seconds=session.execution_time_seconds,
+        overhead_seconds=session.overhead_seconds,
+        covered_nodes=session.covered_nodes,
+        total_nodes=session.total_nodes,
+        coverage_percent=session.coverage_percent,
+        trace_events_count=session.trace_events_count,
+        created_at=session.created_at,
+        error_message=session.error_message,
+    )
+    return ExecuteRuntimeResponse(
+        request_id=request.state.request_id,
+        session=summary,
+        graph_updated=True,
+        links=Links(
+            self=f"{base}/runtime",
+            graph=f"{base}/graph",
+            diagnostics=f"{base}/diagnostics",
+        ),
+    )
+
+
+@router.get(
+    "/{analysis_id}/runtime",
+    response_model=RuntimeSessionsResponse,
+)
+def list_runtime_sessions(
+    analysis_id: str,
+    request: Request,
+    service: AnalysisService = Depends(analysis_service),
+) -> RuntimeSessionsResponse:
+    _require(service, analysis_id)
+    sessions = service.get_runtime_sessions(analysis_id)
+    return RuntimeSessionsResponse(
+        request_id=request.state.request_id,
+        analysis_id=analysis_id,
+        sessions=[
+            RuntimeSessionSummary(
+                session_id=s.session_id,
+                analysis_id=s.analysis_id,
+                target_file=s.target_file,
+                entry_function=s.entry_function,
+                status=s.status,
+                total_calls=s.total_calls,
+                execution_time_seconds=s.execution_time_seconds,
+                overhead_seconds=s.overhead_seconds,
+                covered_nodes=s.covered_nodes,
+                total_nodes=s.total_nodes,
+                coverage_percent=s.coverage_percent,
+                trace_events_count=s.trace_events_count,
+                created_at=s.created_at,
+                error_message=s.error_message,
+            )
+            for s in sessions
+        ],
+    )

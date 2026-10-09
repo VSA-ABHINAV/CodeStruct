@@ -1,4 +1,4 @@
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 DDL = """
 CREATE TABLE IF NOT EXISTS schema_metadata(version INTEGER NOT NULL);
@@ -19,4 +19,12 @@ CREATE TABLE IF NOT EXISTS cache_results(
 CREATE INDEX IF NOT EXISTS idx_jobs_expiry ON jobs(expires_at_epoch);
 CREATE INDEX IF NOT EXISTS idx_cache_lru ON cache_results(last_accessed_at);
 CREATE TABLE IF NOT EXISTS expired_jobs(analysis_id TEXT PRIMARY KEY, forget_after_epoch REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS runtime_sessions(
+ session_id TEXT PRIMARY KEY, analysis_id TEXT NOT NULL, target_file TEXT NOT NULL,
+ entry_function TEXT, status TEXT NOT NULL, total_calls INTEGER NOT NULL,
+ execution_time_seconds REAL NOT NULL, overhead_seconds REAL NOT NULL,
+ covered_nodes INTEGER NOT NULL, total_nodes INTEGER NOT NULL, coverage_percent REAL NOT NULL,
+ trace_events_count INTEGER NOT NULL, created_at TEXT NOT NULL, error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_runtime_analysis ON runtime_sessions(analysis_id);
 """
