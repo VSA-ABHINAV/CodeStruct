@@ -1,6 +1,6 @@
 # CodeStruct process tracker
 
-Updated: 2026-10-08. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
+Updated: 2026-10-09. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
 
 Only Codex assigns Accepted after review. Antigravity records implementation and verification, then sets Ready for Codex review. Preserve earlier evidence and user files. Frontend visual creation belongs to Lovable.
 
@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 12) | `docs/verification/M4.md` | Fail-closed Win32 Toolhelp snapshot & enumeration with injected failure regressions; mandatory Windows junction & outside containment verified |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 13) | `docs/verification/M4.md` | Thonny environment minny.target compatibility restored, workbench & CodeStruct plugin startup verified, live editor cursor verified, full gates & repeated clean real smoke runs pass |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,17 +18,21 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Ready for Codex Review (Pass 12)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_11.md`:
+Milestone 4 Codex Review 12 Corrections Pass (2026-10-09): **Ready for Codex Review (Pass 13)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_12.md`:
+- Finding 1 (Thonny Environment Compatibility & Workbench Startup): Repaired `D:\REP\thonny\venv` by providing `minny.target` module stub in site-packages and runtime dynamic fallback in smoke harness. Proved Thonny workbench startup, CodeStruct plugin loading, and live Tk text widget cursor navigation (`4.4`) across repeated clean live workflow smoke runs.
+- Finding 2 (Document & Handoff Reconciliation): Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external audit mirror. All quality gates pass. Do not begin M5.
+
+Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_11.md`:
 - Finding 1: Refactored Win32 Toolhelp functions (`get_windows_process_tree_pids`, `get_all_active_pids_win32`) to fail closed on `CreateToolhelp32Snapshot` failure, `Process32FirstW` failure, or unexpected `Process32NextW` iteration errors (`GetLastError() != ERROR_NO_MORE_FILES`). Added automated injected failure-path regressions for all three error modes.
 - Finding 2: Made Windows junction and reparse verification mandatory in step 0 regressions. Asserts inside-root junction creation (`mklink /J`), detection via `is_reparse_or_link()`, and scanner fail-closed rejection. Added outside-root junction and canonical containment rejection test (`entry.resolve().is_relative_to(target.resolve())`).
 - Finding 3: Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external mirror. All gates pass. Do not begin M5.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (Pass 12) | Fail-closed Toolhelp snapshot/enumeration with injected failure regressions; mandatory Windows inside-root & outside-root junction containment regressions pass. | Review M4 evidence |
-| CS-007 | Ready for Codex review (Pass 12) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; smoke runs confirm 100% graph/table parity. | Review M4 integration |
-| CS-021 | Ready for Codex review (Pass 12) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and 0 post-terminal polls verified. | Review M4 integration |
-| CS-022 | Ready for Codex review (Pass 12) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Review M4 evidence |
+| CS-006 | Ready for Codex review (Pass 13) | Thonny venv minny.target compatibility restored, workbench & CodeStruct plugin startup verified, Toolhelp snapshot & enumeration error modes fail closed, mandatory Windows junction & containment regressions passing, live Tk cursor 4.4 verified. | Review M4 integration |
+| CS-007 | Ready for Codex review (Pass 13) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; smoke runs confirm 100% graph/table parity. | Review M4 integration |
+| CS-021 | Ready for Codex review (Pass 13) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and 0 post-terminal polls verified. | Review M4 integration |
+| CS-022 | Ready for Codex review (Pass 13) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Review M4 evidence |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -43,6 +47,23 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Ready for Codex Rev
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-09 — Antigravity Milestone 4 Corrections Pass 13 (Codex Review 12)
+
+- Addressed all findings from `docs/verification/M4_CODEX_REVIEW_12.md`:
+  - **Finding 1 (Thonny Environment & Workbench Compatibility):** Repaired `D:\REP\thonny\venv` by providing `minny.target` module stub in site-packages and added defensive runtime fallback in `run_thonny.py` harness template. Verified that Thonny workbench initializes, loads `thonnycontrib.codestruct`, starts analysis, dispatches navigation from CDP browser click, and updates live Tk insert cursor to line `4.4` (`def calculate_root2(self):`).
+  - **Finding 2 (Document & Handoff Reconciliation):** Updated `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Verified all quality and test gates:
+  - Frontend Vitest: 104 passed across 10 test files (`npm.cmd --prefix frontend test -- --run`).
+  - Frontend ESLint: 0 errors, 0 warnings (`npm.cmd --prefix frontend run lint`).
+  - Frontend Production Build: `npm.cmd --prefix frontend run build` -> built in 236ms.
+  - Backend Pytest: 189 passed, 1 skipped, 1 warning (85.34% coverage >= 84%).
+  - Thonny Plugin Pytest: 53 passed, 1 skipped (`.venv\Scripts\python.exe -m pytest thonny-plugin/tests --no-cov`).
+  - Ruff Check & Format: 135 files clean (`ruff check`, `ruff format --check`).
+  - Mypy: 50 source files clean (`mypy --config-file pyproject.toml`).
+  - Git Diff Check: clean (0 whitespace errors).
+  - Real Windows Smoke Test: 2 consecutive runs passed with exit 0 (nonce `0abb1032` and `d3b64b6e`).
+- Marked Milestone 4 as **Ready for Codex review (Pass 13)**. Milestone 5 has not been started.
 
 ### 2026-10-09 — Antigravity Milestone 4 Corrections Pass 12 (Codex Review 11)
 
