@@ -43,6 +43,7 @@ import sys
 import tempfile
 import threading
 import time
+import unittest.mock as mock
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -59,6 +60,7 @@ TH32CS_SNAPPROCESS = 0x00000002
 INVALID_HANDLE_VALUE = (
     ctypes.wintypes.HANDLE(-1).value if sys.platform == "win32" else -1
 )
+ERROR_NO_MORE_FILES = 18
 
 
 class PROCESSENTRY32W(ctypes.Structure):
@@ -90,24 +92,42 @@ if kernel32:
     Process32NextW = kernel32.Process32NextW
     Process32NextW.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
     Process32NextW.restype = ctypes.wintypes.BOOL
+    GetLastError = kernel32.GetLastError
+    GetLastError.argtypes = []
+    GetLastError.restype = ctypes.wintypes.DWORD
 
 
 def get_windows_process_tree_pids(root_pid: int) -> set[int]:
-    """Discovers root_pid and all its descendant PIDs using Win32 Toolhelp snapshot."""
-    if sys.platform != "win32" or not kernel32:
+    """Discovers root_pid and all its descendant PIDs using Win32 Toolhelp snapshot. Fails closed on any error."""
+    if sys.platform != "win32":
         return {root_pid}
+    if not kernel32:
+        raise RuntimeError(
+            "Fail-closed error: kernel32 is unavailable for Toolhelp snapshot"
+        )
     h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
     if h == INVALID_HANDLE_VALUE:
-        return {root_pid}
+        err = GetLastError()
+        raise RuntimeError(
+            f"Fail-closed error: CreateToolhelp32Snapshot failed with Win32 error code {err}"
+        )
     try:
         pe = PROCESSENTRY32W()
         pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
         if not Process32FirstW(h, ctypes.byref(pe)):
-            return {root_pid}
+            err = GetLastError()
+            raise RuntimeError(
+                f"Fail-closed error: Process32FirstW failed with Win32 error code {err}"
+            )
         parent_map: dict[int, list[int]] = {}
         while True:
             parent_map.setdefault(pe.th32ParentProcessID, []).append(pe.th32ProcessID)
             if not Process32NextW(h, ctypes.byref(pe)):
+                err = GetLastError()
+                if err != ERROR_NO_MORE_FILES:
+                    raise RuntimeError(
+                        f"Fail-closed error: Process32NextW failed during enumeration with Win32 error code {err}"
+                    )
                 break
         descendants = {root_pid}
         queue_pids = [root_pid]
@@ -123,21 +143,36 @@ def get_windows_process_tree_pids(root_pid: int) -> set[int]:
 
 
 def get_all_active_pids_win32() -> set[int]:
-    """Returns set of all currently active PIDs in the system."""
-    if sys.platform != "win32" or not kernel32:
+    """Returns set of all currently active PIDs in the system. Fails closed on any error."""
+    if sys.platform != "win32":
         return set()
+    if not kernel32:
+        raise RuntimeError(
+            "Fail-closed error: kernel32 is unavailable for Toolhelp snapshot"
+        )
     h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
     if h == INVALID_HANDLE_VALUE:
-        return set()
+        err = GetLastError()
+        raise RuntimeError(
+            f"Fail-closed error: CreateToolhelp32Snapshot failed with Win32 error code {err}"
+        )
     try:
         pe = PROCESSENTRY32W()
         pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
         pids: set[int] = set()
         if not Process32FirstW(h, ctypes.byref(pe)):
-            return pids
+            err = GetLastError()
+            raise RuntimeError(
+                f"Fail-closed error: Process32FirstW failed with Win32 error code {err}"
+            )
         while True:
             pids.add(pe.th32ProcessID)
             if not Process32NextW(h, ctypes.byref(pe)):
+                err = GetLastError()
+                if err != ERROR_NO_MORE_FILES:
+                    raise RuntimeError(
+                        f"Fail-closed error: Process32NextW failed during enumeration with Win32 error code {err}"
+                    )
                 break
         return pids
     finally:
@@ -442,8 +477,79 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
         f"Expected token redaction in diagnostic output: {emitted_diag}"
     )
 
-    # 0b. Process-Tree Teardown & Secret Scanner Fail-Closed Regressions (CODEX REVIEW 10 FIX)
-    # (i) Test real process tree shutdown asserting both parent and descendant child PID exit
+    # 0b. Process-Tree Teardown & Secret Scanner Fail-Closed Regressions (CODEX REVIEW 11 FIX)
+    # (i) Test Win32 Toolhelp snapshot and enumeration failure injections
+    if sys.platform == "win32" and kernel32:
+        # 1. Snapshot creation failure injection
+        with mock.patch(
+            f"{__name__}.CreateToolhelp32Snapshot",
+            return_value=INVALID_HANDLE_VALUE,
+        ):
+            try:
+                get_windows_process_tree_pids(os.getpid())
+                raise AssertionError(
+                    "Expected get_windows_process_tree_pids to fail closed on snapshot error"
+                )
+            except RuntimeError as snap_err:
+                assert "CreateToolhelp32Snapshot failed" in str(snap_err)
+
+            try:
+                get_all_active_pids_win32()
+                raise AssertionError(
+                    "Expected get_all_active_pids_win32 to fail closed on snapshot error"
+                )
+            except RuntimeError as snap_err:
+                assert "CreateToolhelp32Snapshot failed" in str(snap_err)
+
+        def _fresh_snapshot(*args: Any) -> Any:
+            return kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+
+        # 2. Process32FirstW failure injection
+        with mock.patch(
+            f"{__name__}.CreateToolhelp32Snapshot",
+            side_effect=_fresh_snapshot,
+        ):
+            with mock.patch(f"{__name__}.Process32FirstW", return_value=0):
+                try:
+                    get_windows_process_tree_pids(os.getpid())
+                    raise AssertionError(
+                        "Expected get_windows_process_tree_pids to fail closed on Process32FirstW error"
+                    )
+                except RuntimeError as first_err:
+                    assert "Process32FirstW failed" in str(first_err)
+
+                try:
+                    get_all_active_pids_win32()
+                    raise AssertionError(
+                        "Expected get_all_active_pids_win32 to fail closed on Process32FirstW error"
+                    )
+                except RuntimeError as first_err:
+                    assert "Process32FirstW failed" in str(first_err)
+
+        # 3. Process32NextW unexpected iteration error injection
+        with mock.patch(
+            f"{__name__}.CreateToolhelp32Snapshot",
+            side_effect=_fresh_snapshot,
+        ):
+            with mock.patch(f"{__name__}.Process32NextW", return_value=0):
+                with mock.patch(f"{__name__}.GetLastError", return_value=5):
+                    try:
+                        get_windows_process_tree_pids(os.getpid())
+                        raise AssertionError(
+                            "Expected get_windows_process_tree_pids to fail closed on Process32NextW error"
+                        )
+                    except RuntimeError as next_err:
+                        assert "Process32NextW failed" in str(next_err)
+
+                    try:
+                        get_all_active_pids_win32()
+                        raise AssertionError(
+                            "Expected get_all_active_pids_win32 to fail closed on Process32NextW error"
+                        )
+                    except RuntimeError as next_err:
+                        assert "Process32NextW failed" in str(next_err)
+
+    # (ii) Test real process tree shutdown asserting both parent and descendant child PID exit
     child_spawn_script = "import time; time.sleep(30)"
     parent_spawn_script = (
         f"import subprocess, sys, time; "
@@ -471,7 +577,7 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
             f"Test child PID {test_child_pid} was not terminated by process tree shutdown"
         )
 
-    # (ii) Test scanner fail-closed on token leak, special entries, and Windows junction/reparse points
+    # (iii) Test scanner fail-closed on token leak, special entries, and mandatory Windows junction/reparse points
     test_scan_dir = pathlib.Path(tempfile.mkdtemp(prefix="codestruct_scan_test_"))
     try:
         (test_scan_dir / "valid.txt").write_text("clean content", encoding="utf-8")
@@ -491,23 +597,30 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
         assert leak_detected is True, "Scanner failed to detect secret token pattern"
         (test_scan_dir / "leaked.txt").unlink()
 
-        # Test Windows junction / reparse point rejection
-        junc_target = test_scan_dir / "junc_target"
-        junc_target.mkdir()
-        (junc_target / "nested.txt").write_text("inside target", encoding="utf-8")
-        junc_link = test_scan_dir / "junc_link"
-        junc_created = False
+        # (iv) Mandatory Windows junction & canonical containment regressions (CODEX REVIEW 11 FIX)
         if sys.platform == "win32":
-            subprocess.run(
+            # 1. Inside-root junction test
+            junc_target = test_scan_dir / "junc_target"
+            junc_target.mkdir(parents=True, exist_ok=True)
+            (junc_target / "nested.txt").write_text("inside target", encoding="utf-8")
+            junc_link = test_scan_dir / "junc_link"
+
+            mk_res = subprocess.run(
                 ["cmd", "/c", "mklink", "/J", str(junc_link), str(junc_target)],
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            if junc_link.exists() and is_reparse_or_link(junc_link):
-                junc_created = True
+            assert mk_res.returncode == 0, (
+                f"Mandatory Windows junction creation failed: {mk_res.stderr.strip()}"
+            )
+            assert junc_link.exists(), (
+                f"Mandatory Windows junction not found on disk at {junc_link}"
+            )
+            assert is_reparse_or_link(junc_link) is True, (
+                f"Mandatory Windows junction was not recognized by is_reparse_or_link(): {junc_link}"
+            )
 
-        if junc_created:
             reparse_detected = False
             try:
                 scan_for_secret_tokens(test_scan_dir, {"ok": True})
@@ -515,15 +628,72 @@ def run_full_m4_real_workflow() -> dict[str, Any]:
                 if "unexpected symlink or reparse point" in str(rep_err):
                     reparse_detected = True
             assert reparse_detected is True, (
-                "Scanner failed to reject Windows junction reparse point"
+                "Scanner failed to reject mandatory Windows junction reparse point"
             )
-            # Remove junction using rmdir
             subprocess.run(
                 ["cmd", "/c", "rmdir", str(junc_link)],
                 capture_output=True,
                 check=False,
             )
-        shutil.rmtree(junc_target, ignore_errors=True)
+            shutil.rmtree(junc_target, ignore_errors=True)
+
+            # 2. Outside-root junction and containment test
+            outside_scan_dir = pathlib.Path(
+                tempfile.mkdtemp(prefix="codestruct_outside_test_")
+            )
+            try:
+                (outside_scan_dir / "outside_secret.txt").write_text(
+                    "outside content", encoding="utf-8"
+                )
+                outside_junc_link = test_scan_dir / "outside_junc"
+                mk_res_out = subprocess.run(
+                    [
+                        "cmd",
+                        "/c",
+                        "mklink",
+                        "/J",
+                        str(outside_junc_link),
+                        str(outside_scan_dir),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                assert mk_res_out.returncode == 0, (
+                    f"Mandatory outside-root Windows junction creation failed: {mk_res_out.stderr.strip()}"
+                )
+                assert outside_junc_link.exists(), (
+                    f"Mandatory outside-root Windows junction not found on disk at {outside_junc_link}"
+                )
+                assert is_reparse_or_link(outside_junc_link) is True, (
+                    f"Mandatory outside-root Windows junction was not recognized by is_reparse_or_link(): {outside_junc_link}"
+                )
+
+                # Verify scanner rejects outside-root reparse point fail-closed
+                outside_reparse_detected = False
+                try:
+                    scan_for_secret_tokens(test_scan_dir, {"ok": True})
+                except AssertionError as out_rep_err:
+                    if "unexpected symlink or reparse point" in str(out_rep_err):
+                        outside_reparse_detected = True
+                assert outside_reparse_detected is True, (
+                    "Scanner failed to reject outside-root Windows junction reparse point"
+                )
+
+                # Verify canonical containment resolution rejection
+                resolved_target_root = test_scan_dir.resolve(strict=True)
+                resolved_outside_link = outside_junc_link.resolve(strict=True)
+                assert not resolved_outside_link.is_relative_to(resolved_target_root), (
+                    f"Outside link {resolved_outside_link} should resolve outside scan root {resolved_target_root}"
+                )
+
+                subprocess.run(
+                    ["cmd", "/c", "rmdir", str(outside_junc_link)],
+                    capture_output=True,
+                    check=False,
+                )
+            finally:
+                shutil.rmtree(outside_scan_dir, ignore_errors=True)
     finally:
         shutil.rmtree(test_scan_dir, ignore_errors=True)
 

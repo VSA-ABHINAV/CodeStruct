@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M1 | CS-001–004, CS-023, contract portion CS-026 | Antigravity | Accepted | `docs/verification/M1_CODEX_REVIEW_8_ACCEPTED.md` | Live Thonny cursor and selected-file isolation verified; stale STOP race fixed; contract and focused gates pass |
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
-| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 11) | `docs/verification/M4.md` | Descendant process exit asserted via Win32 Toolhelp snapshot; Windows junction/reparse points detected & fail-closed; sanitized cancellation diagnostics |
+| M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Ready for Codex review (Pass 12) | `docs/verification/M4.md` | Fail-closed Win32 Toolhelp snapshot & enumeration with injected failure regressions; mandatory Windows junction & outside containment verified |
 | M5 | CS-012–014 | Antigravity | Not started | — | Pending |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
@@ -18,18 +18,17 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
-Milestone 4 Codex Review 10 Corrections Pass (2026-10-08): **Ready for Codex Review (Pass 11)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_10.md`:
-- Finding 1: Implemented Win32 Toolhelp snapshot process tree descendant tracking (`get_windows_process_tree_pids`, `get_all_active_pids_win32`) in `stop_process_tree_and_wait()`. Asserts all descendant PIDs have completely exited before disk scanning. Extended step 0 regression to assert child PID is dead.
-- Finding 2: Implemented `is_reparse_or_link()` detecting symlinks, junctions, and `FILE_ATTRIBUTE_REPARSE_POINT` (0x400) plus canonical containment check (`is_relative_to`) before recursion in `scan_for_secret_tokens()`. Added automated step 0 regression creating and rejecting real Windows junctions via `mklink /J`.
-- Finding 3: Sanitized cancellation failure diagnostics in `M4_real_workflow_smoke.py`, formatting `progress.phase` and `progress.message_code` without claiming non-existent top-level `error_code`.
-- Finding 4: Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external mirror. All gates pass. Do not begin M5.
+Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Ready for Codex Review (Pass 12)**. Addressed all findings from `docs/verification/M4_CODEX_REVIEW_11.md`:
+- Finding 1: Refactored Win32 Toolhelp functions (`get_windows_process_tree_pids`, `get_all_active_pids_win32`) to fail closed on `CreateToolhelp32Snapshot` failure, `Process32FirstW` failure, or unexpected `Process32NextW` iteration errors (`GetLastError() != ERROR_NO_MORE_FILES`). Added automated injected failure-path regressions for all three error modes.
+- Finding 2: Made Windows junction and reparse verification mandatory in step 0 regressions. Asserts inside-root junction creation (`mklink /J`), detection via `is_reparse_or_link()`, and scanner fail-closed rejection. Added outside-root junction and canonical containment rejection test (`entry.resolve().is_relative_to(target.resolve())`).
+- Finding 3: Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external mirror. All gates pass. Do not begin M5.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-006 | Ready for Codex review (Pass 11) | Win32 Toolhelp snapshot captures all descendant PIDs and asserts complete quiescence before profile scanning; reparse points and junctions fail closed; step 0 regressions pass. | Review M4 evidence |
-| CS-007 | Ready for Codex review (Pass 11) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; two smoke runs confirm 100% graph/table parity. | Review M4 integration |
-| CS-021 | Ready for Codex review (Pass 11) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and 0 post-terminal polls verified. | Review M4 integration |
-| CS-022 | Ready for Codex review (Pass 11) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Review M4 evidence |
+| CS-006 | Ready for Codex review (Pass 12) | Fail-closed Toolhelp snapshot/enumeration with injected failure regressions; mandatory Windows inside-root & outside-root junction containment regressions pass. | Review M4 evidence |
+| CS-007 | Ready for Codex review (Pass 12) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; smoke runs confirm 100% graph/table parity. | Review M4 integration |
+| CS-021 | Ready for Codex review (Pass 12) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and 0 post-terminal polls verified. | Review M4 integration |
+| CS-022 | Ready for Codex review (Pass 12) | Computed motion duration and responsive/ARIA assertions verified; screen-reader observation pending. | Review M4 evidence |
 | CS-008 | Accepted (M2) | `metrics_computed: bool` explicitly serialized on `GraphMetadata` and verified in smoke for false, true, and warm cache hit. | None |
 | CS-009 | Accepted (M2) | Transient NetworkX adapter, optional dependency, deterministic fallback, and unified canonical community partitioning verified across exhaustive 4/5-node parity probe. | None |
 | CS-010 | Accepted (M2) | Resolved-edge filtering, iterative SCC, component separation, module metrics, and unified canonical community partitioning independently verified. | None |
@@ -44,6 +43,24 @@ Milestone 4 Codex Review 10 Corrections Pass (2026-10-08): **Ready for Codex Rev
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-09 — Antigravity Milestone 4 Corrections Pass 12 (Codex Review 11)
+
+- Addressed all 3 findings from `docs/verification/M4_CODEX_REVIEW_11.md`:
+  - **Finding 1 (Fail-Closed Win32 Toolhelp API & Failure Injections):** Refactored `get_windows_process_tree_pids()` and `get_all_active_pids_win32()` in `M4_real_workflow_smoke.py` to propagate sanitized `RuntimeError` on snapshot creation, `Process32FirstW`, and unexpected `Process32NextW` iteration errors (`GetLastError() != ERROR_NO_MORE_FILES`). Added automated step 0 mock injection tests for all three error conditions.
+  - **Finding 2 (Mandatory Windows Junction & Containment Regressions):** Made Windows junction regression mandatory in step 0, asserting creation (`mklink /J`), detection via `is_reparse_or_link()`, and scanner fail-closed rejection. Added outside-root junction and canonical containment verification asserting `resolve(strict=True)` is not relative to the scan root.
+  - **Finding 3 (Handoff & Audit Reconciliation):** Reconciled `ANTIGRAVITY_TASK.md`, `PROCESS_TRACKER.md`, `docs/verification/M4.md`, `docs/codestruct_audit.md`, and external audit mirror.
+- Verified all quality and test gates:
+  - Frontend Vitest: 104 passed across 10 test files (`npm.cmd test --prefix frontend -- --run`).
+  - Frontend ESLint: 0 errors, 0 warnings (`npm.cmd run lint --prefix frontend`).
+  - Frontend Production Build: `npm.cmd run build --prefix frontend` -> built in 251ms.
+  - Backend Pytest: 189 passed, 1 skipped, 1 warning (85.34% coverage >= 84%).
+  - Thonny Plugin Pytest: 53 passed, 1 skipped (`.venv\Scripts\pytest.exe -o addopts="" thonny-plugin/tests`).
+  - Ruff Check & Format: 209 files clean (`ruff check .`, `ruff format --check .`).
+  - Mypy: 48 source files clean (`mypy backend/src`).
+  - Git Diff Check: clean (0 whitespace errors).
+  - Real Windows Smoke Test: 2 consecutive runs passed with exit 0 (nonce `63110c21` and `959d27a3`).
+- Marked Milestone 4 as **Ready for Codex review (Pass 12)**. Milestone 5 has not been started.
 
 ### 2026-10-08 — Antigravity Milestone 4 Corrections Pass 11 (Codex Review 10)
 
