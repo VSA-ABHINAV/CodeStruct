@@ -89,7 +89,10 @@ def run_worker(payload_path: str) -> None:
             mod_globals[entry_function]()
         success = True
     except Exception as exc:
-        error_msg = str(exc)
+        raw_msg = str(exc)
+        error_msg = (
+            raw_msg[:max_output_bytes] if len(raw_msg) > max_output_bytes else raw_msg
+        )
         success = False
     finally:
         trace = tracer.stop()

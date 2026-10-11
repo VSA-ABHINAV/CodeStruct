@@ -755,61 +755,68 @@ def trace_project_target(
             else src_path
         )
 
+        stdout_path = tmp_path / "stdout.log"
+        stderr_path = tmp_path / "stderr.log"
+
         start_time = time.monotonic()
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "codestruct.analysis.runtime_worker",
-                str(payload_file),
-            ],
-            cwd=str(resolved_root),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        timed_out = False
-        cancelled = False
-        deadline = start_time + timeout_seconds
-
-        while True:
-            ret = proc.poll()
-            if ret is not None:
-                break
-            if cancel_event is not None and cancel_event.is_set():
-                cancelled = True
-                break
-            if time.monotonic() >= deadline:
-                timed_out = True
-                break
-            time.sleep(0.01)
-
-        elapsed = time.monotonic() - start_time
-
-        if timed_out or cancelled:
-            _kill_process_tree(proc.pid)
-            try:
-                proc.wait(timeout=2.0)
-            except Exception:
-                pass
-            msg = (
-                f"Target execution exceeded timeout of {timeout_seconds}s"
-                if timed_out
-                else "Session cancelled"
+        with open(stdout_path, "wb") as out_f, open(stderr_path, "wb") as err_f:
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "codestruct.analysis.runtime_worker",
+                    str(payload_file),
+                ],
+                cwd=str(resolved_root),
+                env=env,
+                stdout=out_f,
+                stderr=err_f,
             )
-            return (
-                False,
-                RuntimeTraceResult((), 0, round(elapsed, 4), 0.0, (), 0),
-                msg,
-            )
+
+            timed_out = False
+            cancelled = False
+            deadline = start_time + timeout_seconds
+
+            while True:
+                ret = proc.poll()
+                if ret is not None:
+                    break
+                if cancel_event is not None and cancel_event.is_set():
+                    cancelled = True
+                    break
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                time.sleep(0.01)
+
+            elapsed = time.monotonic() - start_time
+
+            if timed_out or cancelled:
+                _kill_process_tree(proc.pid)
+                try:
+                    proc.wait(timeout=2.0)
+                except Exception:
+                    pass
+                msg = (
+                    f"Target execution exceeded timeout of {timeout_seconds}s"
+                    if timed_out
+                    else "Session cancelled"
+                )
+                return (
+                    False,
+                    RuntimeTraceResult((), 0, round(elapsed, 4), 0.0, (), 0),
+                    msg,
+                )
 
         if not result_file.is_file():
-            stderr_text = (
-                proc.stderr.read().decode("utf-8", errors="replace")
-                if proc.stderr
-                else ""
-            )
+            stderr_text = ""
+            if stderr_path.is_file():
+                try:
+                    stderr_text = stderr_path.read_bytes()[:max_output_bytes].decode(
+                        "utf-8", errors="replace"
+                    )
+                except Exception:
+                    stderr_text = ""
             return (
                 False,
                 RuntimeTraceResult((), 0, round(elapsed, 4), 0.0, (), 0),

@@ -503,3 +503,69 @@ def test_dynamic_tracer_truthful_overhead_and_duration():
     # For zero calls, overhead should be 0.0
     empty_trace = DynamicTracer().stop()
     assert empty_trace.overhead_seconds == 0.0
+
+
+@pytest.mark.integration
+def test_trace_project_target_output_bounds_no_leak(tmp_path):
+    from codestruct.analysis.dynamic_tracer import trace_project_target
+
+    script = tmp_path / "verbose_target.py"
+    script.write_text(
+        """
+import sys
+
+def main():
+    # Attempt to write 200 KB to stdout and 200 KB to stderr
+    sys.stdout.write("X" * 200_000)
+    sys.stderr.write("Y" * 200_000)
+    print("FINISHED")
+    return 0
+
+if __name__ == "__main__":
+    main()
+""",
+        encoding="utf-8",
+    )
+
+    # Enforce bound of 1024 bytes
+    max_output = 1024
+    success, trace, error_msg = trace_project_target(
+        project_root=tmp_path,
+        target_file=script,
+        entry_function="main",
+        max_output_bytes=max_output,
+        timeout_seconds=5.0,
+    )
+
+    assert success is True
+    assert error_msg is None
+    assert trace.total_calls >= 1
+
+
+@pytest.mark.integration
+def test_trace_project_target_error_output_capped(tmp_path):
+    from codestruct.analysis.dynamic_tracer import trace_project_target
+
+    script = tmp_path / "failing_target.py"
+    script.write_text(
+        """
+import sys
+
+# Raise an exception with huge text
+raise RuntimeError("ERR_" + ("Z" * 100_000))
+""",
+        encoding="utf-8",
+    )
+
+    max_output = 512
+    success, trace, error_msg = trace_project_target(
+        project_root=tmp_path,
+        target_file=script,
+        max_output_bytes=max_output,
+        timeout_seconds=5.0,
+    )
+
+    assert success is False
+    assert error_msg is not None
+    # Verify the error message is bounded by max_output_bytes (plus worker message prefix)
+    assert len(error_msg) <= max_output + 100

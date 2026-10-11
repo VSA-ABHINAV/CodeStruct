@@ -1,5 +1,5 @@
 
-Updated: 2026-10-09. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
+Updated: 2026-10-11. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
 
 Only Codex assigns Accepted after review. Antigravity records implementation and verification, then sets Ready for Codex review. Preserve earlier evidence and user files. Frontend visual creation belongs to Lovable.
 
@@ -9,7 +9,7 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
-| M5 | CS-012-CS-014 | Antigravity | Ready for Codex review (Pass 2) | `docs/verification/M5.md` | Process-isolated worker, bounded execution, terminal process tree kill, ambiguous candidate preservation, and truthful overhead timing verified |
+| M5 | CS-012-CS-014 | Antigravity | Final verification and cleanup requested; not Codex accepted | `ANTIGRAVITY_TASK.md`, `docs/verification/M5_CODEX_REVIEW_1.md` | Antigravity must rerun the complete acceptance matrix, fix failures, report evidence, and clean only confirmed-unused M5 artifacts |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
@@ -17,10 +17,12 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 
 ## Current milestone issue tracker
 
+M5 workflow update, 2026-10-11: Antigravity Pass 2 has been submitted. At the user's direction, Codex is not independently reviewing the implementation in this workflow. Antigravity is instructed in `ANTIGRAVITY_TASK.md` to rerun all acceptance checks, resolve failures until reproducible evidence exists, create the final report, and perform conservative phase-file cleanup. M5 remains not Codex accepted; do not begin M6.
+
 Milestone 5 Antigravity Pass 2, 2026-10-09: **Ready for Codex Review (Pass 2)**. Addressed all findings from `docs/verification/M5_CODEX_REVIEW_1.md`:
 - **CS-012 (Process-Isolated Killable Target Execution & Bounded Supervision):** Target scripts run in an isolated child process via `codestruct.analysis.runtime_worker`. `CappedStream` limits stdout/stderr bytes. Strict timeout and cancellation enforcement uses Win32 Toolhelp process-tree discovery (`_kill_process_tree`) ensuring all child/descendant processes are terminated with zero side effects occurring after timeout/cancellation. Verified with deterministic regressions (`test_trace_project_target_timeout_prevents_side_effects`, `test_trace_project_target_cancellation_prevents_side_effects`).
 - **CS-013 / CS-014 (Ambiguous Candidate Retention & Truthful Timing):** `find_node()` returns `None` and candidate list on ambiguous matches rather than arbitrarily returning the first candidate. `merge_runtime_trace_into_graph()` emits an ambiguous `CALLS` edge (`target_id = None`, `ResolutionStatus.AMBIGUOUS`, `candidate_ids`) without mutating candidate node attributes. Microsecond tracer hook overhead (`overhead_seconds > 0.0` for recorded calls) and per-event duration (`duration_seconds`) are measured and reported truthfully.
-- **Verification & Gates:** 199 backend tests passed (84.50% coverage >= 84%), 53 Thonny plugin tests passed, 104 frontend vitest tests passed, Ruff check/format clean, Mypy clean, frontend build clean, and `scripts/verify_m5_runtime.py` executed successfully reporting positive overhead. Evidence recorded in `docs/verification/M5.md`. Do not begin M6.
+- **Verification & Gates:** 201 backend tests passed (84.41% coverage >= 84%), 53 Thonny plugin tests passed, 104 frontend vitest tests passed, Ruff check/format clean, Mypy clean, frontend build clean, and `scripts/verify_m5_runtime.py` executed successfully reporting positive overhead. Output capping and no output leaks verified. Evidence recorded in `docs/verification/M5.md`. Do not begin M6.
 
 Milestone 5 Codex Review 1, 2026-10-09: **Changes required.** Full backend coverage, focused tests, plugin/frontend suites and static checks pass; real API runtime sessions persist and merge. However, a 0.1-second timeout returned after 0.11 seconds while the target still performed a later write; ambiguous observations still attach to the first candidate; and timing fields are hard-coded zero. See `docs/verification/M5_CODEX_REVIEW_1.md`; do not begin M6.
 
