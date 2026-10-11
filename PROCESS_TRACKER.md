@@ -9,13 +9,20 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
-| M5 | CS-012-CS-014 | Antigravity | Ready for Codex review (Pass 1) | `docs/verification/M5.md` | Explicit runtime execution, attribution/disambiguation with ambiguity retained, recursion self-loops, repeated run metric re-enrichment |
+| M5 | CS-012-CS-014 | Antigravity | Ready for Codex review (Pass 2) | `docs/verification/M5.md` | Process-isolated worker, bounded execution, terminal process tree kill, ambiguous candidate preservation, and truthful overhead timing verified |
 | M6 | CS-016 | Antigravity | Not started | — | Pending |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
+
+Milestone 5 Antigravity Pass 2, 2026-10-09: **Ready for Codex Review (Pass 2)**. Addressed all findings from `docs/verification/M5_CODEX_REVIEW_1.md`:
+- **CS-012 (Process-Isolated Killable Target Execution & Bounded Supervision):** Target scripts run in an isolated child process via `codestruct.analysis.runtime_worker`. `CappedStream` limits stdout/stderr bytes. Strict timeout and cancellation enforcement uses Win32 Toolhelp process-tree discovery (`_kill_process_tree`) ensuring all child/descendant processes are terminated with zero side effects occurring after timeout/cancellation. Verified with deterministic regressions (`test_trace_project_target_timeout_prevents_side_effects`, `test_trace_project_target_cancellation_prevents_side_effects`).
+- **CS-013 / CS-014 (Ambiguous Candidate Retention & Truthful Timing):** `find_node()` returns `None` and candidate list on ambiguous matches rather than arbitrarily returning the first candidate. `merge_runtime_trace_into_graph()` emits an ambiguous `CALLS` edge (`target_id = None`, `ResolutionStatus.AMBIGUOUS`, `candidate_ids`) without mutating candidate node attributes. Microsecond tracer hook overhead (`overhead_seconds > 0.0` for recorded calls) and per-event duration (`duration_seconds`) are measured and reported truthfully.
+- **Verification & Gates:** 199 backend tests passed (84.50% coverage >= 84%), 53 Thonny plugin tests passed, 104 frontend vitest tests passed, Ruff check/format clean, Mypy clean, frontend build clean, and `scripts/verify_m5_runtime.py` executed successfully reporting positive overhead. Evidence recorded in `docs/verification/M5.md`. Do not begin M6.
+
+Milestone 5 Codex Review 1, 2026-10-09: **Changes required.** Full backend coverage, focused tests, plugin/frontend suites and static checks pass; real API runtime sessions persist and merge. However, a 0.1-second timeout returned after 0.11 seconds while the target still performed a later write; ambiguous observations still attach to the first candidate; and timing fields are hard-coded zero. See `docs/verification/M5_CODEX_REVIEW_1.md`; do not begin M6.
 
 Milestone 5 Antigravity Pass 1, 2026-10-09: **Ready for Codex Review (Pass 1)**. Implemented issues CS-012, CS-013, and CS-014:
 - **CS-012 (Explicit Opt-In Runtime Analysis):** Added `POST /api/v1/analyses/{analysis_id}/runtime` and `GET /api/v1/analyses/{analysis_id}/runtime` endpoints; enforced authorized root path containment and escaping path rejection (`RUNTIME_PATH_OUTSIDE_PROJECT`); preserved strict non-execution for static analysis.
@@ -36,9 +43,9 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-012 | Ready for Codex review (Pass 1) | Explicit bounded runtime analysis endpoints (`POST /api/v1/analyses/{id}/runtime`, `GET /api/v1/analyses/{id}/runtime`) implemented; static non-execution preserved; authorized containment enforced. | None for M5 (Codex review) |
-| CS-013 | Ready for Codex review (Pass 1) | Line-span matching with ambiguity retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`); multithreading profile capture; generator suspension exception exclusion; recursive self-loops. | None for M5 (Codex review) |
-| CS-014 | Ready for Codex review (Pass 1) | Repeated-run merging with cumulative call counts, node-level stats (`runtime_invocations`, `runtime_calls_out`, `runtime_exception`), and re-enrichment overwriting stale graph metrics. | None for M5 (Codex review) |
+| CS-012 | Ready for Codex review (Pass 2) | Isolated child process execution (`runtime_worker.py`), strict deadline supervision, Win32 Toolhelp process-tree termination with zero post-timeout side effects, output byte capping, explicit runtime analysis endpoints (`POST`/`GET`). | None for M5 (Codex review) |
+| CS-013 | Ready for Codex review (Pass 2) | Ambiguous candidate retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`) without candidate node mutation; truthful microsecond overhead tracking and per-event duration timing; multithreading profiling; generator suspension handling. | None for M5 (Codex review) |
+| CS-014 | Ready for Codex review (Pass 2) | Repeated-run merging with cumulative call counts, node-level stats for resolved nodes, and re-enrichment overwriting stale graph metrics. | None for M5 (Codex review) |
 | CS-006 | Accepted (M4) | Thonny compatibility harness, actual CodeStruct plugin analysis, browser-to-editor dispatch, and live Tk cursor `4.4` independently verified; Toolhelp and junction regressions pass. | None for M4 |
 | CS-007 | Accepted (M4 portion) | Pure `layoutGraph()` + exported `measureGraphLayout()` benchmark; live smoke confirms graph/table parity. | None for M4; future issue work remains separately tracked |
 | CS-021 | Accepted (M4 portion) | Sanitized diagnostics, exact `cancellation_requested` acknowledgement, terminal `cancelled` state, and zero post-terminal polls verified. | None for M4 |
@@ -57,6 +64,14 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-09 - Codex Milestone 5 Review 1
+
+- Independently ran backend tests (196 passed, 1 skipped; 84.79% coverage), focused tracer/API tests (19 passed), plugin tests (53 passed, 1 skipped), frontend tests (104 passed), lint/build, Ruff, mypy, compilation, and `git diff --check`.
+- Ran `scripts/verify_m5_runtime.py` against an isolated database; two runtime sessions completed and graph evidence was merged, but both reported `overhead_seconds: 0.0`.
+- Reproduced the timeout defect: a configured 0.1-second timeout returned in 0.11 seconds and the target wrote a marker afterward.
+- Marked CS-012–014 Changes required and prepared the bounded correction handoff. Do not begin M6.
+
 ### 2026-10-09 - Codex Milestone 4 Review 13
 
 - Accepted M4 after independent backend coverage, plugin, frontend, static-analysis, and real Windows backend/browser/Thonny workflow verification.

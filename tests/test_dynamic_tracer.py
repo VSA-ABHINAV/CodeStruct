@@ -322,16 +322,21 @@ def test_merge_runtime_trace_ambiguity_retention(tmp_path):
         RuntimeTraceResult,
         merge_runtime_trace_into_graph,
     )
-    from codestruct.graph.enums import RelationshipKind
+    from codestruct.graph.enums import RelationshipKind, ResolutionStatus
 
     src = tmp_path / "ambig.py"
     src.write_text(
         """
-def target():
-    return 1
+class ServiceA:
+    def execute(self):
+        return 1
+
+class ServiceB:
+    def execute(self):
+        return 2
 
 def runner():
-    return 2
+    return 3
 """,
         encoding="utf-8",
     )
@@ -340,22 +345,28 @@ def runner():
     parsed = parse_project(tmp_path, policy)
     static_graph = build_graph(parsed)
 
-    # Construct synthetic ambiguous trace event where callee line doesn't match single definition
+    exec_nodes = [n for n in static_graph.nodes if n.name == "execute"]
+    assert len(exec_nodes) == 2
+    for node in exec_nodes:
+        assert "runtime_invocations" not in dict(node.attributes)
+
+    # Construct ambiguous trace event targeting "execute" without clear single match
     ambig_trace = RuntimeTraceResult(
         events=(
             RuntimeCallEvent(
                 caller_file=str(src),
                 caller_name="runner",
-                caller_line=6,
+                caller_line=10,
                 callee_file=str(src),
-                callee_name="target",
-                callee_line=999,  # synthetic non-matching line to simulate ambiguous resolution
+                callee_name="execute",
+                callee_line=999,  # synthetic line that cannot uniquely resolve to either class method
                 call_count=5,
+                duration_seconds=0.005,
             ),
         ),
         total_calls=5,
         execution_time_seconds=0.01,
-        overhead_seconds=0.0,
+        overhead_seconds=0.0001,
         threads_observed=(1,),
         exceptions_observed=0,
     )
@@ -363,7 +374,132 @@ def runner():
     merged = merge_runtime_trace_into_graph(static_graph, ambig_trace)
     calls_edges = [e for e in merged.edges if e.kind is RelationshipKind.CALLS]
     assert len(calls_edges) >= 1
+
     ambig_edge = next(
         e for e in calls_edges if dict(e.attributes).get("runtime_calls") == "5"
     )
     assert ambig_edge is not None
+    assert ambig_edge.target_id is None
+    assert ambig_edge.target_reference == "execute"
+    assert ambig_edge.resolution.status is ResolutionStatus.AMBIGUOUS
+    assert len(ambig_edge.resolution.candidate_ids) == 2
+
+    # Verify neither candidate node was mutated with the ambiguous invocation counts
+    merged_exec_nodes = [n for n in merged.nodes if n.name == "execute"]
+    for node in merged_exec_nodes:
+        assert dict(node.attributes).get("runtime_invocations", "0") == "0"
+
+
+@pytest.mark.integration
+def test_trace_project_target_timeout_prevents_side_effects(tmp_path):
+    from codestruct.analysis.dynamic_tracer import trace_project_target
+
+    marker_file = tmp_path / "marker_timeout.txt"
+    script = tmp_path / "delayed_effect.py"
+    script.write_text(
+        f"""
+import time
+from pathlib import Path
+
+def main():
+    time.sleep(0.6)
+    Path({repr(str(marker_file))}).write_text("SIDE_EFFECT_EXECUTED", encoding="utf-8")
+    return 0
+
+if __name__ == "__main__":
+    main()
+""",
+        encoding="utf-8",
+    )
+
+    success, trace, error_msg = trace_project_target(
+        project_root=tmp_path,
+        target_file=script,
+        entry_function="main",
+        timeout_seconds=0.15,
+    )
+
+    assert success is False
+    assert error_msg is not None
+    assert "exceeded timeout" in error_msg.lower()
+    assert trace.total_calls == 0
+
+    # Wait longer than the target script's sleep duration to ensure it is dead and cannot execute side effects
+    import time
+
+    time.sleep(0.7)
+    assert marker_file.exists() is False, (
+        "Side effect occurred after process timeout kill!"
+    )
+
+
+@pytest.mark.integration
+def test_trace_project_target_cancellation_prevents_side_effects(tmp_path):
+    import threading
+    import time
+
+    from codestruct.analysis.dynamic_tracer import trace_project_target
+
+    marker_file = tmp_path / "marker_cancelled.txt"
+    script = tmp_path / "cancellable_effect.py"
+    script.write_text(
+        f"""
+import time
+from pathlib import Path
+
+def main():
+    time.sleep(0.6)
+    Path({repr(str(marker_file))}).write_text("SIDE_EFFECT_EXECUTED", encoding="utf-8")
+    return 0
+
+if __name__ == "__main__":
+    main()
+""",
+        encoding="utf-8",
+    )
+
+    cancel_event = threading.Event()
+
+    # Trigger cancellation shortly after launch
+    def cancel_later():
+        time.sleep(0.1)
+        cancel_event.set()
+
+    canceller = threading.Thread(target=cancel_later)
+    canceller.start()
+
+    success, trace, error_msg = trace_project_target(
+        project_root=tmp_path,
+        target_file=script,
+        entry_function="main",
+        timeout_seconds=5.0,
+        cancel_event=cancel_event,
+    )
+    canceller.join()
+
+    assert success is False
+    assert error_msg is not None
+    assert "cancelled" in error_msg.lower()
+
+    # Wait longer than the target script's sleep duration
+    time.sleep(0.7)
+    assert marker_file.exists() is False, (
+        "Side effect occurred after process cancellation!"
+    )
+
+
+@pytest.mark.unit
+def test_dynamic_tracer_truthful_overhead_and_duration():
+    def dummy_target():
+        return helper_func_a(3)
+
+    _, trace = trace_call(dummy_target)
+    assert trace.total_calls >= 2
+    # Overhead must be truthfully measured and strictly positive for recorded calls
+    assert trace.overhead_seconds > 0.0
+    for event in trace.events:
+        assert event.duration_seconds >= 0.0
+
+    # For zero calls, overhead should be 0.0
+    empty_trace = DynamicTracer().stop()
+    assert empty_trace.overhead_seconds == 0.0
