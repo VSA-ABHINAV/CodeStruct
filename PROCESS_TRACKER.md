@@ -9,13 +9,21 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M2 | CS-008–011, CS-018–019 | Antigravity | Accepted | `docs/verification/M2_CODEX_REVIEW_4_ACCEPTED.md` | Shared canonical community partition, exhaustive 4/5-node parity, full backend/plugin/static gates, real API/cache smoke and audit mirror independently verified |
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
-| M5 | CS-012-CS-014 | Antigravity | Ready for Codex review (Pass 2) | `docs/verification/M5.md` | Tested code commit `e72a909`, report commits `a8f3d38`, `7ea0999`; zero code diffs to HEAD; full gates pass |
-| M6 | CS-016 | Antigravity | Not started | — | Pending |
+| M5 | CS-012-CS-014 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | docs/verification/M5_REPORT_ACCEPTED.md, docs/verification/M5.md | Report records full gates and cleanup; code e72a909; reports a8f3d38, 7ea0999, fc21580 |
+| M6 | CS-016 | Antigravity | Ready for review | `docs/verification/M6.md` | Tested code commit `649625b`; 5 real API scenarios; full gates pass (84.75% coverage); zero code diff to HEAD |
 | M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
+
+Milestone 6 Antigravity Pass 1, 2026-10-12: **Ready for Codex Review**. Implemented issue CS-016 ("Grounded semantic explanations, bounded retrieval, and strict validation"):
+- **CS-016 Bounded Retrieval & Security Containment (`retrieval.py`):** Canonical path containment (`is_safe_path_contained`), sensitive/secret pattern exclusion (`is_secret_or_sensitive`), line/byte bounds (`retrieve_source_snippet`), and multi-source context assembly (definition source snippet, relationships, runtime events, topological metrics, and bounded token budget).
+- **CS-016 Strict Validation & Provenance (`llm_summary.py`):** Strict Pydantic models with `extra="forbid"` (`ExplanationClaim`, `LLMExplanationPayload`). Canonical citation validation against retrieved evidence IDs (`validate_evidence_references`) rejecting hallucinated IDs with `InvalidCitationError`. Clear distinction of model-derived claims labeled `LLM_INFERRED` vs rule-based `RULE_SYNTHESIZED`.
+- **CS-016 Explicit Opt-In & Deterministic Offline Fallback:** Default `provider="rule-based"` on `GET /api/v1/analyses/{analysis_id}/nodes/{node_id}/explain`. Automatic deterministic fallback when LLM is unconfigured (`CODESTRUCT_LLM_API_BASE` unset), times out, hallucinates citations, or returns invalid schemas, with truthful response metadata (`fallback_used`, `fallback_reason`, `retrieved_evidence_ids`, `cited_evidence_ids`, `claims`). Zero paid/remote provider calls in tests (local injected `FakeExplanationProvider`).
+- **Verification & Gates:** 274 pytest passed, 1 skipped (84.75% coverage >= 84%), 53 Thonny plugin tests passed, 104 frontend vitest tests passed, Ruff check and format clean, Mypy clean, frontend build clean, static analysis non-execution invariant verified, and `scripts/verify_m6_semantic.py` passed across 5 isolated API scenarios. Tested code commit `649625b`. Safe file cleanup verified with zero untracked files. Do not begin M7.
+
+M5 completion, 2026-10-12: Per the user instruction to rely on Antigravity report, M5 is considered complete based on docs/verification/M5.md. Codex did not independently inspect or test the implementation. M6 CS-016 implemented and verified.
 
 M5 workflow update, 2026-10-12: Antigravity Pass 2 report and commit reconciliation completed. Tested code commit is `e72a909`, report commits are `a8f3d38` and `7ea0999`. Verified via `git diff e72a909..HEAD` that only documentation files changed, with zero changes to implementation, test suites, dependencies, or configuration. Full quality gates independently rerun and verified (201 backend tests / 84.41% coverage, 53 Thonny plugin tests, 104 Vitest tests, Ruff clean, Mypy clean, Frontend build clean, and isolated SQLite runtime verification exit 0). Safe M5 file inventory verified with zero untracked or temporary files remaining. Ready for Codex review; do not begin M6.
 
@@ -45,6 +53,7 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
+| CS-016 | Ready for review | Bounded retrieval (`retrieval.py`), canonical graph/runtime/metric context, path containment, secret exclusion, strict Pydantic parsing (`extra="forbid"`), canonical citation validation (`validate_evidence_references`), `LLM_INFERRED` labeling, opt-in `provider="rule-based"` default with deterministic offline fallback, local fake provider injection, truthful API schemas, and 5 real API verification scenarios (`verify_m6_semantic.py`). | None for M6 (Codex review) |
 | CS-012 | Ready for Codex review (Pass 2) | Isolated child process execution (`runtime_worker.py`), strict deadline supervision, Win32 Toolhelp process-tree termination with zero post-timeout side effects, output byte capping, explicit runtime analysis endpoints (`POST`/`GET`). | None for M5 (Codex review) |
 | CS-013 | Ready for Codex review (Pass 2) | Ambiguous candidate retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`) without candidate node mutation; truthful microsecond overhead tracking and per-event duration timing; multithreading profiling; generator suspension handling. | None for M5 (Codex review) |
 | CS-014 | Ready for Codex review (Pass 2) | Repeated-run merging with cumulative call counts, node-level stats for resolved nodes, and re-enrichment overwriting stale graph metrics. | None for M5 (Codex review) |
@@ -66,6 +75,25 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-12 - Antigravity Milestone 6 Pass 1
+
+- Implemented CS-016: bounded source snippet retrieval, path containment, sensitive file/secret exclusion, strict Pydantic validation (`extra="forbid"`), canonical evidence reference grounding, `LLM_INFERRED` provenance labeling, explicit opt-in provider selection (`provider="rule-based"` default), and deterministic offline fallback.
+- Added comprehensive unit, route, and static-analysis invariant test suites (`tests/test_retrieval.py`, `tests/test_llm_summary.py`, `tests/test_explain_route.py`, `tests/test_static_analysis_invariant.py`).
+- Ran all required verification gates on code commit `649625b`:
+  - Ruff check: clean (0 errors)
+  - Ruff format check: clean (220 files formatted)
+  - Mypy: clean (52 source files)
+  - Python compilation: exit 0
+  - Git whitespace check: clean
+  - Thonny plugin tests: 53 passed, 1 skipped
+  - Frontend Vitest: 104 passed (10 test files)
+  - Frontend ESLint: clean (0 warnings, 0 errors)
+  - Frontend Build: built in 371ms
+  - Backend Pytest coverage: 274 passed, 1 skipped, 84.75% coverage (exceeds >= 84.0%)
+  - Deterministic M6 runner (`scripts/verify_m6_semantic.py`): exit 0 across 5 isolated API scenarios.
+- Verified safe file cleanup with zero untracked or temporary files remaining.
+- Recorded complete evidence in `docs/verification/M6.md`. Ready for review; do not begin M7.
 
 ### 2026-10-09 - Codex Milestone 5 Review 1
 
