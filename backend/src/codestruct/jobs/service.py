@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from codestruct.settings import Settings
 from codestruct.storage import SQLiteRepository
@@ -91,6 +92,7 @@ class AnalysisService:
             timeout_seconds=settings.analysis_timeout_seconds,
             cancellation_grace_seconds=settings.cancellation_grace_seconds,
         )
+        self.custom_explanation_provider: Any = None
 
     def register_editor_file(
         self, file_path: str | Path, ttl_seconds: float = 120.0

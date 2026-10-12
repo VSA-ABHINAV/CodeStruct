@@ -21,6 +21,7 @@ from ..schemas import (
     DiagnosticsResponse,
     ExecuteRuntimeRequest,
     ExecuteRuntimeResponse,
+    ExplanationClaimModel,
     JobResponse,
     Links,
     NodeExplanationResponse,
@@ -259,7 +260,7 @@ def explain_analysis_node(
     node_id: str,
     request: Request,
     provider: str = Query(
-        "auto", description="LLM provider: 'auto', 'rule-based', or 'llm'"
+        "rule-based", description="LLM provider: 'rule-based', 'auto', or 'llm'"
     ),
     service: AnalysisService = Depends(analysis_service),
 ) -> NodeExplanationResponse:
@@ -271,7 +272,13 @@ def explain_analysis_node(
             "The analysis has not produced a graph result yet.",
         )
     try:
-        explanation = explain_node(record.graph, node_id, provider=provider)
+        explanation = explain_node(
+            record.graph,
+            node_id,
+            provider=provider,
+            project_root=record.project_root,
+            custom_provider=getattr(service, "custom_explanation_provider", None),
+        )
     except KeyError:
         raise ApiError(
             404,
@@ -290,6 +297,19 @@ def explain_analysis_node(
         recommendations=explanation.recommendations,
         prompt=explanation.prompt,
         provider=explanation.provider,
+        fallback_used=explanation.fallback_used,
+        fallback_reason=explanation.fallback_reason,
+        retrieved_evidence_ids=explanation.retrieved_evidence_ids,
+        cited_evidence_ids=explanation.cited_evidence_ids,
+        claims=[
+            ExplanationClaimModel(
+                statement=c.statement,
+                claim_type=c.claim_type,
+                evidence_ids=c.evidence_ids,
+                provenance=c.provenance,
+            )
+            for c in explanation.claims
+        ],
     )
 
 

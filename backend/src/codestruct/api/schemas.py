@@ -130,6 +130,13 @@ class EditorSelectionResponse(StrictModel):
     display_name: str
 
 
+class ExplanationClaimModel(StrictModel):
+    statement: str
+    claim_type: str = "architectural_interpretation"
+    evidence_ids: list[str] = Field(default_factory=list)
+    provenance: str = "LLM_INFERRED"
+
+
 class NodeExplanationResponse(StrictModel):
     api_version: Literal["v1"] = "v1"
     request_id: str
@@ -143,6 +150,11 @@ class NodeExplanationResponse(StrictModel):
     recommendations: list[str]
     prompt: str | None = None
     provider: str = "rule-based"
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    retrieved_evidence_ids: list[str] = Field(default_factory=list)
+    cited_evidence_ids: list[str] = Field(default_factory=list)
+    claims: list[ExplanationClaimModel] = Field(default_factory=list)
 
 
 class ExecuteRuntimeRequest(StrictModel):

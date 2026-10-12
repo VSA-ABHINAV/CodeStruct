@@ -2,8 +2,9 @@
 
 Provides deterministic, offline-first architectural explanations analyzing coupling,
 centrality, caller/callee networks, runtime traces, and structural risks. Supports
-optional pluggable OpenAI-compatible LLM endpoints (e.g. local Ollama or cloud models)
-with automatic fallback to rule-based synthesis.
+optional pluggable LLM providers with strict Pydantic response validation, canonical
+evidence verification, claim provenance labeling (LLM_INFERRED), and automatic
+deterministic fallback to rule-based synthesis.
 """
 
 from __future__ import annotations
@@ -13,7 +14,74 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal, Protocol
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .retrieval import (
+    RetrievedEvidenceContext,
+    SourceSnippet,
+    retrieve_evidence_context,
+)
+
+
+class ExplanationClaim(BaseModel):
+    """A single architectural claim or interpretation with truthful provenance and evidence citations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    statement: str = Field(min_length=1, max_length=4000)
+    claim_type: str = Field(default="architectural_interpretation", max_length=128)
+    evidence_ids: list[str] = Field(default_factory=list)
+    provenance: Literal[
+        "LLM_INFERRED", "RULE_SYNTHESIZED", "STATIC_AST", "RUNTIME_OBSERVED"
+    ] = "LLM_INFERRED"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "statement": self.statement,
+            "claim_type": self.claim_type,
+            "evidence_ids": list(self.evidence_ids),
+            "provenance": self.provenance,
+        }
+
+
+class LLMExplanationPayload(BaseModel):
+    """Strict Pydantic schema for external LLM provider responses.
+
+    Enforces exact types and forbids extra fields to prevent unvalidated output.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: str = Field(min_length=1, max_length=256)
+    summary: str = Field(min_length=1, max_length=4000)
+    dependencies_summary: str = Field(min_length=1, max_length=4000)
+    metrics_summary: str = Field(min_length=1, max_length=4000)
+    recommendations: list[str] = Field(default_factory=list, max_length=50)
+    evidence_references: list[str] = Field(default_factory=list, max_length=100)
+    claims: list[ExplanationClaim] = Field(default_factory=list, max_length=50)
+
+
+def validate_evidence_references(
+    cited_ids: list[str],
+    canonical_evidence_ids: set[str],
+) -> tuple[bool, list[str], list[str]]:
+    """Validate all cited evidence references against canonical evidence set.
+
+    Returns (is_valid, valid_ids, invalid_ids).
+    """
+    valid: list[str] = []
+    invalid: list[str] = []
+    for cid in cited_ids:
+        if cid in canonical_evidence_ids:
+            if cid not in valid:
+                valid.append(cid)
+        else:
+            if cid not in invalid:
+                invalid.append(cid)
+    return (len(invalid) == 0, valid, invalid)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +96,7 @@ class NodeContext:
     line: int | None = None
     end_line: int | None = None
     docstring: str | None = None
+    source_snippet: SourceSnippet | None = None
     metrics: dict[str, Any] = field(default_factory=dict)
     callers: list[str] = field(default_factory=list)
     callees: list[str] = field(default_factory=list)
@@ -37,6 +106,7 @@ class NodeContext:
     inherited_by: list[str] = field(default_factory=list)
     runtime_stats: dict[str, Any] = field(default_factory=dict)
     evidence: list[dict[str, Any]] = field(default_factory=list)
+    canonical_evidence_ids: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +123,11 @@ class NodeExplanation:
     recommendations: list[str]
     prompt: str | None = None
     provider: str = "rule-based"
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    retrieved_evidence_ids: list[str] = field(default_factory=list)
+    cited_evidence_ids: list[str] = field(default_factory=list)
+    claims: list[ExplanationClaim] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,246 +138,69 @@ class NodeExplanation:
             "summary": self.summary,
             "dependencies_summary": self.dependencies_summary,
             "metrics_summary": self.metrics_summary,
-            "recommendations": self.recommendations,
+            "recommendations": list(self.recommendations),
             "prompt": self.prompt,
             "provider": self.provider,
+            "fallback_used": self.fallback_used,
+            "fallback_reason": self.fallback_reason,
+            "retrieved_evidence_ids": list(self.retrieved_evidence_ids),
+            "cited_evidence_ids": list(self.cited_evidence_ids),
+            "claims": [c.to_dict() for c in self.claims],
         }
 
 
-def extract_node_context(graph: dict[str, Any], node_id: str) -> NodeContext:
+def extract_node_context(
+    graph: dict[str, Any],
+    node_id: str,
+    project_root: str | Path | None = None,
+) -> NodeContext:
     """Extract full structural context, metrics, evidence, and relationships for a node."""
-    nodes = graph.get("nodes", [])
-    edges = graph.get("edges", [])
-
-    target_node = None
-    node_name_map: dict[str, str] = {}
-    for node in nodes:
-        nid = node.get("id")
-        qname = node.get("qualified_name") or node.get("name") or nid
-        if nid:
-            node_name_map[nid] = qname
-        if nid == node_id:
-            target_node = node
-
-    if target_node is None:
-        raise KeyError(f"Node '{node_id}' not found in graph")
-
-    name = target_node.get("name", "")
-    qualified_name = target_node.get("qualified_name", name)
-    kind = target_node.get("kind", "unknown")
-
-    # Extract canonical location: {path, start_line, end_line} (flat) or nested variants
-    location = target_node.get("location") or target_node.get("source_location") or {}
-    file_path = (
-        location.get("path")
-        or location.get("file_path")
-        or target_node.get("file_path")
-    )
-    span = (
-        location.get("span")
-        if isinstance(location, dict) and isinstance(location.get("span"), dict)
-        else {}
-    )
-    start_point = (
-        span.get("start")
-        if isinstance(span, dict) and isinstance(span.get("start"), dict)
-        else {}
-    )
-    end_point = (
-        span.get("end")
-        if isinstance(span, dict) and isinstance(span.get("end"), dict)
-        else {}
-    )
-    line = (
-        location.get("start_line")
-        or location.get("line")
-        or (span.get("start_line") if isinstance(span, dict) else None)
-        or (start_point.get("line") if isinstance(start_point, dict) else None)
-        or (span.get("line") if isinstance(span, dict) else None)
-        or target_node.get("line")
-    )
-    end_line = (
-        location.get("end_line")
-        or (span.get("end_line") if isinstance(span, dict) else None)
-        or (end_point.get("line") if isinstance(end_point, dict) else None)
-        or target_node.get("end_line")
+    retrieved = retrieve_evidence_context(
+        graph,
+        node_id,
+        project_root=project_root,
     )
 
-    # Extract attributes & metrics from dict, list of pairs, or list of dicts
-    attributes_raw = target_node.get("attributes", {})
-    attributes: dict[str, Any] = {}
-    if isinstance(attributes_raw, dict):
-        attributes = dict(attributes_raw)
-    elif isinstance(attributes_raw, list):
-        for item in attributes_raw:
-            if isinstance(item, (list, tuple)) and len(item) == 2:
-                attributes[str(item[0])] = item[1]
-            elif isinstance(item, dict) and "key" in item:
-                attributes[str(item["key"])] = item.get("value")
-
-    metrics: dict[str, Any] = {}
-    int_keys: dict[str, str] = {
-        "fan_in": "fan_in",
-        "fan_out": "fan_out",
-        "component": "component_id",
-        "component_id": "component_id",
-        "community": "community_id",
-        "community_id": "community_id",
-        "ca": "ca",
-        "ce": "ce",
-    }
-    float_keys: dict[str, str] = {
-        "instability": "instability",
-        "degree_centrality": "degree_centrality",
-        "centrality": "degree_centrality",
-        "betweenness_centrality": "betweenness_centrality",
-        "module_instability": "module_instability",
-        "cohesion": "cohesion",
-        "relational_density": "relational_density",
-    }
-    for raw_k, val in attributes.items():
-        if raw_k in int_keys:
-            try:
-                metrics[int_keys[raw_k]] = int(val)
-            except (ValueError, TypeError):
-                pass
-        elif raw_k in float_keys:
-            try:
-                metrics[float_keys[raw_k]] = float(val)
-            except (ValueError, TypeError):
-                pass
-        elif raw_k == "in_cycle":
-            metrics["in_cycle"] = val is True or str(val).lower() == "true"
-
-    # Runtime statistics
-    runtime_stats: dict[str, Any] = {}
-    runtime_keys = (
-        "runtime_calls",
-        "runtime_exceptions",
-        "runtime_duration_ms",
-    )
-    for rk in runtime_keys:
-        if rk in attributes:
-            runtime_stats[rk] = attributes[rk]
-
-    docstring = attributes.get("docstring")
-
-    # Group incoming and outgoing relationships (strictly resolved dependencies only)
-    callers: list[str] = []
-    callees: list[str] = []
-    importers: list[str] = []
-    imports: list[str] = []
-    inherits: list[str] = []
-    inherited_by: list[str] = []
-    incident_evidence_ids: set[str] = set()
-
-    for edge in edges:
-        source_id = edge.get("source_id") or edge.get("source")
-        target_id = edge.get("target_id") or edge.get("target")
-        edge_kind = str(edge.get("kind") or edge.get("type") or "").upper()
-        res_status = str(
-            edge.get("resolution_status")
-            or (
-                edge.get("resolution", {}).get("status")
-                if isinstance(edge.get("resolution"), dict)
-                else ""
-            )
-            or ""
-        ).lower()
-
-        # Collect evidence from defining containment
-        if (source_id == target_node.get("parent_id") and target_id == node_id) or (
-            target_id == node_id and edge_kind in ("DEFINES", "DEFINE")
-        ):
-            for evid in edge.get("evidence_ids", []):
-                incident_evidence_ids.add(str(evid))
-
-        # Only RESOLVED dependencies count towards architectural dependency network
-        if res_status in (
-            "unresolved",
-            "ambiguous",
-            "syntactic_only",
-            "not_applicable",
-        ):
-            continue
-
-        if source_id == node_id and target_id is not None and target_id != node_id:
-            dest_name = node_name_map.get(target_id, str(target_id))
-            if edge_kind in ("CALL", "CALLS"):
-                callees.append(dest_name)
-                for evid in edge.get("evidence_ids", []):
-                    incident_evidence_ids.add(str(evid))
-            elif edge_kind in ("IMPORT", "IMPORTS"):
-                imports.append(dest_name)
-                for evid in edge.get("evidence_ids", []):
-                    incident_evidence_ids.add(str(evid))
-            elif edge_kind in ("INHERIT", "INHERITS"):
-                inherits.append(dest_name)
-                for evid in edge.get("evidence_ids", []):
-                    incident_evidence_ids.add(str(evid))
-
-        if target_id == node_id and source_id is not None and source_id != node_id:
-            src_name = node_name_map.get(source_id, str(source_id))
-            if edge_kind in ("CALL", "CALLS"):
-                callers.append(src_name)
-                for evid in edge.get("evidence_ids", []):
-                    incident_evidence_ids.add(str(evid))
-            elif edge_kind in ("IMPORT", "IMPORTS"):
-                importers.append(src_name)
-                for evid in edge.get("evidence_ids", []):
-                    incident_evidence_ids.add(str(evid))
-            elif edge_kind in ("INHERIT", "INHERITS"):
-                inherited_by.append(src_name)
-                for evid in edge.get("evidence_ids", []):
-                    incident_evidence_ids.add(str(evid))
-
-    evidence_index: dict[str, dict[str, Any]] = {}
-    for ev in graph.get("evidence", []):
-        if isinstance(ev, dict):
-            eid = str(ev.get("evidence_id") or ev.get("id") or "")
-            if eid:
-                evidence_index[eid] = ev
-
-    collected_evidence: list[dict[str, Any]] = []
-    for eid in sorted(incident_evidence_ids):
-        ev = evidence_index.get(eid)
-        if ev:
-            collected_evidence.append(
-                {
-                    "id": eid,
-                    "origin": ev.get("origin"),
-                    "observation_kind": ev.get("observation_kind"),
-                    "location": ev.get("location"),
-                    "observed_text_hash": ev.get("observed_text_hash"),
-                    "excerpt": ev.get("excerpt"),
-                    "explanation": ev.get("explanation"),
-                    "expression": ev.get("expression"),
-                }
-            )
+    # Convert CanonicalEvidenceItems to dicts for backward compatibility
+    evidence_dicts: list[dict[str, Any]] = [
+        {
+            "id": ev.id,
+            "origin": ev.origin,
+            "observation_kind": ev.observation_kind,
+            "location": ev.location,
+            "excerpt": ev.excerpt,
+            "explanation": ev.explanation,
+            "observed_text_hash": ev.observed_text_hash,
+            "expression": ev.expression,
+        }
+        for ev in retrieved.evidence_items
+    ]
 
     return NodeContext(
-        node_id=node_id,
-        name=name,
-        qualified_name=qualified_name,
-        kind=kind,
-        file_path=file_path,
-        line=line,
-        end_line=end_line,
-        docstring=docstring,
-        metrics=metrics,
-        callers=sorted(set(callers)),
-        callees=sorted(set(callees)),
-        importers=sorted(set(importers)),
-        imports=sorted(set(imports)),
-        inherits=sorted(set(inherits)),
-        inherited_by=sorted(set(inherited_by)),
-        runtime_stats=runtime_stats,
-        evidence=collected_evidence,
+        node_id=retrieved.node_id,
+        name=retrieved.name,
+        qualified_name=retrieved.qualified_name,
+        kind=retrieved.kind,
+        file_path=retrieved.file_path,
+        line=retrieved.line,
+        end_line=retrieved.end_line,
+        docstring=retrieved.docstring,
+        source_snippet=retrieved.source_snippet,
+        metrics=retrieved.metrics,
+        callers=retrieved.callers,
+        callees=retrieved.callees,
+        importers=retrieved.importers,
+        imports=retrieved.imports,
+        inherits=retrieved.inherits,
+        inherited_by=retrieved.inherited_by,
+        runtime_stats=retrieved.runtime_stats,
+        evidence=evidence_dicts,
+        canonical_evidence_ids=retrieved.canonical_evidence_ids,
     )
 
 
-def format_explanation_prompt(context: NodeContext) -> str:
-    """Format an LLM prompt describing the architecture context of a node."""
+def format_explanation_prompt(context: NodeContext | RetrievedEvidenceContext) -> str:
+    """Format an LLM prompt describing the architecture context of a node with evidence citations."""
     file_loc = context.file_path or "unknown"
     if context.line is not None:
         file_loc += f":{context.line}"
@@ -313,7 +211,8 @@ def format_explanation_prompt(context: NodeContext) -> str:
 
     lines = [
         "You are an expert Python software architect analyzing a codebase architecture graph.",
-        "Analyze the following code entity and provide a clear, concise architectural summary:",
+        "Analyze the following code entity and provide a clear, concise architectural summary.",
+        "Base all interpretations strictly on the provided evidence.",
         "",
         f"Entity: {context.name} ({context.kind})",
         f"Qualified Name: {context.qualified_name}",
@@ -321,6 +220,16 @@ def format_explanation_prompt(context: NodeContext) -> str:
     ]
     if context.docstring:
         lines.append(f"Docstring: {context.docstring.strip()}")
+
+    if context.source_snippet and context.source_snippet.content:
+        lines.append(
+            f"\nBounded Source Code Snippet ({context.source_snippet.file_path}:{context.source_snippet.start_line}-{context.source_snippet.end_line}):"
+        )
+        lines.append("```python")
+        lines.append(context.source_snippet.content.rstrip())
+        lines.append("```")
+        if context.source_snippet.is_truncated:
+            lines.append("Note: Source snippet was bounded by size limit.")
 
     lines.append("\nArchitecture Metrics:")
     for k, v in sorted(context.metrics.items()):
@@ -349,11 +258,25 @@ def format_explanation_prompt(context: NodeContext) -> str:
     if context.inherited_by:
         lines.append(f"- Inherited By: {', '.join(context.inherited_by)}")
 
-    if context.evidence:
-        lines.append(f"\nStatic Evidence Observations ({len(context.evidence)}):")
-        for ev in context.evidence[:5]:
+    # Evidence items
+    evidence_list: list[dict[str, Any]] = []
+    if isinstance(context, NodeContext):
+        evidence_list = context.evidence
+    elif hasattr(context, "evidence_items"):
+        evidence_list = [
+            {
+                "id": item.id,
+                "origin": item.origin,
+                "observation_kind": item.observation_kind,
+            }
+            for item in context.evidence_items
+        ]
+
+    if evidence_list:
+        lines.append(f"\nCanonical Evidence Observations ({len(evidence_list)}):")
+        for ev in evidence_list[:10]:
             eid = ev.get("id", "")
-            origin = ev.get("origin", "SYNTAX")
+            origin = ev.get("origin", "STATIC_AST")
             loc = ev.get("location")
             loc_str = ""
             if isinstance(loc, dict):
@@ -365,15 +288,34 @@ def format_explanation_prompt(context: NodeContext) -> str:
             obs_kind = ev.get("observation_kind") or ""
             obs_desc = f" ({obs_kind})" if obs_kind else ""
             lines.append(f"- [{eid}] {origin}{obs_desc}{loc_str}")
-        if len(context.evidence) > 5:
-            lines.append(
-                f"- ... and {len(context.evidence) - 5} more evidence records."
-            )
+        if len(evidence_list) > 10:
+            lines.append(f"- ... and {len(evidence_list) - 10} more evidence records.")
 
+    lines.append("\nStrict Output Requirements:")
+    lines.append("Respond ONLY with valid JSON conforming to this schema:")
     lines.append(
-        "\nProvide an explanation covering: 1) Architectural Role, 2) Summary of Responsibilities, "
-        "3) Coupling & Stability Analysis, and 4) Architectural Recommendations or Risks."
+        "{\n"
+        '  "role": "<architectural role>",\n'
+        '  "summary": "<architectural summary>",\n'
+        '  "dependencies_summary": "<dependencies narrative>",\n'
+        '  "metrics_summary": "<metrics and stability narrative>",\n'
+        '  "recommendations": ["<recommendation 1>", ...],\n'
+        '  "evidence_references": ["<evidence_id_1>", ...],\n'
+        '  "claims": [\n'
+        "    {\n"
+        '      "statement": "<specific claim>",\n'
+        '      "claim_type": "architectural_interpretation",\n'
+        '      "evidence_ids": ["<evidence_id_1>"],\n'
+        '      "provenance": "LLM_INFERRED"\n'
+        "    }\n"
+        "  ]\n"
+        "}"
     )
+    lines.append(
+        "IMPORTANT: Do NOT hallucinate evidence IDs. Only cite IDs present in the Canonical Evidence Observations list."
+    )
+    lines.append("All claims must be labeled with provenance 'LLM_INFERRED'.")
+
     return "\n".join(lines)
 
 
@@ -381,7 +323,13 @@ class RuleBasedExplainer:
     """Deterministic, offline-first architectural explainer."""
 
     @staticmethod
-    def explain(context: NodeContext, prompt: str | None = None) -> NodeExplanation:
+    def explain(
+        context: NodeContext | RetrievedEvidenceContext,
+        prompt: str | None = None,
+        fallback_used: bool = False,
+        fallback_reason: str | None = None,
+        provider_name: str = "rule-based",
+    ) -> NodeExplanation:
         kind = context.kind.lower()
         has_computed_metrics = bool(context.metrics)
         fan_in = context.metrics.get("fan_in")
@@ -505,7 +453,11 @@ class RuleBasedExplainer:
             ]
 
         if context.runtime_stats:
-            calls = context.runtime_stats.get("runtime_calls", 0)
+            calls = (
+                context.runtime_stats.get("runtime_calls")
+                or context.runtime_stats.get("runtime_invocations")
+                or 0
+            )
             duration = context.runtime_stats.get("runtime_duration_ms", 0.0)
             metric_parts.append(
                 f"Runtime profiling observed {calls} execution(s) spanning {duration:.2f} ms."
@@ -537,6 +489,38 @@ class RuleBasedExplainer:
                 "Healthy architectural posture: No immediate coupling or cycle risks detected."
             )
 
+        # Build claims with deterministic provenance
+        canon_ids = sorted(context.canonical_evidence_ids)
+        claims: list[ExplanationClaim] = [
+            ExplanationClaim(
+                statement=summary,
+                claim_type="architectural_summary",
+                evidence_ids=canon_ids,
+                provenance="RULE_SYNTHESIZED",
+            ),
+            ExplanationClaim(
+                statement=dependencies_summary,
+                claim_type="dependencies_narrative",
+                evidence_ids=canon_ids,
+                provenance="RULE_SYNTHESIZED",
+            ),
+            ExplanationClaim(
+                statement=metrics_summary,
+                claim_type="metrics_narrative",
+                evidence_ids=canon_ids,
+                provenance="RULE_SYNTHESIZED",
+            ),
+        ]
+        for rec in recommendations:
+            claims.append(
+                ExplanationClaim(
+                    statement=rec,
+                    claim_type="recommendation",
+                    evidence_ids=canon_ids,
+                    provenance="RULE_SYNTHESIZED",
+                )
+            )
+
         return NodeExplanation(
             node_id=context.node_id,
             name=context.name,
@@ -547,12 +531,65 @@ class RuleBasedExplainer:
             metrics_summary=metrics_summary,
             recommendations=recommendations,
             prompt=prompt,
-            provider="rule-based",
+            provider=provider_name if fallback_used else "rule-based",
+            fallback_used=fallback_used,
+            fallback_reason=fallback_reason,
+            retrieved_evidence_ids=canon_ids,
+            cited_evidence_ids=canon_ids,
+            claims=claims,
+        )
+
+
+class ExplanationProvider(Protocol):
+    """Protocol for semantic explanation providers."""
+
+    def generate_explanation(
+        self,
+        prompt: str,
+        retrieval_context: NodeContext | RetrievedEvidenceContext,
+    ) -> LLMExplanationPayload:
+        """Generate structured explanation payload from prompt and retrieved context."""
+        ...
+
+
+class FakeExplanationProvider:
+    """Injected deterministic test fake provider ensuring zero remote/paid API calls."""
+
+    def __init__(
+        self,
+        payload: dict[str, Any] | LLMExplanationPayload | None = None,
+        error: Exception | None = None,
+        name: str = "fake-llm",
+    ) -> None:
+        self.payload = payload
+        self.error = error
+        self.name = name
+        self.calls: list[dict[str, Any]] = []
+
+    def generate_explanation(
+        self,
+        prompt: str,
+        retrieval_context: NodeContext | RetrievedEvidenceContext,
+    ) -> LLMExplanationPayload:
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "node_id": retrieval_context.node_id,
+            }
+        )
+        if self.error:
+            raise self.error
+        if isinstance(self.payload, LLMExplanationPayload):
+            return self.payload
+        if isinstance(self.payload, dict):
+            return LLMExplanationPayload.model_validate(self.payload)
+        raise ValueError(
+            "FakeExplanationProvider has neither valid payload nor error configured."
         )
 
 
 class OpenAICompatibleExplainer:
-    """Explainer using an OpenAI-compatible HTTP endpoint with rule-based fallback."""
+    """Explainer using an OpenAI-compatible HTTP endpoint with strict validation and rule fallback."""
 
     def __init__(
         self,
@@ -566,18 +603,23 @@ class OpenAICompatibleExplainer:
         self.model = model
         self.timeout = timeout
 
-    def explain(self, context: NodeContext, prompt: str) -> NodeExplanation:
-        """Call external LLM API; fall back to RuleBasedExplainer on any error."""
+    def generate_explanation(
+        self,
+        prompt: str,
+        retrieval_context: NodeContext | RetrievedEvidenceContext,
+    ) -> LLMExplanationPayload:
         endpoint = f"{self.api_base}/chat/completions"
+        if not endpoint.startswith(("http://", "https://")):
+            raise ValueError(f"Invalid API base URL: {self.api_base}")
+
         payload = {
             "model": self.model,
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "You are an expert code architect. Respond in valid JSON with keys: "
-                        '"role" (string), "summary" (string), "dependencies_summary" (string), '
-                        '"metrics_summary" (string), "recommendations" (list of strings).'
+                        "You are an expert Python software architect. Respond strictly with valid JSON "
+                        "matching the requested schema. Base claims on provided evidence and cite canonical IDs."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -585,83 +627,208 @@ class OpenAICompatibleExplainer:
             "temperature": 0.2,
         }
 
-        if not endpoint.startswith(("http://", "https://")):
-            rule_fallback = RuleBasedExplainer.explain(context, prompt=prompt)
-            return NodeExplanation(
-                node_id=rule_fallback.node_id,
-                name=rule_fallback.name,
-                kind=rule_fallback.kind,
-                role=rule_fallback.role,
-                summary=rule_fallback.summary,
-                dependencies_summary=rule_fallback.dependencies_summary,
-                metrics_summary=rule_fallback.metrics_summary,
-                recommendations=rule_fallback.recommendations,
-                prompt=prompt,
-                provider="rule-based (llm-fallback)",
-            )
+        req_data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
-        try:
-            req_data = json.dumps(payload).encode("utf-8")
-            headers = {"Content-Type": "application/json"}
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
-
-            req = urllib.request.Request(  # noqa: S310
-                endpoint, data=req_data, headers=headers, method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
-                if resp.status == 200:
-                    raw_body = json.loads(resp.read().decode("utf-8"))
-                    content = raw_body["choices"][0]["message"]["content"]
-                    parsed = json.loads(content)
-                    return NodeExplanation(
-                        node_id=context.node_id,
-                        name=context.name,
-                        kind=context.kind,
-                        role=parsed.get("role", "Component"),
-                        summary=parsed.get("summary", ""),
-                        dependencies_summary=parsed.get("dependencies_summary", ""),
-                        metrics_summary=parsed.get("metrics_summary", ""),
-                        recommendations=parsed.get("recommendations", []),
-                        prompt=prompt,
-                        provider=f"llm:{self.model}",
-                    )
-        except Exception:  # noqa: S110
-            pass  # Fall back cleanly
-
-        # Fallback to rule-based explanation
-        rule_exp = RuleBasedExplainer.explain(context, prompt=prompt)
-        return NodeExplanation(
-            node_id=rule_exp.node_id,
-            name=rule_exp.name,
-            kind=rule_exp.kind,
-            role=rule_exp.role,
-            summary=rule_exp.summary,
-            dependencies_summary=rule_exp.dependencies_summary,
-            metrics_summary=rule_exp.metrics_summary,
-            recommendations=rule_exp.recommendations,
-            prompt=prompt,
-            provider="rule-based (llm-fallback)",
+        req = urllib.request.Request(  # noqa: S310
+            endpoint, data=req_data, headers=headers, method="POST"
         )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}: {resp.reason}")
+            raw_body = json.loads(resp.read().decode("utf-8"))
+
+        content = raw_body["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+        # Strict Pydantic model validation
+        return LLMExplanationPayload.model_validate(parsed)
+
+    def explain(
+        self,
+        context: NodeContext | RetrievedEvidenceContext,
+        prompt: str,
+    ) -> NodeExplanation:
+        """Call external LLM API; strictly validate and fall back to RuleBasedExplainer on any error."""
+        try:
+            payload = self.generate_explanation(prompt, context)
+            return _build_validated_explanation(
+                payload=payload,
+                context=context,
+                prompt=prompt,
+                provider_name=f"llm:{self.model}",
+            )
+        except Exception as err:
+            return RuleBasedExplainer.explain(
+                context,
+                prompt=prompt,
+                fallback_used=True,
+                fallback_reason=f"LLM provider failed: {err}",
+                provider_name="rule-based (llm-fallback)",
+            )
+
+
+def _build_validated_explanation(
+    payload: LLMExplanationPayload,
+    context: NodeContext | RetrievedEvidenceContext,
+    prompt: str,
+    provider_name: str,
+) -> NodeExplanation:
+    """Validate evidence citations, enforce LLM_INFERRED labeling, and construct NodeExplanation."""
+    # Collect all cited evidence IDs from references and claims
+    all_cited: list[str] = list(payload.evidence_references)
+    for c in payload.claims:
+        all_cited.extend(c.evidence_ids)
+
+    # Validate against canonical evidence set
+    is_valid, valid_ids, invalid_ids = validate_evidence_references(
+        all_cited,
+        context.canonical_evidence_ids,
+    )
+
+    if not is_valid:
+        # Invalid / hallucinated evidence IDs trigger deterministic fallback
+        return RuleBasedExplainer.explain(
+            context,
+            prompt=prompt,
+            fallback_used=True,
+            fallback_reason=f"Provider cited invalid or unknown evidence IDs: {sorted(invalid_ids)}",
+            provider_name="rule-based (llm-fallback)",
+        )
+
+    # Construct claims ensuring strictly LLM_INFERRED provenance
+    claims: list[ExplanationClaim] = []
+    if payload.claims:
+        for c in payload.claims:
+            claims.append(
+                ExplanationClaim(
+                    statement=c.statement,
+                    claim_type=c.claim_type,
+                    evidence_ids=c.evidence_ids,
+                    provenance="LLM_INFERRED",
+                )
+            )
+    else:
+        # Synthesize claims from summaries with explicit LLM_INFERRED provenance
+        claims.append(
+            ExplanationClaim(
+                statement=payload.summary,
+                claim_type="architectural_summary",
+                evidence_ids=valid_ids,
+                provenance="LLM_INFERRED",
+            )
+        )
+        claims.append(
+            ExplanationClaim(
+                statement=payload.dependencies_summary,
+                claim_type="dependencies_interpretation",
+                evidence_ids=valid_ids,
+                provenance="LLM_INFERRED",
+            )
+        )
+        claims.append(
+            ExplanationClaim(
+                statement=payload.metrics_summary,
+                claim_type="metrics_interpretation",
+                evidence_ids=valid_ids,
+                provenance="LLM_INFERRED",
+            )
+        )
+        for rec in payload.recommendations:
+            claims.append(
+                ExplanationClaim(
+                    statement=rec,
+                    claim_type="recommendation",
+                    evidence_ids=valid_ids,
+                    provenance="LLM_INFERRED",
+                )
+            )
+
+    return NodeExplanation(
+        node_id=context.node_id,
+        name=context.name,
+        kind=context.kind,
+        role=payload.role,
+        summary=payload.summary,
+        dependencies_summary=payload.dependencies_summary,
+        metrics_summary=payload.metrics_summary,
+        recommendations=payload.recommendations,
+        prompt=prompt,
+        provider=provider_name,
+        fallback_used=False,
+        fallback_reason=None,
+        retrieved_evidence_ids=sorted(context.canonical_evidence_ids),
+        cited_evidence_ids=valid_ids,
+        claims=claims,
+    )
 
 
 def explain_node(
     graph: dict[str, Any],
     node_id: str,
-    provider: str = "auto",
+    provider: str = "rule-based",
+    project_root: str | Path | None = None,
+    custom_provider: ExplanationProvider | None = None,
 ) -> NodeExplanation:
-    """Generate an architectural explanation for any node in an analysis graph."""
-    context = extract_node_context(graph, node_id)
+    """Generate an architectural explanation for any node in an analysis graph.
+
+    Adheres strictly to explicit provider opt-in:
+    - 'rule-based' (default): Runs deterministic offline rule-based explainer without provider calls.
+    - 'llm' or 'auto': Attempts external or custom LLM provider; on failure, timeout, invalid schema,
+      or hallucinated evidence references, cleanly falls back to rule-based explanation with fallback metadata.
+    """
+    context = extract_node_context(graph, node_id, project_root=project_root)
     prompt = format_explanation_prompt(context)
 
+    # 1. Explicit Rule-Based Opt-In: always offline deterministic
+    if provider == "rule-based":
+        return RuleBasedExplainer.explain(context, prompt=prompt, fallback_used=False)
+
+    # 2. Custom injected provider (used in tests and decoupled deployments)
+    if custom_provider is not None:
+        try:
+            payload = custom_provider.generate_explanation(prompt, context)
+            provider_name = getattr(custom_provider, "name", "custom-llm")
+            return _build_validated_explanation(
+                payload=payload,
+                context=context,
+                prompt=prompt,
+                provider_name=provider_name,
+            )
+        except Exception as err:
+            return RuleBasedExplainer.explain(
+                context,
+                prompt=prompt,
+                fallback_used=True,
+                fallback_reason=f"Custom provider failed: {type(err).__name__}: {err}",
+                provider_name="rule-based (llm-fallback)",
+            )
+
+    # 3. Environment-configured LLM provider
     api_base = os.getenv("CODESTRUCT_LLM_API_BASE")
     api_key = os.getenv("CODESTRUCT_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
     model = os.getenv("CODESTRUCT_LLM_MODEL", "llama3")
 
-    if provider in ("llm", "auto") and api_base:
+    if api_base:
         explainer = OpenAICompatibleExplainer(
-            api_base=api_base, api_key=api_key, model=model
+            api_base=api_base,
+            api_key=api_key,
+            model=model,
         )
         return explainer.explain(context, prompt)
 
-    return RuleBasedExplainer.explain(context, prompt=prompt)
+    # 4. No LLM configured: fallback behavior
+    if provider == "llm":
+        return RuleBasedExplainer.explain(
+            context,
+            prompt=prompt,
+            fallback_used=True,
+            fallback_reason="LLM provider requested but not configured (CODESTRUCT_LLM_API_BASE unset)",
+            provider_name="rule-based (llm-fallback)",
+        )
+
+    # 'auto' without LLM configured cleanly defaults to rule-based
+    return RuleBasedExplainer.explain(
+        context, prompt=prompt, fallback_used=False, provider_name="rule-based"
+    )

@@ -12,5 +12,23 @@
     "Ensure input validation on payload before business processing."
   ],
   "prompt": null,
-  "provider": "rule-based"
+  "provider": "rule-based",
+  "fallback_used": false,
+  "fallback_reason": null,
+  "retrieved_evidence_ids": [
+    "ev_service_ast_01"
+  ],
+  "cited_evidence_ids": [
+    "ev_service_ast_01"
+  ],
+  "claims": [
+    {
+      "statement": "Handles incoming request processing and coordinates business logic execution.",
+      "claim_type": "architectural_summary",
+      "evidence_ids": [
+        "ev_service_ast_01"
+      ],
+      "provenance": "LLM_INFERRED"
+    }
+  ]
 }
