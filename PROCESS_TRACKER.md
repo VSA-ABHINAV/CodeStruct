@@ -10,12 +10,17 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M3 | CS-005; design CS-007/022/026 | Lovable + user | User reports complete; Codex visual review pending | `LOVABLE_FRONTEND_BRIEF.md`, `docs/frontend-redesign-functional-map.md` | User confirms frontend design complete; Codex visual review evidence pending |
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
 | M5 | CS-012-CS-014 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | docs/verification/M5_REPORT_ACCEPTED.md, docs/verification/M5.md | Report records full gates and cleanup; code e72a909; reports a8f3d38, 7ea0999, fc21580 |
-| M6 | CS-016 | Antigravity | Ready for review | `docs/verification/M6.md` | Tested code commit `649625b`; 5 real API scenarios; full gates pass (84.75% coverage); zero code diff to HEAD |
-| M7 | CS-015, CS-017 | Antigravity | Not started | — | Pending |
+| M6 | CS-016 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | `docs/verification/M6_REPORT_ACCEPTED.md`, `docs/verification/M6.md` | Report records tested code `649625b`, report `e0232f2`, 5 real API scenarios, and full gates (84.75% coverage) |
+| M7 | CS-015, CS-017 | Antigravity | Ready for review | `docs/verification/M7.md` | Tested code commit `921f930`; 8 real API scenarios; full gates pass (84.81% coverage); persistent per-file caching & bounded Graphviz exports |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
+
+Milestone 7 Antigravity Pass 1, 2026-10-12: **Ready for Codex Review**. Implemented issues CS-015 ("Effective incremental parse caching") and CS-017 ("Bounded, deterministic Graphviz exports"):
+- **CS-015 Persistent Per-File Parse Caching (`file_cache.py`, `worker.py`, `python_parser.py`):** Multi-factor cache key binding canonical root identity, normalized relative path, content SHA-256 digest, parser version 2, and parse policy fingerprint. SQLite WAL table `file_parse_cache` with compound lookup and LRU indexes, configurable LRU eviction (`max_entries=5000`, `max_bytes=50MB`), and transparent corruption recovery. Preserved whole-result cache (`cache_results` in `sqlite_repository.py`) returning 200 on unchanged whole-graph requests. Verified cold parse, warm reuse in worker, same-size edit invalidation, mtime touch reuse, and cross-root isolation.
+- **CS-017 Bounded Deterministic Graphviz Exports (`export_dot.py`, `analyses.py`, `TopToolbar.jsx`):** Safe character-level escaping (`_escape`), deterministic node/edge sorting, size bounds (`MAX_EXPORT_NODES=2000`, `MAX_EXPORT_EDGES=5000`), subprocess execution with 15s timeout and 10MB output cap, process-tree termination, actionable 503 diagnostics when Graphviz is missing/unconfigured (`GRAPHVIZ_UNAVAILABLE`), format-specific signature validation (`<svg`, `\x89PNG`), and frontend export distinction between loaded slice and complete graph.
+- **Verification & Gates:** 298 pytest passed, 1 skipped (84.81% coverage >= 84%), 53 Thonny plugin tests passed, 104 frontend vitest tests passed, Ruff check and format clean, Mypy clean, frontend build clean, and `scripts/verify_m7_cache_export.py` passed across 8 isolated API scenarios in 9.73s. Tested code commit `921f930`. Safe file cleanup verified with zero untracked files. Do not begin M8.
 
 Milestone 6 Antigravity Pass 1, 2026-10-12: **Ready for Codex Review**. Implemented issue CS-016 ("Grounded semantic explanations, bounded retrieval, and strict validation"):
 - **CS-016 Bounded Retrieval & Security Containment (`retrieval.py`):** Canonical path containment (`is_safe_path_contained`), sensitive/secret pattern exclusion (`is_secret_or_sensitive`), line/byte bounds (`retrieve_source_snippet`), and multi-source context assembly (definition source snippet, relationships, runtime events, topological metrics, and bounded token budget).
@@ -53,6 +58,8 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
+| CS-015 | Ready for review | Persistent per-file parse cache (`file_cache.py`), integrated into worker and python_parser; cache key binds root, path, content SHA-256, parser version 2, and policy fingerprint; SQLite WAL table with LRU eviction and corruption recovery; whole-result cache preserved. Verified across cold parse, warm reuse, same-size edit invalidation, mtime touch reuse, and cross-root isolation (`verify_m7_cache_export.py`). | None for M7 (Codex review) |
+| CS-017 | Ready for review | Bounded deterministic Graphviz export (`export_dot.py`), safe character-level escaping, node/edge bounds (2000/5000), subprocess execution with 15s timeout and 10MB output cap, process-tree termination, actionable 503 diagnostics when Graphviz is missing (`GRAPHVIZ_UNAVAILABLE`), SVG/PNG signature verification, and frontend loaded-slice vs complete-graph export distinction. | None for M7 (Codex review) |
 | CS-016 | Ready for review | Bounded retrieval (`retrieval.py`), canonical graph/runtime/metric context, path containment, secret exclusion, strict Pydantic parsing (`extra="forbid"`), canonical citation validation (`validate_evidence_references`), `LLM_INFERRED` labeling, opt-in `provider="rule-based"` default with deterministic offline fallback, local fake provider injection, truthful API schemas, and 5 real API verification scenarios (`verify_m6_semantic.py`). | None for M6 (Codex review) |
 | CS-012 | Ready for Codex review (Pass 2) | Isolated child process execution (`runtime_worker.py`), strict deadline supervision, Win32 Toolhelp process-tree termination with zero post-timeout side effects, output byte capping, explicit runtime analysis endpoints (`POST`/`GET`). | None for M5 (Codex review) |
 | CS-013 | Ready for Codex review (Pass 2) | Ambiguous candidate retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`) without candidate node mutation; truthful microsecond overhead tracking and per-event duration timing; multithreading profiling; generator suspension handling. | None for M5 (Codex review) |
@@ -75,6 +82,26 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-12 - Antigravity Milestone 7 Pass 1
+
+- Implemented CS-015: persistent per-file parse cache (`file_cache.py`), integrated into `run_analysis_worker` and `python_parser.py`; cache key strictly binding canonical root, normalized path, content SHA-256 digest, parser version 2, and policy fingerprint; SQLite WAL table with LRU eviction and corruption recovery; whole-result cache preserved.
+- Implemented CS-017: bounded deterministic Graphviz DOT, SVG, and PNG exports (`export_dot.py`), safe character-level escaping, node/edge bounds (2000/5000), subprocess execution with 15s timeout and 10MB output cap, process-tree termination, actionable 503 diagnostics when Graphviz is missing/unconfigured (`GRAPHVIZ_UNAVAILABLE`), format-specific signature verification (`<svg`, `\x89PNG`), and frontend loaded-slice vs complete-graph export distinction.
+- Added comprehensive unit and route test suites (`tests/test_file_cache.py`, `tests/test_export_dot.py`).
+- Ran all required verification gates on code commit `921f930`:
+  - Ruff check: clean (0 errors)
+  - Ruff format check: clean (86 files formatted)
+  - Mypy: clean (54 source files)
+  - Python compilation: exit 0
+  - Git whitespace check: clean
+  - Thonny plugin tests: 53 passed, 1 skipped
+  - Frontend Vitest: 104 passed (10 test files)
+  - Frontend ESLint: clean (0 warnings, 0 errors)
+  - Frontend Build: built in 218ms
+  - Backend Pytest coverage: 298 passed, 1 skipped, 84.81% coverage (exceeds >= 84.0%)
+  - Deterministic M7 runner (`scripts/verify_m7_cache_export.py`): exit 0 across 8 isolated API scenarios in 9.73s.
+- Verified safe file cleanup with zero untracked or temporary files remaining.
+- Recorded complete evidence in `docs/verification/M7.md`. Ready for review; do not begin M8.
 
 ### 2026-10-12 - Antigravity Milestone 6 Pass 1
 
