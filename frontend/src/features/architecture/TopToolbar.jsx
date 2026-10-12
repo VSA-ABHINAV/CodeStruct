@@ -22,6 +22,7 @@ import { generateDot } from './exportDot.js'
  */
 export default function TopToolbar({
   currentIdentity = 'Architecture',
+  analysisId = '',
   projects = [],
   projectId = '',
   onSelectProject = null,
@@ -93,6 +94,13 @@ export default function TopToolbar({
     }
   }
 
+  const isSlice = Boolean(
+    graph?.metadata?.partial ||
+    provenance?.slice ||
+    (graph?.metadata && graph.metadata.partial_load)
+  )
+  const effectiveAnalysisId = analysisId || provenance?.analysis_id
+
   // Working JSON export action
   function handleExportJson() {
     if (!graph) return
@@ -100,7 +108,8 @@ export default function TopToolbar({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${currentIdentity || 'architecture'}-graph.json`
+    const suffix = isSlice ? '-slice' : ''
+    a.download = `${currentIdentity || 'architecture'}${suffix}-graph.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -116,11 +125,18 @@ export default function TopToolbar({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${currentIdentity || 'architecture'}-graph.dot`
+    const suffix = isSlice ? '-slice' : ''
+    a.download = `${currentIdentity || 'architecture'}${suffix}-graph.dot`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    setMenuOpen(false)
+  }
+
+  function handleExportComplete(format = 'dot') {
+    if (!effectiveAnalysisId) return
+    window.open(`/api/v1/analyses/${encodeURIComponent(effectiveAnalysisId)}/export/${format}`, '_blank')
     setMenuOpen(false)
   }
 
@@ -351,7 +367,7 @@ export default function TopToolbar({
                 disabled={!graph}
               >
                 <ExportIcon width={16} height={16} />
-                <span>Export graph (JSON)</span>
+                <span>{isSlice ? 'Export loaded slice (JSON)' : 'Export graph (JSON)'}</span>
               </button>
 
               <button
@@ -361,8 +377,19 @@ export default function TopToolbar({
                 disabled={!graph}
               >
                 <ExportIcon width={16} height={16} />
-                <span>Export Graphviz (DOT)</span>
+                <span>{isSlice ? 'Export loaded slice (DOT)' : 'Export Graphviz (DOT)'}</span>
               </button>
+
+              {effectiveAnalysisId && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleExportComplete('dot')}
+                >
+                  <ExportIcon width={16} height={16} />
+                  <span>Export complete graph (DOT via API)</span>
+                </button>
+              )}
 
               <div className="cs-dropdown-divider" />
 

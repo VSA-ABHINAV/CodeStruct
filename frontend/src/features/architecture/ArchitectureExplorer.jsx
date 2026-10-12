@@ -224,6 +224,7 @@ export default function ArchitectureExplorer({
             onSubmitProject={onSubmitProject}
             onRefresh={onRefresh}
             provenance={provenance}
+            analysisId={provenance?.analysis_id || ''}
             busy={busy}
             query={query}
             onQueryChange={(value) => {

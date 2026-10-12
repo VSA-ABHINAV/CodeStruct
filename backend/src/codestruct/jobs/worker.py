@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 from pathlib import Path
 from typing import Any
 
 from codestruct.analysis import AnalysisPolicy, PythonAstParser, scan_project
 from codestruct.analysis.models import ProjectParseResult
 from codestruct.graph import build_graph, graph_to_dict
+from codestruct.storage.file_cache import PersistentFileParseCache
 
 
 def run_analysis_worker(
@@ -36,11 +39,39 @@ def run_analysis_worker(
         root = Path(project_root).resolve(strict=True)
         files = []
         diagnostics = list(scan.diagnostics)
+        cache_db_path = policy_data.get("cache_db_path")
+        file_cache = PersistentFileParseCache(db_path=cache_db_path)
         for source_file in scan.source_files:
             if cancel.is_set():
                 output.put({"kind": "cancelled"})
                 return
+            file_path = root / Path(source_file.relative_path)
+            content_sha256 = None
+            cached_result = None
+            try:
+                data = file_path.read_bytes()
+                content_sha256 = hashlib.sha256(data).hexdigest()
+                cached_result = file_cache.get(
+                    root, source_file.relative_path, content_sha256, policy
+                )
+            except Exception:
+                cached_result = None
+
+            if cached_result is not None:
+                files.append(cached_result)
+                diagnostics.extend(cached_result.diagnostics)
+                continue
+
             parsed_file = parser.parse(root, source_file, policy, cancel.is_set)
+            if parsed_file.parsed and content_sha256 is not None:
+                with contextlib.suppress(Exception):
+                    file_cache.put(
+                        root,
+                        source_file.relative_path,
+                        content_sha256,
+                        policy,
+                        parsed_file,
+                    )
             files.append(parsed_file)
             diagnostics.extend(parsed_file.diagnostics)
         parsed = ProjectParseResult(

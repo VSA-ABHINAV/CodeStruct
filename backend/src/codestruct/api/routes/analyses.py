@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from codestruct.analysis.llm_summary import explain_node
-from codestruct.graph.export_dot import graph_to_dot
+from codestruct.graph.export_dot import (
+    GraphTooLargeForExportError,
+    GraphvizNotFoundError,
+    GraphvizOutputLimitError,
+    GraphvizRenderError,
+    GraphvizTimeoutError,
+    render_graphviz,
+)
 from codestruct.jobs.executor import QueueFullError
 from codestruct.jobs.models import TERMINAL_STATES, JobRecord, JobState
 from codestruct.jobs.service import AnalysisService, ProjectSelectionError
@@ -230,6 +238,60 @@ def get_graph(
         ) from None
 
 
+def _render_export(
+    analysis_id: str,
+    graph: dict[str, Any],
+    export_format: str,
+) -> Response:
+    fmt = export_format.lower().strip()
+    if fmt not in ("dot", "svg", "png"):
+        raise ApiError(
+            400,
+            "UNSUPPORTED_EXPORT_FORMAT",
+            f"Unsupported export format '{export_format}'. Supported formats are: dot, svg, png.",
+        )
+    try:
+        rendered_bytes = render_graphviz(graph, format=fmt)
+    except GraphTooLargeForExportError as exc:
+        raise ApiError(400, "GRAPH_TOO_LARGE", str(exc)) from exc
+    except GraphvizNotFoundError as exc:
+        raise ApiError(
+            503,
+            "GRAPHVIZ_UNAVAILABLE",
+            str(exc),
+        ) from exc
+    except GraphvizTimeoutError as exc:
+        raise ApiError(
+            504,
+            "GRAPHVIZ_TIMEOUT",
+            str(exc),
+        ) from exc
+    except GraphvizOutputLimitError as exc:
+        raise ApiError(
+            413,
+            "GRAPHVIZ_OUTPUT_TOO_LARGE",
+            str(exc),
+        ) from exc
+    except GraphvizRenderError as exc:
+        raise ApiError(
+            500,
+            "GRAPHVIZ_RENDER_FAILED",
+            str(exc),
+        ) from exc
+
+    media_types = {
+        "dot": "text/vnd.graphviz; charset=utf-8",
+        "svg": "image/svg+xml",
+        "png": "image/png",
+    }
+    filename = f"codestruct-{analysis_id}.{fmt}"
+    return Response(
+        content=rendered_bytes,
+        media_type=media_types[fmt],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{analysis_id}/export/dot")
 def export_dot(
     analysis_id: str,
@@ -242,13 +304,53 @@ def export_dot(
             "GRAPH_UNAVAILABLE",
             "The analysis has not produced a graph result yet.",
         )
-    dot_content = graph_to_dot(record.graph)
-    filename = f"codestruct-{analysis_id}.dot"
-    return Response(
-        content=dot_content,
-        media_type="text/vnd.graphviz",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _render_export(analysis_id, record.graph, "dot")
+
+
+@router.get("/{analysis_id}/export/svg")
+def export_svg(
+    analysis_id: str,
+    service: AnalysisService = Depends(analysis_service),
+) -> Response:
+    record = _require(service, analysis_id)
+    if record.graph is None:
+        raise ApiError(
+            409,
+            "GRAPH_UNAVAILABLE",
+            "The analysis has not produced a graph result yet.",
+        )
+    return _render_export(analysis_id, record.graph, "svg")
+
+
+@router.get("/{analysis_id}/export/png")
+def export_png(
+    analysis_id: str,
+    service: AnalysisService = Depends(analysis_service),
+) -> Response:
+    record = _require(service, analysis_id)
+    if record.graph is None:
+        raise ApiError(
+            409,
+            "GRAPH_UNAVAILABLE",
+            "The analysis has not produced a graph result yet.",
+        )
+    return _render_export(analysis_id, record.graph, "png")
+
+
+@router.get("/{analysis_id}/export")
+def export_graph(
+    analysis_id: str,
+    format: str = Query("dot", description="Export format: dot, svg, or png"),
+    service: AnalysisService = Depends(analysis_service),
+) -> Response:
+    record = _require(service, analysis_id)
+    if record.graph is None:
+        raise ApiError(
+            409,
+            "GRAPH_UNAVAILABLE",
+            "The analysis has not produced a graph result yet.",
+        )
+    return _render_export(analysis_id, record.graph, format)
 
 
 @router.get(

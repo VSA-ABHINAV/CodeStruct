@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
+import logging
+import os
 import re
+import shutil
+import subprocess
+from pathlib import Path
 from typing import Any
 
 # Color and styling palette matching CodeStruct's visual design tokens
@@ -142,22 +148,91 @@ DEFAULT_EDGE_STYLE = {
 }
 
 
-def _escape(text: str) -> str:
-    """Escape text for Graphviz double-quoted strings."""
-    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+logger = logging.getLogger("codestruct.graph.export_dot")
+
+MAX_EXPORT_NODES = 2000
+MAX_EXPORT_EDGES = 5000
+MAX_RENDER_BYTES = 10 * 1024 * 1024  # 10 MiB
+DEFAULT_RENDER_TIMEOUT = 15.0  # seconds
+
+
+class GraphvizExportError(Exception):
+    """Base exception for Graphviz export failures."""
+
+
+class GraphvizNotFoundError(GraphvizExportError):
+    """Raised when Graphviz 'dot' executable cannot be found."""
+
+
+class GraphvizTimeoutError(GraphvizExportError):
+    """Raised when Graphviz rendering exceeds the maximum allowed time."""
+
+
+class GraphvizOutputLimitError(GraphvizExportError):
+    """Raised when Graphviz output exceeds the maximum allowed byte size."""
+
+
+class GraphvizRenderError(GraphvizExportError):
+    """Raised when Graphviz fails to render the provided DOT graph."""
+
+
+class GraphTooLargeForExportError(GraphvizExportError):
+    """Raised when the graph node or edge count exceeds export safety bounds."""
+
+
+def _escape(text: Any) -> str:
+    """Safely escape arbitrary text for Graphviz double-quoted strings."""
+    if text is None:
+        return ""
+    safe_chars: list[str] = []
+    for ch in str(text):
+        if ch == "\\":
+            safe_chars.append("\\\\")
+        elif ch == '"':
+            safe_chars.append('\\"')
+        elif ch == "\n":
+            safe_chars.append("\\n")
+        elif ch == "\r":
+            continue
+        elif ch == "\t":
+            safe_chars.append("\\t")
+        elif ord(ch) < 32 or ord(ch) == 127:
+            safe_chars.append(f"\\x{ord(ch):02x}")
+        else:
+            safe_chars.append(ch)
+    return "".join(safe_chars)
 
 
 def _sanitize_id(identifier: str) -> str:
     """Create a valid Graphviz node identifier."""
-    return re.sub(r"[^a-zA-Z0-9_]", "_", identifier)
+    return re.sub(r"[^a-zA-Z0-9_]", "_", str(identifier))
 
 
 def graph_to_dot(graph: dict[str, Any]) -> str:
-    """Convert a CodeStruct graph dictionary into a clean Graphviz DOT string."""
+    """Convert a CodeStruct graph dictionary into a deterministic Graphviz DOT string."""
     metadata = graph.get("metadata", {})
     analysis_id = metadata.get("analysis_id", "codestruct")
-    nodes = graph.get("nodes", [])
-    edges = graph.get("edges", [])
+
+    raw_nodes = graph.get("nodes", [])
+    raw_edges = graph.get("edges", [])
+
+    if len(raw_nodes) > MAX_EXPORT_NODES or len(raw_edges) > MAX_EXPORT_EDGES:
+        raise GraphTooLargeForExportError(
+            f"Graph exceeds maximum export size bounds ({len(raw_nodes)} nodes > {MAX_EXPORT_NODES} "
+            f"or {len(raw_edges)} edges > {MAX_EXPORT_EDGES})."
+        )
+
+    # Sort nodes and edges deterministically by ID and relationship tuple
+    nodes = sorted(raw_nodes, key=lambda n: str(n.get("id", "")))
+    edges = sorted(
+        raw_edges,
+        key=lambda e: (
+            str(e.get("source_id", "")),
+            str(e.get("target_id", "")),
+            str(e.get("kind", "")),
+            str(e.get("id", "")),
+        ),
+    )
 
     lines: list[str] = [
         f'digraph "CodeStruct_{_sanitize_id(analysis_id)}" {{',
@@ -170,13 +245,13 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
     # Map node id to sanitized DOT id
     dot_id_map: dict[str, str] = {}
     for node in nodes:
-        raw_id = node.get("id", "")
+        raw_id = str(node.get("id", ""))
         dot_id_map[raw_id] = f"node_{_sanitize_id(raw_id)}"
 
     # Add nodes
     lines.append("  // Nodes")
     for node in nodes:
-        raw_id = node.get("id", "")
+        raw_id = str(node.get("id", ""))
         dot_id = dot_id_map[raw_id]
         name = node.get("name") or raw_id
         kind = node.get("kind", "entity")
@@ -210,10 +285,10 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
     lines.append("")
     lines.append("  // Relationships")
     for edge in edges:
-        source_id = edge.get("source_id", "")
-        target_id = edge.get("target_id")
-        kind = edge.get("kind", "references")
-        status = edge.get("resolution_status", "resolved")
+        source_id = str(edge.get("source_id", ""))
+        target_id = str(edge.get("target_id") or "")
+        kind = str(edge.get("kind", "references"))
+        status = str(edge.get("resolution_status", "resolved"))
 
         if source_id not in dot_id_map or not target_id or target_id not in dot_id_map:
             continue
@@ -236,3 +311,125 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
 
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def find_graphviz_dot() -> str | None:
+    """Locate the Graphviz 'dot' binary via environment override or system PATH."""
+    override = os.environ.get("CODESTRUCT_GRAPHVIZ_DOT_PATH")
+    if override and os.path.isfile(override) and os.access(override, os.X_OK):
+        return override
+    found = shutil.which("dot")
+    if found:
+        return found
+    # On Windows, also check common installation directories if not on PATH
+    if os.name == "nt":
+        for program_files in ("ProgramFiles", "ProgramFiles(x86)"):
+            base = os.environ.get(program_files)
+            if base:
+                candidate = Path(base) / "Graphviz" / "bin" / "dot.exe"
+                if candidate.is_file():
+                    return str(candidate)
+    return None
+
+
+def _kill_process_tree(pid: int) -> None:
+    """Terminate a process and its child processes defensively."""
+    if os.name == "nt":
+        with contextlib.suppress(Exception):
+            subprocess.run(  # noqa: S603
+                ["taskkill", "/F", "/T", "/PID", str(pid)],  # noqa: S607
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+    else:
+        with contextlib.suppress(Exception):
+            os.kill(pid, 9)
+
+
+def render_graphviz(
+    graph: dict[str, Any],
+    format: str = "svg",
+    dot_path: str | None = None,
+    timeout: float = DEFAULT_RENDER_TIMEOUT,
+    max_bytes: int = MAX_RENDER_BYTES,
+) -> bytes:
+    """Render a canonical CodeStruct graph dictionary to SVG, PNG, or DOT bytes.
+
+    Raises:
+        GraphvizNotFoundError: If Graphviz executable is not installed or located.
+        GraphTooLargeForExportError: If the graph exceeds export size limits.
+        GraphvizTimeoutError: If rendering exceeds the timeout deadline.
+        GraphvizOutputLimitError: If rendered output exceeds maximum byte limit.
+        GraphvizRenderError: If rendering produces an error or invalid output.
+    """
+    fmt = format.lower().strip()
+    if fmt not in ("svg", "png", "dot"):
+        raise ValueError(
+            f"Unsupported export format '{format}'; must be 'dot', 'svg', or 'png'"
+        )
+
+    dot_content = graph_to_dot(graph)
+    if fmt == "dot":
+        return dot_content.encode("utf-8")
+
+    executable = dot_path or find_graphviz_dot()
+    if not executable:
+        raise GraphvizNotFoundError(
+            "Graphviz 'dot' executable was not found. Install Graphviz "
+            "(e.g., 'winget install Graphviz.Graphviz' or 'apt install graphviz') "
+            "and ensure 'dot' is in PATH or set CODESTRUCT_GRAPHVIZ_DOT_PATH."
+        )
+
+    cmd = [executable, f"-T{fmt}", "-Gmargin=0.2", "-Gdpi=96"]
+
+    try:
+        proc = subprocess.Popen(  # noqa: S603
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False,
+        )
+    except Exception as exc:
+        raise GraphvizRenderError(
+            f"Failed to spawn Graphviz process '{executable}': {exc}"
+        ) from exc
+
+    try:
+        stdout_bytes, stderr_bytes = proc.communicate(
+            input=dot_content.encode("utf-8"),
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc.pid)
+        with contextlib.suppress(Exception):
+            proc.kill()
+        raise GraphvizTimeoutError(
+            f"Graphviz render timed out after {timeout:.1f}s"
+        ) from None
+
+    if proc.returncode != 0:
+        err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
+        raise GraphvizRenderError(
+            f"Graphviz process exited with code {proc.returncode}: {err_msg}"
+        )
+
+    if len(stdout_bytes) > max_bytes:
+        raise GraphvizOutputLimitError(
+            f"Graphviz output exceeded maximum byte limit ({len(stdout_bytes)} > {max_bytes} bytes)"
+        )
+
+    # Format-specific signature verification
+    if fmt == "svg":
+        if b"<svg" not in stdout_bytes:
+            raise GraphvizRenderError(
+                "Graphviz output does not contain a valid SVG root element."
+            )
+    elif fmt == "png":
+        if not stdout_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise GraphvizRenderError(
+                "Graphviz output does not have a valid PNG file header."
+            )
+
+    return stdout_bytes

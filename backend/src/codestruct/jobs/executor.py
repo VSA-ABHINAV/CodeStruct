@@ -118,6 +118,11 @@ class SpawnJobExecutor:
                 "max_file_size": policy.max_file_size,
                 "single_file_name": policy.single_file_name,
                 "compute_metrics": policy.compute_metrics,
+                "cache_db_path": (
+                    str(getattr(self.registry, "path", ""))
+                    if getattr(self.registry, "path", None)
+                    else None
+                ),
             }
 
             process = context.Process(

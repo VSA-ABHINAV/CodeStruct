@@ -1,4 +1,4 @@
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 DDL = """
 CREATE TABLE IF NOT EXISTS schema_metadata(version INTEGER NOT NULL);
@@ -27,4 +27,12 @@ CREATE TABLE IF NOT EXISTS runtime_sessions(
  trace_events_count INTEGER NOT NULL, created_at TEXT NOT NULL, error_message TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_runtime_analysis ON runtime_sessions(analysis_id);
+CREATE TABLE IF NOT EXISTS file_parse_cache(
+ cache_key TEXT PRIMARY KEY, root_identity TEXT NOT NULL, relative_path TEXT NOT NULL,
+ content_sha256 TEXT NOT NULL, parser_version TEXT NOT NULL, policy_fingerprint TEXT NOT NULL,
+ result_json TEXT NOT NULL, stored_size INTEGER NOT NULL, created_at TEXT NOT NULL,
+ last_accessed_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_file_parse_cache_lru ON file_parse_cache(last_accessed_at);
+CREATE INDEX IF NOT EXISTS idx_file_parse_cache_lookup ON file_parse_cache(root_identity, relative_path);
 """

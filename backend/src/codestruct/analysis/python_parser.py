@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import contextlib
+import hashlib
 import io
 import os
 import stat as stat_module
@@ -10,6 +12,7 @@ import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from .diagnostics import SAFE_MESSAGES, DiagnosticCode, DiagnosticSeverity
 from .models import (
@@ -37,6 +40,8 @@ from .models import (
 )
 from .policy import AnalysisPolicy
 from .scanner import CancellationCheck, scan_project
+
+PARSER_VERSION = "2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -708,7 +713,7 @@ def parse_project(
     policy: AnalysisPolicy,
     cancellation_check: CancellationCheck | None = None,
     parser: PythonAstParser | None = None,
-    cache: FileParseCache | None = None,
+    cache: Any = None,
 ) -> ProjectParseResult:
     """Scan and parse a project while retaining valid per-file results."""
 
@@ -736,11 +741,24 @@ def parse_project(
             cancelled = True
             break
         if cache is not None:
-            cached = cache.get(
-                source_file.relative_path,
-                source_file.size_bytes,
-                source_file.modified_ns,
-            )
+            cached = None
+            if hasattr(cache, "database_path"):
+                try:
+                    src_bytes = (
+                        canonical_root / source_file.relative_path
+                    ).read_bytes()
+                    src_sha = hashlib.sha256(src_bytes).hexdigest()
+                    cached = cache.get(
+                        canonical_root, source_file.relative_path, src_sha, policy
+                    )
+                except Exception:
+                    cached = None
+            else:
+                cached = cache.get(
+                    source_file.relative_path,
+                    source_file.size_bytes,
+                    source_file.modified_ns,
+                )
             if cached is not None:
                 files.append(cached)
                 diagnostics.extend(cached.diagnostics)
@@ -752,12 +770,26 @@ def parse_project(
             cancellation_check,
         )
         if cache is not None and result.parsed:
-            cache.put(
-                source_file.relative_path,
-                source_file.size_bytes,
-                source_file.modified_ns,
-                result,
-            )
+            if hasattr(cache, "database_path"):
+                with contextlib.suppress(Exception):
+                    src_bytes = (
+                        canonical_root / source_file.relative_path
+                    ).read_bytes()
+                    src_sha = hashlib.sha256(src_bytes).hexdigest()
+                    cache.put(
+                        canonical_root,
+                        source_file.relative_path,
+                        src_sha,
+                        policy,
+                        result,
+                    )
+            else:
+                cache.put(
+                    source_file.relative_path,
+                    source_file.size_bytes,
+                    source_file.modified_ns,
+                    result,
+                )
         files.append(result)
         diagnostics.extend(result.diagnostics)
         if any(
