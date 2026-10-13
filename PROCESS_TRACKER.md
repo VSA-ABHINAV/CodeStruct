@@ -83,6 +83,21 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 ## Run log
 
+### 2026-10-13 — Prototype Launch Shortcut Repair & Project Status Report
+
+- Diagnosed and repaired CodeStruct prototype start shortcut failure following Python upgrade/location change:
+  - Identified actual desktop shortcuts at `C:\Users\ABHINAV\OneDrive\Desktop\Start CodeStruct Prototype.lnk` and `Stop CodeStruct Prototype.lnk` pointing to `Start-CodeStruct-Prototype.cmd` and `Stop-CodeStruct-Prototype.cmd`.
+  - Pinpointed root cause: Python was upgraded to Python 3.14 (`C:\Python314\python.exe`), removing `C:\Users\ABHINAV\AppData\Local\Programs\Python\Python313\python.exe` which was hardcoded in `prototype-launcher\prototype-config.json` as `backendPythonExecutable`.
+  - Created backups: `C:\Users\ABHINAV\OneDrive\Desktop\Start CodeStruct Prototype.lnk.bak` and `Stop CodeStruct Prototype.lnk.bak`.
+  - Minimal repair: Updated `prototype-config.json` to point `backendPythonExecutable` to `D:\REP\Codestruct\Codestruct\.venv\Scripts\python.exe` (Python 3.14.6 with `codestruct` editable install and dependencies); added resilient fallback auto-discovery to `Start-CodeStruct-Prototype.ps1` to automatically detect `.venv\Scripts\python.exe` if the configured path is missing.
+  - Ran focused verification:
+    - `test-launcher-suite.ps1`: All 12 scenarios passed.
+    - `test-profile-encoding.ps1`: All 5 scenarios passed.
+    - Real prototype smoke workflow: Started backend (8000), frontend (5173), and Thonny; verified live analysis `ana_XGyqKJBAVGHdtPRglDcQQeyb` completed (11 nodes, 13 edges, proxy verified `completed`); executed safe stop releasing ports with zero orphan processes.
+- Produced comprehensive project status report in `docs/verification/PROJECT_STATUS_AND_SHORTCUT.md`.
+- Reconciled audit (`docs/codestruct_audit.md` CS-016 status updated to report-accepted) and synchronized external audit mirror with identical SHA-256 hash.
+- M7 remains Ready for Codex review; M8 not started.
+
 ### 2026-10-12 - Antigravity Milestone 7 Pass 1
 
 - Implemented CS-015: persistent per-file parse cache (`file_cache.py`), integrated into `run_analysis_worker` and `python_parser.py`; cache key strictly binding canonical root, normalized path, content SHA-256 digest, parser version 2, and policy fingerprint; SQLite WAL table with LRU eviction and corruption recovery; whole-result cache preserved.

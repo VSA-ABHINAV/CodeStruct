@@ -50,7 +50,8 @@ $origConfig = Get-Content -Path $ConfigPath -Raw -Encoding UTF8
 try {
     $badConfig = $origConfig | ConvertFrom-Json
     $badConfig.backendPort = 999999
-    $badConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $ConfigPath -Encoding UTF8
+    $badJson = $badConfig | ConvertTo-Json -Depth 5
+    [System.IO.File]::WriteAllText($ConfigPath, $badJson, [System.Text.UTF8Encoding]::new($false))
     
     $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript 2>&1
     $exitCode = $LASTEXITCODE
@@ -58,7 +59,7 @@ try {
     $passed = ($exitCode -ne 0) -and $hasErrorMsg
     Record-TestResult "ConfigValidation" $passed "Exit code: $exitCode, Error message caught: $hasErrorMsg"
 } finally {
-    Set-Content -Path $ConfigPath -Value $origConfig -Encoding UTF8
+    [System.IO.File]::WriteAllText($ConfigPath, $origConfig, [System.Text.UTF8Encoding]::new($false))
 }
 
 # TEST 2: Working Directory Independence
@@ -207,7 +208,8 @@ Write-Host "`n[Test 10] Alternate Ports End-to-End (8001 / 5174)..." -Foreground
 $altConfig = $origConfig | ConvertFrom-Json
 $altConfig.backendPort = 8001
 $altConfig.frontendPort = 5174
-$altConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $ConfigPath -Encoding UTF8
+$altJson = $altConfig | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText($ConfigPath, $altJson, [System.Text.UTF8Encoding]::new($false))
 
 try {
     $outAlt = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript 2>&1
@@ -239,7 +241,7 @@ try {
     $altPassed = ($exitCodeAlt -eq 0) -and $altBackendOk -and $altFrontendOk -and $altProxyOk
     Record-TestResult "AlternatePorts-8001-5174" $altPassed "Backend 8001: $altBackendOk, Frontend 5174: $altFrontendOk, Proxy: $altProxyOk"
 } finally {
-    Set-Content -Path $ConfigPath -Value $origConfig -Encoding UTF8
+    [System.IO.File]::WriteAllText($ConfigPath, $origConfig, [System.Text.UTF8Encoding]::new($false))
 }
 
 # TEST 11: Desktop Shortcuts Verification
@@ -274,7 +276,8 @@ Record-TestResult "DesktopShortcuts" $shortcutsPassed "Start Target Valid: $scSt
 Write-Host "`n[Test 12] Thonny Plugin Preflight Failure Safe Abort..." -ForegroundColor Yellow
 $badThonnyConfig = $origConfig | ConvertFrom-Json
 $badThonnyConfig.thonnyPluginDirectory = Join-Path $LauncherDir "nonexistent-plugin-dir"
-$badThonnyConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $ConfigPath -Encoding UTF8
+$badThonnyJson = $badThonnyConfig | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText($ConfigPath, $badThonnyJson, [System.Text.UTF8Encoding]::new($false))
 
 try {
     $outPre = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StartScript 2>&1
@@ -284,7 +287,7 @@ try {
     $passedPre = ($exitCodePre -ne 0) -and $detectedPreflightFail
     Record-TestResult "ThonnyPreflight-SafeAbort" $passedPre "Exit code: $exitCodePre, Aborted safely: $detectedPreflightFail"
 } finally {
-    Set-Content -Path $ConfigPath -Value $origConfig -Encoding UTF8
+    [System.IO.File]::WriteAllText($ConfigPath, $origConfig, [System.Text.UTF8Encoding]::new($false))
 }
 
 # Final cleanup of services

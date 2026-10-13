@@ -113,7 +113,13 @@ if (-not (Test-Path $config.codeStructDirectory)) {
     $validationErrors.Add("codeStructDirectory does not exist: '$($config.codeStructDirectory)'")
 }
 if (-not (Test-Path $config.backendPythonExecutable)) {
-    $validationErrors.Add("backendPythonExecutable does not exist: '$($config.backendPythonExecutable)'")
+    $candidateVenv = Join-Path $config.codeStructDirectory ".venv\Scripts\python.exe"
+    if (Test-Path $candidateVenv) {
+        Write-Host "  [NOTICE] Configured backendPythonExecutable not found; auto-discovered virtualenv at '$candidateVenv'." -ForegroundColor Yellow
+        $config.backendPythonExecutable = $candidateVenv
+    } else {
+        $validationErrors.Add("backendPythonExecutable does not exist: '$($config.backendPythonExecutable)'")
+    }
 }
 if (-not (Test-Path $config.frontendDirectory)) {
     $validationErrors.Add("frontendDirectory does not exist: '$($config.frontendDirectory)'")
