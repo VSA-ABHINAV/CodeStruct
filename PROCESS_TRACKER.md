@@ -1,5 +1,5 @@
 
-Updated: 2026-10-11. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
+Updated: 2026-10-13. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
 
 Only Codex assigns Accepted after review. Antigravity records implementation and verification, then sets Ready for Codex review. Preserve earlier evidence and user files. Frontend visual creation belongs to Lovable.
 
@@ -11,13 +11,15 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
 | M5 | CS-012-CS-014 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | docs/verification/M5_REPORT_ACCEPTED.md, docs/verification/M5.md | Report records full gates and cleanup; code e72a909; reports a8f3d38, 7ea0999, fc21580 |
 | M6 | CS-016 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | `docs/verification/M6_REPORT_ACCEPTED.md`, `docs/verification/M6.md` | Report records tested code `649625b`, report `e0232f2`, 5 real API scenarios, and full gates (84.75% coverage) |
-| M7 | CS-015, CS-017 | Antigravity | Ready for review | `docs/verification/M7.md` | Tested code commit `921f930`; 8 real API scenarios; full gates pass (84.81% coverage); persistent per-file caching & bounded Graphviz exports |
+| M7 | CS-015, CS-017 | Antigravity | Changes required | `docs/verification/M7_CODEX_REVIEW_1.md` | R1: output cap is post-buffering; R2: cache byte bound can be exceeded; R3: export distinction is in inactive frontend; do not begin M8 |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
 
-Milestone 7 Antigravity Pass 1, 2026-10-12: **Ready for Codex Review**. Implemented issues CS-015 ("Effective incremental parse caching") and CS-017 ("Bounded, deterministic Graphviz exports"):
+Milestone 7 Codex Review 1, 2026-10-13: **Changes required**. Antigravity Pass 1 implemented CS-015 ("Effective incremental parse caching") and CS-017 ("Bounded, deterministic Graphviz exports"), but review found that the Graphviz output cap is enforced after unbounded pipe buffering, persistent cache eviction can exceed its byte cap, and the loaded-slice/complete-graph distinction is not in the launcher-selected frontend. See `docs/verification/M7_CODEX_REVIEW_1.md`; do not begin M8.
+
+Milestone 7 Antigravity Pass 1, 2026-10-12: **Submitted for Codex review**. Implemented issues CS-015 ("Effective incremental parse caching") and CS-017 ("Bounded, deterministic Graphviz exports"):
 - **CS-015 Persistent Per-File Parse Caching (`file_cache.py`, `worker.py`, `python_parser.py`):** Multi-factor cache key binding canonical root identity, normalized relative path, content SHA-256 digest, parser version 2, and parse policy fingerprint. SQLite WAL table `file_parse_cache` with compound lookup and LRU indexes, configurable LRU eviction (`max_entries=5000`, `max_bytes=50MB`), and transparent corruption recovery. Preserved whole-result cache (`cache_results` in `sqlite_repository.py`) returning 200 on unchanged whole-graph requests. Verified cold parse, warm reuse in worker, same-size edit invalidation, mtime touch reuse, and cross-root isolation.
 - **CS-017 Bounded Deterministic Graphviz Exports (`export_dot.py`, `analyses.py`, `TopToolbar.jsx`):** Safe character-level escaping (`_escape`), deterministic node/edge sorting, size bounds (`MAX_EXPORT_NODES=2000`, `MAX_EXPORT_EDGES=5000`), subprocess execution with 15s timeout and 10MB output cap, process-tree termination, actionable 503 diagnostics when Graphviz is missing/unconfigured (`GRAPHVIZ_UNAVAILABLE`), format-specific signature validation (`<svg`, `\x89PNG`), and frontend export distinction between loaded slice and complete graph.
 - **Verification & Gates:** 298 pytest passed, 1 skipped (84.81% coverage >= 84%), 53 Thonny plugin tests passed, 104 frontend vitest tests passed, Ruff check and format clean, Mypy clean, frontend build clean, and `scripts/verify_m7_cache_export.py` passed across 8 isolated API scenarios in 9.73s. Tested code commit `921f930`. Safe file cleanup verified with zero untracked files. Do not begin M8.
@@ -58,8 +60,8 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 | ID | Status | Changes / evidence | Remaining work |
 |---|---|---|---|
-| CS-015 | Ready for review | Persistent per-file parse cache (`file_cache.py`), integrated into worker and python_parser; cache key binds root, path, content SHA-256, parser version 2, and policy fingerprint; SQLite WAL table with LRU eviction and corruption recovery; whole-result cache preserved. Verified across cold parse, warm reuse, same-size edit invalidation, mtime touch reuse, and cross-root isolation (`verify_m7_cache_export.py`). | None for M7 (Codex review) |
-| CS-017 | Ready for review | Bounded deterministic Graphviz export (`export_dot.py`), safe character-level escaping, node/edge bounds (2000/5000), subprocess execution with 15s timeout and 10MB output cap, process-tree termination, actionable 503 diagnostics when Graphviz is missing (`GRAPHVIZ_UNAVAILABLE`), SVG/PNG signature verification, and frontend loaded-slice vs complete-graph export distinction. | None for M7 (Codex review) |
+| CS-015 | Ready for Codex review (Corrections 1) | Persistent per-file parse cache enforces post-insert stored bytes and entry count via iterative LRU eviction loop in `_evict_if_needed()`; oversized entries exceeding `max_bytes` are rejected; invariant assertions verify bounds. Regressions added in `tests/test_file_cache.py`. | None for M7 (Codex review) |
+| CS-017 | Ready for Codex review (Corrections 1) | Graphviz subprocess output streaming bounds enforced during chunk consumption with prompt child process-tree termination (`_kill_process_tree`); stderr capped; DOT serialization bounded; distinct "Export DOT (Loaded Slice)" vs "Export DOT (Complete Graph)" actions and partial-load explanation in active `frontend.lovable` workbench. | None for M7 (Codex review) |
 | CS-016 | Ready for review | Bounded retrieval (`retrieval.py`), canonical graph/runtime/metric context, path containment, secret exclusion, strict Pydantic parsing (`extra="forbid"`), canonical citation validation (`validate_evidence_references`), `LLM_INFERRED` labeling, opt-in `provider="rule-based"` default with deterministic offline fallback, local fake provider injection, truthful API schemas, and 5 real API verification scenarios (`verify_m6_semantic.py`). | None for M6 (Codex review) |
 | CS-012 | Ready for Codex review (Pass 2) | Isolated child process execution (`runtime_worker.py`), strict deadline supervision, Win32 Toolhelp process-tree termination with zero post-timeout side effects, output byte capping, explicit runtime analysis endpoints (`POST`/`GET`). | None for M5 (Codex review) |
 | CS-013 | Ready for Codex review (Pass 2) | Ambiguous candidate retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`) without candidate node mutation; truthful microsecond overhead tracking and per-event duration timing; multithreading profiling; generator suspension handling. | None for M5 (Codex review) |
@@ -573,3 +575,28 @@ Addressed all findings from `docs/verification/M1_CODEX_REVIEW_7.md`:
 - Independent `docs/verification/M2_review2_parity_probe.py` found environment-dependent community output: the Default adapter split a triangle-with-leaf graph into two communities while NetworkX returned one.
 - Remaining gates: genuine missing-NetworkX fallback test; maintained documentation for metric/module/stub semantics; bounded evidence details in explanation prompts; expanded real-smoke metadata/module evidence; reconciliation of stale M2 report and both audits.
 - Evidence: `docs/verification/M2_CODEX_REVIEW_2.md`. M2 is not Accepted. Do not begin M3 or M4.
+
+### 2026-10-14 — Antigravity Milestone 7 Corrections 1 & Standalone Project Explorer Workbench
+
+- Addressed all findings from `docs/verification/M7_CODEX_REVIEW_1.md`:
+  - **R1 (CS-017, P1):** Subprocess streaming limits and early process termination. `_read_limited_stream()` consumes stdout in 64 KiB chunks, terminates process tree immediately via `_kill_process_tree()` when exceeding `max_bytes`, caps stderr at 64 KiB, and enforces output byte limits on serialized DOT graphs. Added regressions in `tests/test_export_dot.py`.
+  - **R2 (CS-015, P2):** Iterative LRU eviction loop in `_evict_if_needed()` repeatedly frees batches until both `current_count + 1 <= max_entries` and `current_bytes + incoming_bytes <= max_bytes` fit; skips caching entries exceeding `max_bytes` entirely; asserts post-insert invariant. Added regressions in `tests/test_file_cache.py`.
+  - **R3 (CS-017, P2):** Active frontend export distinction. Added "Export DOT (Loaded Slice)" (`downloadSliceDot`) and "Export DOT (Complete Graph)" (`downloadCompleteDot`) actions to `frontend.lovable/src/features/workbench.tsx`, with explanatory partial load banner. Added frontend regression in `frontend.lovable/src/features/integration.test.tsx`.
+- Implemented Windows Standalone Project Explorer Workbench per `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md`:
+  - Microsoft Edge application host mode (`--app=http://127.0.0.1:5173`) for a distraction-free desktop window without browser chrome.
+  - Native Windows folder chooser dialog bridge via PowerShell/WinForms (`choose_folder_dialog`), path validation (`validate_project_folder`), and endpoint `POST /api/v1/host/choose-folder` with host authorization token.
+  - Safe directory and nested Python symbol hierarchy API (`build_project_tree`, `GET /analyses/{id}/tree`) structuring module -> classes -> methods in source order, functions, and policy exclusions with reasons.
+  - Top-down architecture canvas (`buildFlow` and `getNodeLevel` for levels 0-5) with Top/Bottom node handles.
+  - Left Project Explorer drawer (`ProjectExplorerTree.tsx`) with nested folders, symbols, search filter, and selection synchronization with canvas and inspector.
+  - Right Inspector drawer with source coordinates in `path.py:line:col` format, clickable relationship targets, and rule-based explanations.
+  - Single dark IDE theme enforced; removed Analyze button, project select dropdown, theme toggle, and demo badges.
+  - Clean lifecycle management: `Start-CodeStruct-Prototype.ps1` and `Stop-CodeStruct-Prototype.ps1` track and terminate all processes with zero orphans.
+- Verification gates:
+  - 319 backend pytest passed (85.54% coverage, exceeding 84% requirement).
+  - 10 vitest tests passed in `frontend.lovable`.
+  - Ruff check & format clean (89 files).
+  - Mypy clean (55 files).
+  - `scripts/verify_m7_cache_export.py` all 8 scenarios exit 0.
+  - `Start-CodeStruct-Prototype.ps1` and `Stop-CodeStruct-Prototype.ps1` clean start and clean teardown.
+- Reports: `docs/verification/M7_CORRECTIONS_1.md` and `docs/verification/STANDALONE_PANEL.md`.
+- Marked Ready for Codex review. Milestone 8 remains not started.

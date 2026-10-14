@@ -1,39 +1,109 @@
-# Antigravity task: Prototype launch shortcut repair and current project status
+# Antigravity Task: M7 Corrections and Standalone Windows Project Explorer
 
-Date: 2026-10-12. Repository: `D:\REP\Codestruct\Codestruct`.
+Date: 2026-10-13
+Repository: `D:\REP\Codestruct\Codestruct`
+Task owner: Antigravity. Codex authored the review and task brief; do not treat this task as permission for Codex to implement the application changes.
 
-The user reports that the CodeStruct prototype Start shortcut stopped working after the Python installation/location changed. The user also requests a complete, evidence-based report of current project status and next steps. Work only on diagnosing/repairing this launcher path and producing the report. Do not implement M8 or make unrelated feature changes. Do not directly review or rewrite M7 implementation. Treat `docs/verification/M7.md` as Antigravity-submitted evidence and label it as not independently reviewed.
+## Goal
 
-Read `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, all milestone verification/acceptance reports, `prototype-launcher/README.md` if present, `prototype-launcher/Start-CodeStruct-Prototype.ps1`, `prototype-launcher/Start-CodeStruct-Prototype.cmd`, `prototype-launcher/Create-Desktop-Shortcuts.ps1`, and the primary technology summary `D:\REP\# CodeStruct – Technology Summary.txt`. Confirm the actual repository/branch/HEAD and current working tree before drawing conclusions. Historical reports may describe different commits; reconcile them against the current log and tracker.
+Resolve the findings in `docs/verification/M7_CODEX_REVIEW_1.md`, then deliver the user-requested Windows-only standalone CodeStruct workbench that opens a whole project folder. Use `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md` for the visual requirements. Work through the phases below, commit each completed phase separately, keep running tests and fixing regressions until the requirements are met, then create the reports and stop for Codex review. Do not begin M8.
 
-## Shortcut diagnosis and repair
+This scope is the M7 correction pass plus the standalone project-explorer/frontend-integration work requested by the user. It does **not** include CS-020–024 evaluation/release work or deferred CS-025 features.
 
-1. Identify the actual shortcut the user invokes (desktop, Start menu, or repository shortcut) and record its target, arguments, working directory, and whether it is a Windows `.lnk`, `.cmd`, `.ps1`, or another launcher. Do not guess which shortcut is broken.
-2. Determine the current usable Python executable through supported local discovery (for example `py -0p`, `Get-Command python`, and the launcher scripts/configuration). Compare it with the shortcut and launcher configuration. Do not scan unrelated user files or expose environment secrets.
-3. Trace the full start path through the shortcut, command wrapper, PowerShell launcher, backend and frontend startup. Identify the precise failure caused by the Python location change.
-4. Repair only the minimal launcher configuration needed. Preserve the existing shortcut's name, icon, arguments, and working directory where possible. Back up any shortcut before changing it; do not remove or replace unrelated shortcuts, Python installs, project files, or user settings. If the broken shortcut is outside the repository, record its exact path and change in the report; do not commit user-profile artifacts.
-5. Run the actual Start shortcut (or faithfully exercise the exact same target/arguments if Windows prevents programmatic shortcut activation), verify the backend and frontend become reachable, run the real prototype smoke workflow, then stop the prototype using its supported stop shortcut/script. Record exact commands, process/health evidence, ports, and outcome. Check that failure paths do not leave orphan processes.
-6. Run the focused launcher tests, plus lint/format or tests for any changed repository script. Do not run unrelated feature implementation. Fix and rerun until the shortcut/startup workflow succeeds or an external blocker is precisely evidenced.
+## Read first and verify the checkout
 
-## Complete project status report
+Read these current sources before changing code:
 
-Create `docs/verification/PROJECT_STATUS_AND_SHORTCUT.md`. Make it useful as the handoff document for the project owner and cover:
+- `docs/verification/M7_CODEX_REVIEW_1.md` — current Codex findings and required regressions.
+- `docs/codestruct_audit.md` and `PROCESS_TRACKER.md` — stable issue IDs and current statuses.
+- `D:\REP\# CodeStruct – Technology Summary.txt` — primary product and technology direction.
+- `frontend.lovable/INTEGRATION_HANDOFF.md` and `prototype-launcher/prototype-config.json` — active frontend and launcher wiring.
+- The relevant source, tests, and launcher files for each finding.
 
-- Current checkout: repository root, branch, HEAD commit, upstream/ahead-behind state, working-tree state, and any uncommitted or untracked files. Never include secrets.
-- Milestone status M1 through M8 and CS-001 through CS-026, grouped into accepted by independent review, complete/considered complete only by the user's report-reliance instruction, ready for review, user-reported/pending visual acceptance, open/partial/verification gap, and deferred. Cite exact tracker/audit/report paths and relevant tested commits. Do not upgrade report-only evidence to independent acceptance.
-- A concise summary of what the current reports claim was delivered and tested in each completed/reported phase. Distinguish reported evidence from checks freshly run in this task. List known limitations and unresolved acceptance items, including frontend visual/user acceptance or screen-reader review where the project records them.
-- The current prototype start shortcut failure, root cause, exact repair, backup location if applicable, and reproducible successful startup/shutdown instructions.
-- Next steps in priority order, with owner and prerequisites. Use `docs/codestruct_audit.md` and the technology summary as primary scope sources. Explain that M7 is currently reported Ready for review and M8 must not be called accepted or begun as part of this task. Identify M8 scope (CS-020–024) and any user/owner decisions needed; keep CS-025 deferred unless the audit says otherwise.
-- A short next-action recommendation for the user, separating Antigravity work, Codex review/status decisions, and user/Lovable decisions.
+Verify the actual Git root, branch, HEAD, remotes, and working tree before editing. The expected checkout is the existing repository on `main`; the review was performed at `590a208`, with tested M7 code at `921f930`. Do not reset, rebase, discard, or overwrite user files. The current working tree is expected to contain Codex-authored changes to `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, `docs/verification/M7_CODEX_REVIEW_1.md`, this task file, and `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md`. Preserve them and inspect every other modification before staging.
 
-Do not claim all project requirements are complete merely because tests pass. Report any missing report, stale/mismatched commit, unrun verification, failed check, or blocked shortcut repair plainly. Update `PROCESS_TRACKER.md` only with the outcome actually established here; do not mark M7 Accepted or M8 started. If the report exposes a clear status mismatch in the audit, correct only that factual mismatch and synchronize the external audit mirror, preserving historical review records.
+## Phase 1 — Correct M7 findings R1 and R2
 
-## Scope, cleanup, and completion
+### R1: enforce Graphviz output bounds while output is produced
 
-Do not start M8, modify analysis/cache/Graphviz features, redesign the frontend, or edit unrelated application code. Clean up only temporary artifacts created during this task and proven unnecessary; preserve user files and all verification evidence. If repository files change, commit the scoped launcher/report/tracker changes only after verification passes and include the exact commit in the report. Do not commit external desktop/Start-menu shortcut artifacts. Run `git diff --check` and record final `git status`.
+In `backend/src/codestruct/graph/export_dot.py`, replace the post-`communicate()` output-size check with enforcement that bounds stdout and stderr as they are consumed. Terminate the renderer and descendants promptly when a stream exceeds its cap. Bound or safely discard diagnostics on stderr. Enforce an output bound on DOT serialization as well; node/edge counts alone do not bound label sizes. Preserve timeout behavior, format validation, safe errors, API status mapping, and Windows process-tree cleanup.
 
-Keep investigating/fixing/testing this bounded task until the shortcut workflow and report are complete. If a genuine external blocker prevents completion, stop only after documenting the exact blocker, evidence, and safe next action. Then report **Ready for review** and share `docs/verification/PROJECT_STATUS_AND_SHORTCUT.md`. Do not continue to M8.
+Add regressions for a renderer that emits well beyond the configured stdout cap, a renderer that floods stderr, and an oversized DOT label/serialization. Tests must prove the limit is enforced, the child is terminated, and callers receive the documented output-limit failure without buffering the full output. Cover the relevant API error response too.
+
+### R2: enforce the persistent cache byte limit
+
+In `backend/src/codestruct/storage/file_cache.py`, make eviction continue until the cache fits both the entry-count and byte budgets after the incoming entry, or skip caching an entry that cannot fit by itself. Preserve LRU behavior, transactions, and concurrency safety.
+
+Add tests for byte-only pressure, simultaneous count and byte pressure, and one entry larger than the configured byte budget. Assert both `entries <= max_entries` and `total_bytes <= max_bytes` after insertion. The review's direct failing example is ten existing 10-byte entries under a 100-byte budget followed by an 80-byte entry; the resulting stored total must not exceed 100 bytes.
+
+Do not weaken existing analysis or cache-key invariants. Keep the complete-result cache and per-file cache behavior intact.
+
+## Phase 2 — Windows standalone window and whole-folder workflow
+
+Create a top-level Windows desktop application window for the visualization. It must open as an application window and must not send the user to a Chrome/Edge browser tab. Inspect the existing Python/FastAPI/Vite stack and choose the smallest reliable Windows host that fits it; document the choice and any required runtime. Do not add a large framework or package installer without evidence it is necessary. Keep backend and window process startup/shutdown under the existing launcher lifecycle, with no orphan processes.
+
+The user selected these product decisions:
+
+- **Windows-only standalone app window.**
+- **Open a whole folder/project**, not an individual Python file.
+- Use only the new standalone panel in the application.
+- Visual frontend creation belongs to Lovable; Antigravity owns the native shell, backend/API, and integration work. Use the provided Lovable brief. Do not author a substitute visual design, contact external services, or access a Lovable account. The user will provide the Lovable-generated UI in the active frontend source for integration. Do not invent or substitute demo UI/data.
+
+Provide a native **Open Folder** action that opens a Windows folder chooser. The selected directory becomes the current project root and starts the initial analysis automatically. Do not use a browser file input. Add or adapt a host-to-renderer bridge and backend flow safely: a browser-originated unauthenticated request must not be able to register arbitrary filesystem paths. Preserve canonical-root containment, traversal and reparse/symlink protections, local capability boundaries, and static-analysis non-execution. Do not make source code run as part of opening or refreshing a project.
+
+The project explorer must represent the complete selected folder tree. Add a safe backend/API contract for directory and symbol data if the existing graph API does not provide it. Every in-root entry must remain navigable, using lazy expansion or pagination for large projects. Under Python files, show the module, classes, functions, and methods in source order; nest methods under their classes. Keep ignored/generated directories safe and explain exclusions rather than silently claiming a complete tree when an entry was skipped.
+
+## Phase 3 — Integrate the Lovable workbench requirements
+
+Use `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md` as the UI acceptance source. The user will create the visual screen in Lovable; do not author a replacement visual design in React/CSS or access Lovable externally. Complete the shell, APIs, security, and test work that does not depend on the new export. When the Lovable-generated files are available in the active frontend, wire the host bridge and real data into them and verify the full workbench. Until then, preserve the current frontend and report the exact external handoff needed rather than claiming the visual phase passed. Preserve the existing React Flow decision unless a measured requirement proves it cannot support the top-down hierarchy; the audit explicitly says not to rewrite a graph library solely to match a technology-summary name.
+
+The workbench must:
+
+- Present a readable, IDE-like single-theme interface. Remove the theme toggle; do not add dark/light mode switching.
+- Open a whole folder through the native host. Remove the project-source selector and demo-root/demo-data options.
+- Remove the separate Analyze action. Opening a folder starts analysis; a visible **Refresh** action reanalyzes the currently open project.
+- Show the architecture in a clear top-to-bottom hierarchy from folder/file to module, class, function, and final method. Keep object dimensions and labels readable; use expand/collapse, pan/zoom, and fit-to-view instead of shrinking the graph until labels are unreadable. Show real relationships without obscuring the parent-child hierarchy.
+- Provide an independently collapsible left drawer with the full folder/file tree and nested Python symbols. Selecting an item synchronizes the tree and graph.
+- Provide an independently collapsible right inspector with the selected node's name, source-location pointer, project-relative path, relationships, and architectural explanation. Related nodes should be navigable. Explanations must use the existing evidence-backed service and distinguish evidence from interpretation.
+- Preserve real graph IDs, location data, relationship status/confidence, pagination, cancellation, diagnostics, error states, and existing Thonny/editor navigation where available. Never substitute fixtures after a live API failure.
+- Make DOT export labels explicit about loaded-slice versus complete-graph behavior; satisfy R3 from the review in the active standalone UI.
+
+Do not redesign unrelated product areas or change API contracts without documenting and testing the compatibility impact.
+
+## Frontend folder cleanup
+
+The user explicitly requested removal of frontend files that will not be used by the standalone panel. Perform cleanup only after the replacement is integrated and verified:
+
+1. Inventory frontend directories, entrypoints, build outputs, tests, package manifests/lockfiles, launcher paths, backend bundling, CI, scripts, and documentation references with `rg` and direct inspection.
+2. Identify the actual source needed to build and launch the standalone renderer. Keep `frontend.lovable/` if it remains the active Lovable source. Do not infer that `frontend/` or any subfolder is safe to delete merely because the prototype launcher does not point to it; migrate or remove its tests/build references deliberately.
+3. Delete only exact, proven-unused frontend source folders/files after the new app builds and launches from its retained source. Do not remove historical verification reports, user data, databases, logs, screenshots, lockfiles with live dependency provenance, backend assets, or Thonny files.
+4. Record each removed path and the reference/build/package checks that justified its removal. Verify the final working tree and repository tree; leave no task-created temporary databases or build artifacts unless they are required outputs.
+
+Codex's review attempt created `D:\REP\_codestruct_m7_review.sqlite3` and `D:\REP\_codex_m7_review_tmp_20261013`. Verify these exact paths and that no process is using them; remove them as task-created review artifacts if accessible. Do not broaden cleanup to other files in `D:\REP`.
+
+## Required verification
+
+Keep fixing and rerunning until the applicable gates pass. Record exact commands, exit codes, counts, and evidence; distinguish automated tests from real desktop and visual checks.
+
+- M7: focused cache/export regressions; full backend pytest and configured coverage threshold; Ruff check/format; Mypy; Python compilation; M7 verification runner updated for the corrected behavior.
+- Frontend: active renderer typecheck, unit tests, lint, and production build. Ensure tests exercise tree hierarchy, selected node details, refresh, and partial/complete export labels.
+- Thonny: existing plugin suite and any affected real editor-navigation workflow. Do not claim Thonny integration if not exercised.
+- Real Windows workflow: start the project through its supported shortcut/launcher; observe a separate CodeStruct app window with no browser tab; choose a whole fixture/project folder with the native dialog; inspect a nested Python file, class, function, and method; refresh; select a node and verify its source pointer, relationships, and explanation; verify the left and right drawers open/close; stop the app and confirm task-owned processes/ports are gone.
+- Security: verify invalid roots, traversal, symlink/reparse escape, and unauthenticated root registration are rejected; confirm analysis remains static and does not execute source files.
+- Run `git diff --check` on the complete phase diffs and the final tree. Remove the known trailing whitespace in `docs/verification/M6_REPORT_ACCEPTED.md:3` only if that exact line remains and include the cleanup in a scoped documentation commit.
+- Use isolated test databases and temporary directories under a writable, task-owned location. Never point tests at the prototype user's persistent database.
+
+If a test or runtime flow fails, diagnose and fix it; do not stop after the first test run. If an external dependency blocks the Lovable export or the actual Windows runtime, complete all independent work, preserve the current usable app, record the exact blocker and evidence, and do not claim the standalone visual workflow is complete.
+
+## Phase commits, tracker, audit, and reports
+
+- Commit each completed implementation phase separately, with scoped files and clear messages. The repository already exists: do not create a nested repository, reset history, or push to a remote.
+- Do not stage unrelated user files. Keep the Codex-authored review and brief changes intact.
+- Update `PROCESS_TRACKER.md` and `docs/codestruct_audit.md` only to reflect verified outcomes. Antigravity may mark a phase **Ready for Codex review**; only Codex marks issues Accepted. Do not claim M7 Accepted and do not start M8.
+- Keep the external audit mirror identified in `docs/codestruct_audit.md` synchronized after the audit changes; verify byte/hash parity and record the result. Do not overwrite the archived original audit.
+- Create `docs/verification/M7_CORRECTIONS_1.md` and `docs/verification/STANDALONE_PANEL.md` with implementation commits, exact tests and results, the real Windows workflow evidence, cleanup inventory, failed attempts, untested cases, and remaining limitations. Compare tested code commits with report commits so documentation-only commits cannot conceal implementation changes.
+- Continue through all applicable phases and quality gates before sending **READY FOR REVIEW**. At the end, stop and wait for Codex review; do not begin another milestone. If the Lovable export is not yet available, report the completed non-frontend work and the precise external handoff needed, and leave the active frontend and its dependencies intact.
 
 ## Launch prompt
 
-<span style="color:green">&gt; 🟢 Read ANTIGRAVITY_TASK.md and complete only the prototype start-shortcut diagnosis/repair and project status report described there. Trace the actual shortcut through the Python/backend/frontend startup, repair the minimal path/configuration issue caused by the Python location change, and verify the real prototype starts and stops cleanly. Create docs/verification/PROJECT_STATUS_AND_SHORTCUT.md with the current checkout, evidence-based milestone/audit status, report-only versus independently accepted work, unresolved decisions, and priority-ordered next steps. Update the tracker only to match verified facts, preserve user data and historical evidence, clean only task-created temporary files, run the focused checks and git diff --check, and commit scoped repository changes only after success. Keep running and testing until this task is complete, then stop and report Ready for review. Do not implement M8 or any unrelated feature work.</span>
+> <span style="color:green">Read ANTIGRAVITY_TASK.md and complete the M7 corrections and standalone Windows project-explorer work within its scope. Use the M7 review and Lovable brief, work through all phases, keep fixing and testing until the required result is available, commit each completed phase, update PROCESS_TRACKER.md and the audit, run the real native-window/whole-folder workflow, and write both verification reports with evidence. Preserve user data and existing frontend files until the replacement is integrated and verified. Stop for Codex review when this task is complete. Do not begin Milestone 8.</span>
