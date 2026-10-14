@@ -470,7 +470,34 @@ if (-not $canReuseFrontend) {
     Write-Host "  Frontend is ready and proxy verified (PID: $frontendPid)." -ForegroundColor Green
 }
 
-# 8. Persist Complete Combined State
+# 8. Standalone Windows Desktop Application Window
+Write-Host "[3/4] Launching CodeStruct Standalone Desktop Window..." -ForegroundColor Yellow
+
+$edgePaths = @(
+    "$env:ProgramFiles (x86)\Microsoft\Edge\Application\msedge.exe",
+    "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+    "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
+)
+$edgeExe = $null
+foreach ($ep in $edgePaths) {
+    if (Test-Path $ep) { $edgeExe = $ep; break }
+}
+
+$appWindowPid = $null
+$appWindowStartTime = $null
+if ($edgeExe) {
+    $appProfileDir = Join-Path $RuntimeDir "app_profile"
+    if (-not (Test-Path $appProfileDir)) { New-Item -ItemType Directory -Path $appProfileDir -Force | Out-Null }
+    $appArgs = "--app=$frontendUrl --window-size=1440,900 --user-data-dir=`"$appProfileDir`""
+    $appProc = Start-Process -FilePath $edgeExe -ArgumentList $appArgs -PassThru
+    $appWindowPid = $appProc.Id
+    $appWindowStartTime = $appProc.StartTime.ToString("o")
+    Write-Host "  CodeStruct Standalone Application Window launched (PID: $appWindowPid)." -ForegroundColor Green
+} else {
+    Write-Host "  [WARN] Native Edge application host not found on system." -ForegroundColor Yellow
+}
+
+# Persist Complete Combined State
 $stateData = [ordered]@{
     backend = [ordered]@{
         pid = $backendPid
@@ -482,6 +509,12 @@ $stateData = [ordered]@{
         startTime = $frontendStartTime
         port = $config.frontendPort
     }
+    appWindow = if ($appWindowPid) {
+        [ordered]@{
+            pid = $appWindowPid
+            startTime = $appWindowStartTime
+        }
+    } else { $null }
     rootId = $rootId
     projectDir = $projectDir
     databasePath = $databasePath
@@ -490,7 +523,7 @@ $stateData = [ordered]@{
 Save-LauncherState $stateData
 
 # 9. Thonny Config & Adapter Preflight Check & Launch
-Write-Host "[3/4] Verifying Thonny profile configuration and adapter..." -ForegroundColor Yellow
+Write-Host "[4/4] Verifying Thonny profile configuration and adapter..." -ForegroundColor Yellow
 
 $thonnyPyPath = "$($config.thonnyDirectory);$($config.thonnyPluginDirectory)"
 

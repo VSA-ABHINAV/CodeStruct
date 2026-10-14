@@ -21,8 +21,10 @@ from codestruct.web import SPAStaticFiles, frontend_directory
 from .errors import ApiError, api_error_handler
 from .routes.analyses import router as analyses_router
 from .routes.editor import router as editor_router
+from .routes.host import router as host_router
 from .routes.navigate import router as navigate_router
 from .routes.projects import router as projects_router
+from .routes.tree import router as tree_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -98,6 +100,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(analyses_router)
     application.include_router(editor_router)
     application.include_router(navigate_router)
+    application.include_router(host_router)
+    application.include_router(tree_router)
 
     @application.get("/")
     def home():
