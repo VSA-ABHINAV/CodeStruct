@@ -60,28 +60,47 @@ All changes were implemented with targeted regressions, full quality gates (319 
 
 ## 3. Verification Gate Evidence
 
-### 3.1 Backend Test Suite (Pytest)
+Exact commands, exit codes, and outputs for all verification gates:
+
+### 3.1 Backend Test Suite & Code Coverage (Pytest)
+- **Command:** `.venv\Scripts\python.exe -m pytest tests --cov=backend --cov-report=term-missing --cov-fail-under=84`
+- **Exit Code:** `0`
+- **Output:**
 ```
-================= 319 passed, 2 skipped, 2 warnings in 34.33s =================
+================= 319 passed, 2 skipped, 2 warnings in 36.88s =================
 Required test coverage of 84% reached. Total coverage: 85.54%
 ```
-- Total tests: 319 passed, 2 skipped (Windows sandbox directory link / symlink tests).
-- Code coverage: **85.54%** (exceeds repository gate of 84.00%).
+- **Total Tests:** 319 passed, 2 skipped, 0 failed.
+- **Skipped Tests:**
+  1. `tests\test_scanner.py:153`: Directory links unavailable for this test account.
+  2. `tests\test_tree.py:137`: Symlinks not supported in this test environment.
+- **Code Coverage:** **85.54%** (strictly exceeds the required repository gate of 84.00%).
 
 ### 3.2 Static Linters and Type Checking
-- **Ruff Lint:** `All checks passed!`
-- **Ruff Format:** `89 files already formatted`
-- **Mypy:** `Success: no issues found in 55 source files`
+- **Ruff Lint:**
+  - **Command:** `.venv\Scripts\ruff.exe check backend tests tools scripts`
+  - **Exit Code:** `0`
+  - **Output:** `All checks passed!`
+- **Ruff Format Check:**
+  - **Command:** `.venv\Scripts\ruff.exe format --check backend tests tools scripts`
+  - **Exit Code:** `0`
+  - **Output:** `100 files already formatted`
+- **Mypy Type Checking:**
+  - **Command:** `.venv\Scripts\mypy.exe backend/analyzer.py backend/main.py backend/src/codestruct`
+  - **Exit Code:** `0`
+  - **Output:** `Success: no issues found in 57 source files`
 
 ### 3.3 End-to-End M7 Verification Script
-`scripts/verify_m7_cache_export.py` executed cleanly:
+- **Command:** `.venv\Scripts\python.exe scripts/verify_m7_cache_export.py`
+- **Exit Code:** `0`
+- **Output:**
 ```
 [M7 Verify] Scenario 1: Cold Analysis on Mutable Project...
   -> Cold run completed: 3 files cached in file_parse_cache table.
 [M7 Verify] Scenario 2A: Whole-Result Cache Hit...
   -> Whole-result whole-graph cache hit returned 200 with cache_hit=True.
 [M7 Verify] Scenario 2B: Warm Analysis via Worker with Per-File Cache Reuse...
-  -> Warm worker run completed in 1.108s with identical graph (15 nodes).
+  -> Warm worker run completed in 1.189s with identical graph (15 nodes).
 [M7 Verify] Scenario 3: Same-Size Content Edit Invalidation...
   -> Invalidation on same-size edit verified successfully.
 [M7 Verify] Scenario 4: Timestamp Touch (mtime altered, content identical)...
@@ -94,26 +113,97 @@ Required test coverage of 84% reached. Total coverage: 85.54%
   -> Rendered SVG and PNG successfully with headers and content signatures verified.
 [M7 Verify] Scenario 8: Format validation and Bounds enforcement...
   -> Format validation verified.
-OVERALL STATUS: SUCCESS (Total time: 4.73s)
+OVERALL STATUS: SUCCESS (Total time: 4.88s)
 ```
 
 ### 3.4 Frontend Verification Suite (Vitest)
+- **Command:** `npm --prefix frontend.lovable run test` (`npx vitest run`)
+- **Exit Code:** `0`
+- **Output:**
 ```
 Test Files  1 passed | 1 skipped (2)
      Tests  10 passed | 1 skipped (11)
-  Duration  2.41s
+  Duration  2.69s
 ```
-- 10 unit and integration tests passing in `frontend.lovable/src/features/integration.test.tsx`.
+- **Reconciled Test Breakdown:**
+  - Total test files: 2 (1 passed, 1 skipped).
+  - Total tests: 11 (10 passed, 1 skipped, 0 failed).
+  - `src/features/integration.test.tsx`: 10 passed (Strict mode replay, hierarchy layout levels 0-5, R3 slice vs complete export, folder open, tree fetch).
+  - `src/features/live.test.tsx`: 1 skipped (by design; requires an independently running live backend server instance).
 
-### 3.5 Frontend Build
-`vite build` executed cleanly with 0 warnings or errors, generating production bundles in `dist/`.
+### 3.5 Frontend Production Build
+- **Command:** `npm --prefix frontend.lovable run build` (`vite build`)
+- **Exit Code:** `0`
+- **Output:** Built in 447ms, 1881 modules transformed, 0 warnings or errors. Bundles emitted to `frontend.lovable/dist/`.
 
-### 3.6 Whitespace and Diff Check
-`git diff --check` executed with code 0 across the entire repository.
+### 3.6 Real Windows Standalone Whole-Folder Workflow
+- **Command:** `.venv\Scripts\python.exe scripts/verify_real_windows_standalone_workflow.py`
+- **Exit Code:** `0`
+- **Walkthrough and Results:**
+  - **Step 1:** Created disposable fixture project at `scratch/standalone_workflow_project` with nested package `nested/domain/calculator.py` (module `calculator`, top-level function `compute_discount`, class `InvoiceCalculator`, methods `calculate_total` and `format_currency`), non-Python config `nested/config/settings.json`, and version control `nested/.git`.
+  - **Step 2:** Verified clean service state via `Stop-CodeStruct-Prototype.ps1`.
+  - **Step 3:** Launched services and standalone application window via `Start-CodeStruct-Prototype.ps1` (`msedge --app=http://127.0.0.1:5173`). Confirmed borderless standalone window with zero browser tabs or address bar.
+  - **Step 4:** Verified running processes: Backend PID `31656`, Frontend PID `19628`, Standalone App Window PID `30664`.
+  - **Step 5:** Triggered native folder chooser bridge (`POST /api/v1/host/choose-folder`) and polled automatic initial analysis to completion (`completed`).
+  - **Step 6:** Verified directory and nested Python symbol hierarchy (`GET /analyses/{id}/tree`): module `calculator` -> function `compute_discount`, class `InvoiceCalculator` -> methods `calculate_total` and `format_currency` in source order; policy exclusion `nested/.git` reported with reason.
+  - **Step 7:** Verified graph architecture hierarchy: 7 nodes, 7 edges; `InvoiceCalculator` located at `nested/domain/calculator.py:8-18`.
+  - **Step 8:** Verified architectural explanation: Role: `Isolated Leaf Component`, Summary, Provider: `rule-based`.
+  - **Step 9:** Exercised project Refresh: re-analyzed without executing project source code.
+  - **Step 10:** Captured real standalone desktop window screenshot via PowerShell to `docs/verification/standalone_window_workflow.png` (5,275 bytes).
+  - **Step 11:** Executed clean shutdown via `Stop-CodeStruct-Prototype.ps1` (exit code 0); confirmed zero lingering processes and runtime state file cleared; cleaned up disposable fixture project.
+
+### 3.7 Whitespace and Diff Check
+- **Command:** `git diff --check 590a208..HEAD`
+- **Exit Code:** `0` (Zero whitespace errors across all commits since baseline).
 
 ---
 
-## 4. Commits Included in Corrections
-- `e51cb6c`: `fix(m7): enforce streaming bounds on graphviz export and byte capacity on parse cache`
-- `4453ed9`: `feat(explorer): add standalone windows host, whole-folder explorer, and nested python symbols`
-- `40f894d`: `feat(ui): integrate standalone workbench, remove redundant frontend assets, and record verification`
+## 4. Commit Progression and Tested-Code Comparison
+
+| Commit | Type | Description |
+|---|---|---|
+| `590a208` | Baseline | Milestone 7 Review 1 task start baseline |
+| `e51cb6c` | Implementation | M7 streaming bounds on Graphviz export (R1) & persistent cache byte budget eviction (R2) |
+| `4453ed9` | Implementation | Standalone Windows host launcher lifecycle (`msedge --app`), native folder picker bridge, safe directory and nested Python symbol hierarchy API |
+| `40f894d` | Implementation | Standalone workbench UI, top-down hierarchy layout (levels 0-5), `ProjectExplorerTree.tsx`, R3 loaded-slice vs complete DOT export, single dark theme |
+| `06258e9` | Documentation | Initial M7 verification reports and tracker updates |
+| HEAD | Reconciliation | Scoped verification evidence reconciliation, standalone workflow runner, real window screenshot, and audit sync |
+
+**Commit Comparison Confirmation:**
+Tested application code changes were completed at commit `40f894d`. All commits thereafter (`06258e9` and the final reconciliation commit) are strictly documentation, status tracking (`PROCESS_TRACKER.md`, `docs/codestruct_audit.md`), verification scripts (`scripts/verify_real_windows_standalone_workflow.py`), and real desktop screenshot evidence (`docs/verification/standalone_window_workflow.png`). No application code or schema was altered after `40f894d`.
+
+---
+
+## 5. Cleanup Inventory and Review Artifact Status
+
+### 5.1 Frontend Cleanup Inventory
+- **Retained Active Source:** `frontend.lovable/` is the active frontend source serving the standalone desktop workbench (configured in `prototype-config.json`).
+- **Retained Pre-existing Source:** `frontend/` was evaluated for deletion. Direct code inspection revealed:
+  - `tests/test_packaging.py` explicitly tests `"frontend/version.config.js"`.
+  - `tools/dependency_report.py` explicitly reads `"frontend/package-lock.json"`.
+  - Contract test fixtures in `tests/` reference `frontend/` assets.
+  - Deleting `frontend/` would break regression tests and package validation.
+- **Exact Removed Paths:** `0` files removed. All live frontend source, package lockfiles, and tests were preserved intact.
+
+### 5.2 Temporary Review Artifacts Verification
+- `D:\REP\_codestruct_m7_review.sqlite3`: Verified absent (`Test-Path` returned `False`).
+- `D:\REP\_codex_m7_review_tmp_20261013`: Verified absent (`Test-Path` returned `False`).
+- Zero task-created temporary databases or directories remain on disk.
+
+---
+
+## 6. Failed Attempts, Untested Cases, and Remaining Limitations
+
+### 6.1 Failed Attempts During Task
+1. **UTF-8 BOM in Runtime State:** Reading `prototype-state.json` directly with Python's default UTF-8 encoding raised `JSONDecodeError: Unexpected UTF-8 BOM` because PowerShell writes UTF-8 with BOM (`0xEF, 0xBB, 0xBF`). Resolved by opening runtime state with `encoding="utf-8-sig"`.
+2. **Refresh Request Payload Structure:** Initial payload for Refresh re-analysis placed `"refresh": true` inside `"options"`, which was ignored because FastAPI's `CreateAnalysisRequest` schema defines `refresh: bool = False` as a top-level field. Resolved by sending `refresh: True` at the top level of `CreateAnalysisRequest`.
+3. **Linter Formatting in Workflow Script:** `scripts/verify_real_windows_standalone_workflow.py` initially lacked `# noqa: S101, S310, S603, S607` and had an unformatted line, causing `ruff check` and `ruff format --check` to report issues. Resolved by adding noqa header, fixing the f-string, and formatting with ruff.
+
+### 6.2 Untested Cases
+1. **Multi-DPI Display Environments:** The standalone application window was verified on the primary Windows display at standard scaling; multi-monitor environments with differing per-monitor DPI scaling were not tested.
+2. **Non-Windows Desktop Operating Systems:** Standalone `--app` mode and native folder picker bridge (`System.Windows.Forms.FolderBrowserDialog`) are designed specifically for Windows 10/11 desktop. While Tkinter fallback exists for other OSes, non-Windows desktop windowing was not exercised in this Windows-scoped task.
+3. **Physical Screen-Reader Acoustic Audio:** Accessibility semantics (CS-022) were verified via DOM ARIA live regions and keyboard event handling; physical audio output through JAWS/NVDA was not manually monitored.
+
+### 6.3 Remaining Limitations
+1. **Microsoft Edge Requirement for Standalone Window:** Standalone application window mode requires Microsoft Edge (`msedge.exe`) at standard installation paths. If absent, the prototype launcher logs a warning and falls back to a standard browser tab.
+2. **Review Authority Boundary:** Milestone 7 is submitted as **Ready for Codex review (Corrections 1)**; it is not Accepted. Milestone 8 must not begin until Codex review is complete.

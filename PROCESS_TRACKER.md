@@ -1,5 +1,5 @@
 
-Updated: 2026-10-13. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
+Updated: 2026-10-14. Audit: `docs/codestruct_audit.md`. Current task: `ANTIGRAVITY_TASK.md`.
 
 Only Codex assigns Accepted after review. Antigravity records implementation and verification, then sets Ready for Codex review. Preserve earlier evidence and user files. Frontend visual creation belongs to Lovable.
 
@@ -11,11 +11,19 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
 | M5 | CS-012-CS-014 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | docs/verification/M5_REPORT_ACCEPTED.md, docs/verification/M5.md | Report records full gates and cleanup; code e72a909; reports a8f3d38, 7ea0999, fc21580 |
 | M6 | CS-016 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | `docs/verification/M6_REPORT_ACCEPTED.md`, `docs/verification/M6.md` | Report records tested code `649625b`, report `e0232f2`, 5 real API scenarios, and full gates (84.75% coverage) |
-| M7 | CS-015, CS-017 | Antigravity | Changes required | `docs/verification/M7_CODEX_REVIEW_1.md` | R1: output cap is post-buffering; R2: cache byte bound can be exceeded; R3: export distinction is in inactive frontend; do not begin M8 |
+| M7 | CS-015, CS-017 | Antigravity | Ready for Codex review (Corrections 1) | `docs/verification/M7_CORRECTIONS_1.md`, `docs/verification/STANDALONE_PANEL.md` | Corrections 1: resolved R1 (output streaming limit & kill tree), R2 (iterative byte budget eviction), R3 (loaded slice vs complete export in active frontend); verified real Windows standalone whole-folder workflow, tree API, and clean shutdown; M7 is not Accepted; do not begin M8 |
 | M8 | CS-020–024 | Antigravity + user | Not started | — | Pending |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
+
+Milestone 7 Antigravity Corrections Pass 1, 2026-10-14: **Ready for Codex review (Corrections 1)**. Addressed all findings from `docs/verification/M7_CODEX_REVIEW_1.md` and completed standalone Windows project-explorer implementation:
+- **R1 (CS-017 Streaming Bounds & Early Kill):** Subprocess streaming limits with early abortion when output exceeds `max_bytes`, prompt process tree termination via `_kill_process_tree`, capped stderr buffering (64 KiB), and serialized DOT string length enforcement (`tests/test_export_dot.py`).
+- **R2 (CS-015 Iterative Byte Budget Eviction):** Iterative parse-cache byte budget eviction loop in `_evict_if_needed()` guaranteeing that post-insert stored bytes and entry count strictly respect configured maximums (`max_bytes`, `max_entries`), plus rejection of oversized single entries (`tests/test_file_cache.py`).
+- **R3 (CS-017 Loaded-Slice vs Complete Export in Active Workbench):** Added separate "Export DOT (Loaded Slice)" and "Export DOT (Complete Graph)" actions with partial-load explanatory banner in active workbench (`frontend.lovable/src/features/workbench.tsx`), backed by Vitest regressions.
+- **Standalone Windows Project-Explorer Workbench:** Edge `--app` standalone window launcher (`Start-CodeStruct-Prototype.ps1`), native folder picker bridge (`choose_folder_dialog`), safe directory and nested Python symbol tree API (`GET /analyses/{id}/tree`), top-down canvas hierarchy (levels 0-5), left project explorer drawer with collapsible folders/symbols/exclusions, right inspector drawer with symbol details and architectural explanations.
+- **Real Windows Workflow Verification:** Verified whole-folder workflow on real Windows machine via `scripts/verify_real_windows_standalone_workflow.py` across 11 automated steps on a disposable fixture project with nested packages, non-Python files, and Python symbols (module, class, method, top-level function); captured standalone window screenshot to `docs/verification/standalone_window_workflow.png`; verified clean shutdown with zero orphan processes.
+- **Verification Gates & Parity:** Pytest: 319 passed, 2 skipped, 85.54% coverage; Ruff check/format clean; Mypy clean; Frontend Vitest: 10 passed, 1 skipped (11 total across 2 test files); Frontend build clean; git diff --check clean. Reconciled reports: `docs/verification/M7_CORRECTIONS_1.md` and `docs/verification/STANDALONE_PANEL.md`. Review 1 ("Changes required") preserved as historical evidence below. M7 is not Accepted; awaiting Codex review. Do not begin M8.
 
 Milestone 7 Codex Review 1, 2026-10-13: **Changes required**. Antigravity Pass 1 implemented CS-015 ("Effective incremental parse caching") and CS-017 ("Bounded, deterministic Graphviz exports"), but review found that the Graphviz output cap is enforced after unbounded pipe buffering, persistent cache eviction can exceed its byte cap, and the loaded-slice/complete-graph distinction is not in the launcher-selected frontend. See `docs/verification/M7_CODEX_REVIEW_1.md`; do not begin M8.
 
