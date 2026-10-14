@@ -489,3 +489,110 @@ def test_graph_to_dot_edge_status_and_missing_nodes():
     dot = graph_to_dot(graph)
     assert 'tooltip="ambiguous"' in dot
     assert "n_missing" not in dot
+
+
+def test_render_graphviz_streaming_stdout_limit_terminates_child(tmp_path: Path):
+    """Verify that child emitting far beyond max_bytes is terminated promptly without buffering all data."""
+    sample_graph = {
+        "metadata": {"analysis_id": "stdout_flood"},
+        "nodes": [{"id": "n1", "name": "A"}],
+        "edges": [],
+    }
+    # Script emits 10 MB in chunks of 64KB, then writes marker if it completes
+    marker_file = tmp_path / "did_finish.txt"
+    script_content = (
+        "import sys, time\n"
+        "for _ in range(160):\n"
+        "    sys.stdout.buffer.write(b'A' * 65536)\n"
+        "    sys.stdout.buffer.flush()\n"
+        "    time.sleep(0.01)\n"
+        f"open(r'{marker_file}', 'w').write('finished')\n"
+    )
+    mock_bat = _create_mock_dot_script(tmp_path, script_content)
+
+    with pytest.raises(GraphvizOutputLimitError) as exc_info:
+        render_graphviz(
+            sample_graph,
+            format="svg",
+            dot_path=str(mock_bat),
+            max_bytes=1000,
+        )
+    assert "maximum byte limit" in str(exc_info.value)
+    # The child process must have been terminated promptly and never finished
+    assert not marker_file.exists()
+
+
+def test_render_graphviz_streaming_stderr_limit_terminates_child(tmp_path: Path):
+    """Verify that child flooding stderr beyond limit is terminated promptly."""
+    sample_graph = {
+        "metadata": {"analysis_id": "stderr_flood"},
+        "nodes": [{"id": "n1", "name": "A"}],
+        "edges": [],
+    }
+    marker_file = tmp_path / "stderr_finished.txt"
+    script_content = (
+        "import sys, time\n"
+        "for _ in range(50):\n"
+        "    sys.stderr.write('E' * 8192)\n"
+        "    sys.stderr.flush()\n"
+        "    time.sleep(0.01)\n"
+        f"open(r'{marker_file}', 'w').write('finished')\n"
+    )
+    mock_bat = _create_mock_dot_script(tmp_path, script_content)
+
+    with pytest.raises(GraphvizOutputLimitError) as exc_info:
+        render_graphviz(
+            sample_graph,
+            format="svg",
+            dot_path=str(mock_bat),
+            max_stderr_bytes=2048,
+        )
+    assert "stderr exceeded maximum byte limit" in str(exc_info.value)
+    assert not marker_file.exists()
+
+
+def test_graph_to_dot_oversized_label_or_serialization():
+    """Verify that graph_to_dot enforces byte limit on serialization and oversized node labels."""
+    oversized_graph = {
+        "metadata": {"analysis_id": "oversized_label"},
+        "nodes": [{"id": "n1", "name": "A" * 5000, "kind": "class"}],
+        "edges": [],
+    }
+    with pytest.raises(GraphvizOutputLimitError) as exc_info:
+        graph_to_dot(oversized_graph, max_bytes=1000)
+    assert "maximum byte limit" in str(exc_info.value)
+
+
+def test_export_dot_api_output_too_large_413(app_client):
+    """Verify that API returns HTTP 413 GRAPHVIZ_OUTPUT_TOO_LARGE when DOT output exceeds limit."""
+    app, client = app_client
+    service = app.state.analysis_service
+
+    oversized_graph = {
+        "metadata": {"analysis_id": "ana_oversized_export"},
+        "nodes": [
+            {
+                "id": "n1",
+                "name": "X" * 10000,
+                "kind": "class",
+                "qualified_name": "pkg.Large",
+            }
+        ],
+        "edges": [],
+    }
+    job = JobRecord(
+        "ana_oversized_export",
+        "sample",
+        str(SAMPLE),
+        state=JobState.COMPLETED,
+        percent=100,
+        graph=oversized_graph,
+    )
+    service.registry.add(job)
+
+    # Patch MAX_RENDER_BYTES to 1000 for this test
+    with mock.patch("codestruct.graph.export_dot.MAX_RENDER_BYTES", 1000):
+        resp = client.get("/api/v1/analyses/ana_oversized_export/export/dot")
+        assert resp.status_code == 413
+        data = resp.json()
+        assert data["error"]["code"] == "GRAPHVIZ_OUTPUT_TOO_LARGE"

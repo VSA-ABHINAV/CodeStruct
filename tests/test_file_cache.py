@@ -316,6 +316,164 @@ def test_file_cache_lru_eviction(tmp_path: Path):
     assert cache.get(root, "file_4.py", h4, policy) is not None
 
 
+def test_file_cache_direct_probe_byte_pressure_eviction(tmp_path: Path):
+    """Direct regression for Codex review probe:
+
+    Ten existing 10-byte entries under a 100-byte budget followed by an 80-byte entry;
+    the resulting stored total must not exceed 100 bytes.
+    """
+    db_path = tmp_path / "cache.db"
+    cache = PersistentFileParseCache(db_path, max_entries=100, max_bytes=100)
+
+    # Populate 10 rows of 10 bytes directly into file_parse_cache
+    with cache._get_connection() as conn:
+        for i in range(10):
+            conn.execute(
+                """
+                INSERT INTO file_parse_cache(
+                    cache_key, root_identity, relative_path, content_sha256,
+                    parser_version, policy_fingerprint, result_json,
+                    stored_size, created_at, last_accessed_at
+                ) VALUES (?, 'root', ?, 'hash', '2', 'fp', '{}', 10, '2026-10-14T00:00:00Z', ?)
+                """,
+                (f"k_{i}", f"f_{i}.py", float(i)),
+            )
+        conn.commit()
+
+        st_before = cache.stats()
+        assert st_before["entries"] == 10
+        assert st_before["total_bytes"] == 100
+
+        # Now simulate inserting an 80-byte entry using _evict_if_needed
+        conn.execute("BEGIN IMMEDIATE")
+        cache._evict_if_needed(conn, incoming_size=80)
+        conn.execute(
+            """
+            INSERT INTO file_parse_cache(
+                cache_key, root_identity, relative_path, content_sha256,
+                parser_version, policy_fingerprint, result_json,
+                stored_size, created_at, last_accessed_at
+            ) VALUES ('k_new', 'root', 'f_new.py', 'hash', '2', 'fp', '{}', 80, '2026-10-14T00:00:00Z', 100.0)
+            """
+        )
+        conn.commit()
+
+    st_after = cache.stats()
+    assert st_after["total_bytes"] <= 100
+    assert st_after["entries"] <= 100
+    # Specifically, 8 entries of 10 bytes were evicted, 2 entries of 10 bytes + 1 entry of 80 bytes = 100 bytes
+    assert st_after["entries"] == 3
+    assert st_after["total_bytes"] == 100
+
+
+def test_file_cache_byte_pressure_via_put(tmp_path: Path):
+    """Verify byte-cap enforcement through high-level cache.put."""
+    db_path = tmp_path / "cache.db"
+    # Small byte budget: 1000 bytes, allows ~3 entries of ~280 bytes
+    cache = PersistentFileParseCache(db_path, max_entries=50, max_bytes=1000)
+    root = tmp_path / "proj"
+    root.mkdir()
+    policy = AnalysisPolicy(max_file_size=1024 * 1024)
+
+    for i in range(10):
+        content = f"content_{i}".encode("utf-8")
+        h = hashlib.sha256(content).hexdigest()
+        sf = _make_dummy_source_file(f"file_{i}.py", len(content))
+        cache.put(
+            root,
+            f"file_{i}.py",
+            h,
+            policy,
+            FileParseResult(sf, None, parsed=True),
+        )
+        st = cache.stats()
+        assert st["total_bytes"] <= 1000, (
+            f"Exceeded byte budget after insert {i}: {st['total_bytes']}"
+        )
+        assert st["entries"] <= 50
+
+    st_final = cache.stats()
+    assert st_final["total_bytes"] <= 1000
+    assert st_final["entries"] <= 3
+
+
+def test_file_cache_simultaneous_count_and_byte_pressure(tmp_path: Path):
+    """Verify eviction satisfies BOTH count and byte budgets simultaneously."""
+    db_path = tmp_path / "cache.db"
+    # Constrain both: max 2 entries, max 800 bytes
+    cache = PersistentFileParseCache(db_path, max_entries=2, max_bytes=800)
+    root = tmp_path / "proj"
+    root.mkdir()
+    policy = AnalysisPolicy(max_file_size=1024 * 1024)
+
+    for i in range(8):
+        content = f"content_{i}".encode("utf-8")
+        h = hashlib.sha256(content).hexdigest()
+        sf = _make_dummy_source_file(f"file_{i}.py", len(content))
+        cache.put(
+            root,
+            f"file_{i}.py",
+            h,
+            policy,
+            FileParseResult(sf, None, parsed=True),
+        )
+        st = cache.stats()
+        assert st["entries"] <= 2, f"Count exceeded: {st['entries']}"
+        assert st["total_bytes"] <= 800, f"Byte cap exceeded: {st['total_bytes']}"
+
+
+def test_file_cache_oversized_entry_skipped(tmp_path: Path):
+    """Verify that an entry larger than the configured byte budget is skipped entirely."""
+    db_path = tmp_path / "cache.db"
+    cache = PersistentFileParseCache(db_path, max_entries=10, max_bytes=400)
+    root = tmp_path / "proj"
+    root.mkdir()
+    policy = AnalysisPolicy(max_file_size=1024 * 1024)
+
+    # Normal entry (~280 bytes) fits in 400
+    c1 = b"normal"
+    h1 = hashlib.sha256(c1).hexdigest()
+    sf1 = _make_dummy_source_file("normal.py", len(c1))
+    cache.put(root, "normal.py", h1, policy, FileParseResult(sf1, None, parsed=True))
+
+    st1 = cache.stats()
+    assert st1["entries"] == 1
+    assert st1["total_bytes"] <= 400
+
+    # Huge entry: many functions so serialized JSON > 1000 bytes > 400
+    dummy_span = SourceSpan(start_line=1, start_column=0, end_line=1, end_column=10)
+    huge_funcs = tuple(
+        FunctionDefinition(
+            id=f"fn_{j}",
+            name=f"func_{j}",
+            qualified_name=f"mod.func_{j}",
+            kind=DefinitionKind.FUNCTION,
+            enclosing_scope_id="mod",
+            span=dummy_span,
+        )
+        for j in range(50)
+    )
+    sf_huge = _make_dummy_source_file("huge.py", 1000)
+    huge_result = FileParseResult(
+        source_file=sf_huge,
+        module=None,
+        functions=huge_funcs,
+        parsed=True,
+    )
+    c_huge = b"huge"
+    h_huge = hashlib.sha256(c_huge).hexdigest()
+
+    # Attempt to put oversized entry
+    cache.put(root, "huge.py", h_huge, policy, huge_result)
+
+    # Should have been skipped without evicting normal.py
+    st2 = cache.stats()
+    assert st2["entries"] == 1
+    assert st2["total_bytes"] == st1["total_bytes"]
+    assert cache.get(root, "normal.py", h1, policy) is not None
+    assert cache.get(root, "huge.py", h_huge, policy) is None
+
+
 def test_file_cache_corrupt_entry_recovery(tmp_path: Path):
     db_path = tmp_path / "cache.db"
     cache = PersistentFileParseCache(db_path)

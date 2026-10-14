@@ -8,8 +8,12 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Color and styling palette matching CodeStruct's visual design tokens
 NODE_KIND_STYLES = {
@@ -153,6 +157,7 @@ logger = logging.getLogger("codestruct.graph.export_dot")
 MAX_EXPORT_NODES = 2000
 MAX_EXPORT_EDGES = 5000
 MAX_RENDER_BYTES = 10 * 1024 * 1024  # 10 MiB
+DEFAULT_MAX_STDERR_BYTES = 64 * 1024  # 64 KiB
 DEFAULT_RENDER_TIMEOUT = 15.0  # seconds
 
 
@@ -208,8 +213,12 @@ def _sanitize_id(identifier: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "_", str(identifier))
 
 
-def graph_to_dot(graph: dict[str, Any]) -> str:
+def graph_to_dot(
+    graph: dict[str, Any],
+    max_bytes: int | None = None,
+) -> str:
     """Convert a CodeStruct graph dictionary into a deterministic Graphviz DOT string."""
+    effective_max_bytes = max_bytes if max_bytes is not None else MAX_RENDER_BYTES
     metadata = graph.get("metadata", {})
     analysis_id = metadata.get("analysis_id", "codestruct")
 
@@ -242,6 +251,22 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
         "",
     ]
 
+    current_bytes = sum(len(line.encode("utf-8")) + 1 for line in lines)
+    if current_bytes > effective_max_bytes:
+        raise GraphvizOutputLimitError(
+            f"Serialized DOT output exceeded maximum byte limit ({effective_max_bytes} bytes)"
+        )
+
+    def _append_line(line: str) -> None:
+        nonlocal current_bytes
+        line_bytes = len(line.encode("utf-8")) + 1
+        current_bytes += line_bytes
+        if current_bytes > effective_max_bytes:
+            raise GraphvizOutputLimitError(
+                f"Serialized DOT output exceeded maximum byte limit ({effective_max_bytes} bytes)"
+            )
+        lines.append(line)
+
     # Map node id to sanitized DOT id
     dot_id_map: dict[str, str] = {}
     for node in nodes:
@@ -249,7 +274,7 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
         dot_id_map[raw_id] = f"node_{_sanitize_id(raw_id)}"
 
     # Add nodes
-    lines.append("  // Nodes")
+    _append_line("  // Nodes")
     for node in nodes:
         raw_id = str(node.get("id", ""))
         dot_id = dot_id_map[raw_id]
@@ -280,10 +305,10 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
             f'fontcolor="{style["fontcolor"]}"',
         ]
 
-        lines.append(f"  {dot_id} [{', '.join(attr_parts)}];")
+        _append_line(f"  {dot_id} [{', '.join(attr_parts)}];")
 
-    lines.append("")
-    lines.append("  // Relationships")
+    _append_line("")
+    _append_line("  // Relationships")
     for edge in edges:
         source_id = str(edge.get("source_id", ""))
         target_id = str(edge.get("target_id") or "")
@@ -307,10 +332,15 @@ def graph_to_dot(graph: dict[str, Any]) -> str:
         if status != "resolved":
             edge_attrs.append(f'tooltip="{_escape(status)}"')
 
-        lines.append(f"  {src_dot} -> {tgt_dot} [{', '.join(edge_attrs)}];")
+        _append_line(f"  {src_dot} -> {tgt_dot} [{', '.join(edge_attrs)}];")
 
-    lines.append("}")
-    return "\n".join(lines) + "\n"
+    _append_line("}")
+    dot_str = "\n".join(lines) + "\n"
+    if len(dot_str.encode("utf-8")) > effective_max_bytes:
+        raise GraphvizOutputLimitError(
+            f"Serialized DOT output exceeded maximum byte limit ({len(dot_str.encode('utf-8'))} > {effective_max_bytes} bytes)"
+        )
+    return dot_str
 
 
 def find_graphviz_dot() -> str | None:
@@ -334,6 +364,8 @@ def find_graphviz_dot() -> str | None:
 
 def _kill_process_tree(pid: int) -> None:
     """Terminate a process and its child processes defensively."""
+    if pid <= 0:
+        return
     if os.name == "nt":
         with contextlib.suppress(Exception):
             subprocess.run(  # noqa: S603
@@ -352,9 +384,13 @@ def render_graphviz(
     format: str = "svg",
     dot_path: str | None = None,
     timeout: float = DEFAULT_RENDER_TIMEOUT,
-    max_bytes: int = MAX_RENDER_BYTES,
+    max_bytes: int | None = None,
+    max_stderr_bytes: int | None = None,
 ) -> bytes:
     """Render a canonical CodeStruct graph dictionary to SVG, PNG, or DOT bytes.
+
+    Enforces byte limits as streams are consumed, terminates descendant processes
+    promptly upon limit violations or timeouts, and bounds stderr diagnostics.
 
     Raises:
         GraphvizNotFoundError: If Graphviz executable is not installed or located.
@@ -363,15 +399,27 @@ def render_graphviz(
         GraphvizOutputLimitError: If rendered output exceeds maximum byte limit.
         GraphvizRenderError: If rendering produces an error or invalid output.
     """
+    effective_max_bytes = max_bytes if max_bytes is not None else MAX_RENDER_BYTES
+    effective_max_stderr = (
+        max_stderr_bytes if max_stderr_bytes is not None else DEFAULT_MAX_STDERR_BYTES
+    )
+
     fmt = format.lower().strip()
     if fmt not in ("svg", "png", "dot"):
         raise ValueError(
             f"Unsupported export format '{format}'; must be 'dot', 'svg', or 'png'"
         )
 
-    dot_content = graph_to_dot(graph)
+    dot_content = graph_to_dot(graph, max_bytes=effective_max_bytes)
     if fmt == "dot":
-        return dot_content.encode("utf-8")
+        dot_bytes = dot_content.encode("utf-8")
+        if len(dot_bytes) > effective_max_bytes:
+            raise GraphvizOutputLimitError(
+                f"Graphviz output exceeded maximum byte limit ({len(dot_bytes)} > {effective_max_bytes} bytes)"
+            )
+        return dot_bytes
+
+    input_bytes = dot_content.encode("utf-8")
 
     executable = dot_path or find_graphviz_dot()
     if not executable:
@@ -396,29 +444,134 @@ def render_graphviz(
             f"Failed to spawn Graphviz process '{executable}': {exc}"
         ) from exc
 
-    try:
-        stdout_bytes, stderr_bytes = proc.communicate(
-            input=dot_content.encode("utf-8"),
-            timeout=timeout,
+    stdout_chunks: list[bytes] = []
+    stdout_bytes_read = 0
+    stdout_exceeded = False
+
+    stderr_chunks: list[bytes] = []
+    stderr_bytes_read = 0
+    stderr_exceeded = False
+
+    def _write_stdin() -> None:
+        try:
+            if proc.stdin:
+                proc.stdin.write(input_bytes)
+                proc.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+
+    def _read_stdout() -> None:
+        nonlocal stdout_bytes_read, stdout_exceeded
+        chunk_size = 65536
+        try:
+            if proc.stdout:
+                while True:
+                    try:
+                        chunk = proc.stdout.read(chunk_size)
+                    except (ValueError, OSError):
+                        break
+                    if not chunk:
+                        break
+                    stdout_bytes_read += len(chunk)
+                    if stdout_bytes_read > effective_max_bytes:
+                        stdout_exceeded = True
+                        _kill_process_tree(proc.pid)
+                        with contextlib.suppress(Exception):
+                            proc.kill()
+                        break
+                    stdout_chunks.append(chunk)
+        except Exception as exc:
+            logger.debug("Exception while streaming stdout: %s", exc)
+
+    def _read_stderr() -> None:
+        nonlocal stderr_bytes_read, stderr_exceeded
+        chunk_size = 8192
+        try:
+            if proc.stderr:
+                while True:
+                    try:
+                        chunk = proc.stderr.read(chunk_size)
+                    except (ValueError, OSError):
+                        break
+                    if not chunk:
+                        break
+                    stderr_bytes_read += len(chunk)
+                    if stderr_bytes_read > effective_max_stderr:
+                        stderr_exceeded = True
+                        _kill_process_tree(proc.pid)
+                        with contextlib.suppress(Exception):
+                            proc.kill()
+                        break
+                    stderr_chunks.append(chunk)
+        except Exception as exc:
+            logger.debug("Exception while streaming stderr: %s", exc)
+
+    t_in = threading.Thread(target=_write_stdin, name="dot_stdin_writer", daemon=True)
+    t_out = threading.Thread(target=_read_stdout, name="dot_stdout_reader", daemon=True)
+    t_err = threading.Thread(target=_read_stderr, name="dot_stderr_reader", daemon=True)
+
+    t_in.start()
+    t_out.start()
+    t_err.start()
+
+    start_time = time.monotonic()
+    deadline = start_time + timeout
+    timed_out = False
+
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            t_out.join(timeout=0.2)
+            t_err.join(timeout=0.2)
+            if not t_out.is_alive() and not t_err.is_alive():
+                break
+        if stdout_exceeded or stderr_exceeded:
+            break
+        time.sleep(0.01)
+    else:
+        if proc.poll() is None:
+            timed_out = True
+            _kill_process_tree(proc.pid)
+            with contextlib.suppress(Exception):
+                proc.kill()
+
+    # Ensure pipes are closed defensively
+    with contextlib.suppress(Exception):
+        if proc.stdin and not proc.stdin.closed:
+            proc.stdin.close()
+    with contextlib.suppress(Exception):
+        if proc.stdout and not proc.stdout.closed:
+            proc.stdout.close()
+    with contextlib.suppress(Exception):
+        if proc.stderr and not proc.stderr.closed:
+            proc.stderr.close()
+
+    t_in.join(timeout=0.5)
+    t_out.join(timeout=0.5)
+    t_err.join(timeout=0.5)
+
+    with contextlib.suppress(Exception):
+        proc.wait(timeout=1.0)
+
+    if timed_out:
+        raise GraphvizTimeoutError(f"Graphviz render timed out after {timeout:.1f}s")
+
+    if stdout_exceeded:
+        raise GraphvizOutputLimitError(
+            f"Graphviz output exceeded maximum byte limit ({stdout_bytes_read} > {effective_max_bytes} bytes)"
         )
-    except subprocess.TimeoutExpired:
-        _kill_process_tree(proc.pid)
-        with contextlib.suppress(Exception):
-            proc.kill()
-        raise GraphvizTimeoutError(
-            f"Graphviz render timed out after {timeout:.1f}s"
-        ) from None
+
+    if stderr_exceeded:
+        raise GraphvizOutputLimitError(
+            f"Graphviz stderr exceeded maximum byte limit ({stderr_bytes_read} > {effective_max_stderr} bytes)"
+        )
 
     if proc.returncode != 0:
-        err_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
+        err_msg = b"".join(stderr_chunks).decode("utf-8", errors="replace").strip()
         raise GraphvizRenderError(
             f"Graphviz process exited with code {proc.returncode}: {err_msg}"
         )
 
-    if len(stdout_bytes) > max_bytes:
-        raise GraphvizOutputLimitError(
-            f"Graphviz output exceeded maximum byte limit ({len(stdout_bytes)} > {max_bytes} bytes)"
-        )
+    stdout_bytes = b"".join(stdout_chunks)
 
     # Format-specific signature verification
     if fmt == "svg":

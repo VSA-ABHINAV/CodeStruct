@@ -620,15 +620,30 @@ class PersistentFileParseCache:
             now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             now_epoch = time.time()
 
+            # Skip caching if the single entry itself exceeds the configured max_bytes
+            if stored_size > self.max_bytes:
+                logger.debug(
+                    "Skipping file cache for %s: entry size %d exceeds max cache bytes %d",
+                    relative_path,
+                    stored_size,
+                    self.max_bytes,
+                )
+                return
+
             with self._lock, self._get_connection() as conn:
                 conn.execute("BEGIN IMMEDIATE")
                 try:
+                    # Remove any preexisting entry for this key before eviction accounting
+                    conn.execute(
+                        "DELETE FROM file_parse_cache WHERE cache_key = ?", (key,)
+                    )
+
                     # Enforce capacity / eviction before insert
                     self._evict_if_needed(conn, stored_size)
 
                     conn.execute(
                         """
-                        INSERT OR REPLACE INTO file_parse_cache(
+                        INSERT INTO file_parse_cache(
                             cache_key, root_identity, relative_path, content_sha256,
                             parser_version, policy_fingerprint, result_json,
                             stored_size, created_at, last_accessed_at
@@ -655,18 +670,22 @@ class PersistentFileParseCache:
             logger.warning("File cache write failed for %s: %s", relative_path, exc)
 
     def _evict_if_needed(self, conn: sqlite3.Connection, incoming_size: int) -> None:
-        """Evict oldest LRU entries if count or byte bounds are exceeded."""
-        row = conn.execute(
-            "SELECT count(*), coalesce(sum(stored_size), 0) FROM file_parse_cache"
-        ).fetchone()
-        current_count = row[0] if row else 0
-        current_bytes = row[1] if row else 0
-
+        """Evict oldest LRU entries repeatedly until both count and byte bounds fit."""
         target_count = self.max_entries - 1
         target_bytes = self.max_bytes - incoming_size
 
-        if current_count > target_count or current_bytes > target_bytes:
-            # Delete 10% or at least 1 oldest entry
+        while True:
+            row = conn.execute(
+                "SELECT count(*), coalesce(sum(stored_size), 0) FROM file_parse_cache"
+            ).fetchone()
+            current_count = int(row[0]) if row else 0
+            current_bytes = int(row[1]) if row else 0
+
+            if current_count <= target_count and current_bytes <= target_bytes:
+                break
+            if current_count == 0:
+                break
+
             evict_batch = max(1, current_count // 10)
             conn.execute(
                 """
