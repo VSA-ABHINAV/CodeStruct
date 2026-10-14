@@ -1,10 +1,10 @@
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
-import { demoGraph, demoDiagnostics } from './fixtures';
+import { demoGraph, demoDiagnostics, graphToDot } from './fixtures';
 import { liveTransport, mergePages, normalizeGraph, demoTransport } from './transport';
 import { useWorkbench } from './useWorkbench';
-import { buildFlow } from './workbench';
+import { buildFlow, getNodeLevel } from './workbench';
 import type { AnalysisJob, Transport } from './types';
 
 const completed: AnalysisJob = { analysis_id: 'ana_real_42', state: 'completed', terminal: true, partial: false, cache_hit: false, progress: { phase: 'completed', percent: 100, message_code: 'done' }, diagnostics_summary: { info: 0, warning: 0, error: 0 } };
@@ -73,5 +73,91 @@ describe('backend integration', () => {
     const flow = buildFlow(graph, null, () => {});
     expect(new Set(flow.nodes.map(n => `${n.position.x},${n.position.y}`)).size).toBe(graph.nodes.length);
     expect(flow.edges).toEqual([]);
+  });
+
+  it('assigns top-down hierarchy levels correctly (0=project, 1=file, 2=module, 3=class, 4=function, 5=method)', () => {
+    const projectNode = { ...demoGraph.nodes[0], id: 'n_proj', kind: 'project', parent_id: null };
+    const fileNode = { ...demoGraph.nodes[0], id: 'n_file', kind: 'file', parent_id: 'n_proj' };
+    const moduleNode = { ...demoGraph.nodes[0], id: 'n_mod', kind: 'module', parent_id: 'n_file' };
+    const classNode = { ...demoGraph.nodes[0], id: 'n_cls', kind: 'class', parent_id: 'n_mod' };
+    const funcNode = { ...demoGraph.nodes[0], id: 'n_fn', kind: 'function', parent_id: 'n_mod' };
+    const methodNode = { ...demoGraph.nodes[0], id: 'n_mth', kind: 'method', parent_id: 'n_cls' };
+    const funcInClass = { ...demoGraph.nodes[0], id: 'n_fn_cls', kind: 'function', parent_id: 'n_cls' };
+    const all = [projectNode, fileNode, moduleNode, classNode, funcNode, methodNode, funcInClass];
+
+    expect(getNodeLevel(projectNode, all)).toBe(0);
+    expect(getNodeLevel(fileNode, all)).toBe(1);
+    expect(getNodeLevel(moduleNode, all)).toBe(2);
+    expect(getNodeLevel(classNode, all)).toBe(3);
+    expect(getNodeLevel(funcNode, all)).toBe(4);
+    expect(getNodeLevel(methodNode, all)).toBe(5);
+    expect(getNodeLevel(funcInClass, all)).toBe(5);
+
+    const flow = buildFlow({ ...demoGraph, nodes: all, edges: [] }, null, () => {});
+    const nodeY = new Map(flow.nodes.map(n => [n.id, n.position.y]));
+    expect(nodeY.get('n_proj')).toBeLessThan(nodeY.get('n_file')!);
+    expect(nodeY.get('n_file')).toBeLessThan(nodeY.get('n_mod')!);
+    expect(nodeY.get('n_mod')).toBeLessThan(nodeY.get('n_cls')!);
+    expect(nodeY.get('n_cls')).toBeLessThan(nodeY.get('n_fn')!);
+    expect(nodeY.get('n_fn')).toBeLessThan(nodeY.get('n_mth')!);
+  });
+
+  it('satisfies R3 by distinguishing loaded slice export from complete graph export and handling partial load', async () => {
+    // Partial load state with 1 node loaded out of 10
+    const partialGraph = {
+      ...demoGraph,
+      partial_load: true,
+      summary: { ...demoGraph.summary, nodes_total: 10 },
+      nodes: [demoGraph.nodes[0]],
+      edges: [],
+    };
+    // Slice export serializes exactly the loaded slice
+    const sliceDot = graphToDot(partialGraph);
+    expect(sliceDot).toContain(`"${demoGraph.nodes[0].id}"`);
+    expect(sliceDot).not.toContain(`"${demoGraph.nodes[1].id}"`);
+    expect(partialGraph.partial_load).toBe(true);
+
+    // Complete export calls the backend API endpoint
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Blob(['digraph full {}']), { status: 200 }));
+    const completeBlob = await liveTransport.exportDot('ana_real_42');
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/analyses/ana_real_42/export/dot', expect.anything());
+    expect(completeBlob).toBeInstanceOf(Blob);
+  });
+
+  it('triggers native folder selection and retrieves whole-project symbol tree', async () => {
+    const transport = mock();
+    transport.chooseFolder = vi.fn().mockResolvedValue({
+      cancelled: false,
+      root_id: 'root_selected',
+      project_name: 'selected_project',
+      path: 'C:\\Users\\test\\project',
+      analysis_id: 'ana_real_42',
+    });
+    transport.getTree = vi.fn().mockResolvedValue({
+      api_version: 'v1',
+      request_id: 'req_1',
+      analysis_id: 'ana_real_42',
+      root_id: 'root_selected',
+      root_path: 'C:\\Users\\test\\project',
+      tree: {
+        id: 'dir_root',
+        name: 'project',
+        path: '',
+        kind: 'directory',
+        children: [],
+      },
+      excluded: [{ path: '.git', reason: 'Version control directory excluded by policy' }],
+    });
+
+    const { result } = renderHook(() => useWorkbench(transport));
+    await act(async () => {
+      await result.current.openFolder();
+    });
+
+    expect(transport.chooseFolder).toHaveBeenCalled();
+    expect(result.current.projectId).toBe('root_selected');
+    await waitFor(() => expect(result.current.tree).not.toBeNull());
+    expect(result.current.tree?.excluded.length).toBe(1);
+    expect(result.current.tree?.excluded[0].path).toBe('.git');
   });
 });

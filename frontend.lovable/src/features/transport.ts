@@ -1,5 +1,5 @@
 import { demoDiagnostics, demoExplanation, demoGraph, demoProjects, graphToDot } from './fixtures';
-import type { AnalysisJob, Diagnostic, GraphResult, NodeExplanation, Project, Transport } from './types';
+import type { AnalysisJob, Diagnostic, FolderSelectionResult, GraphResult, NodeExplanation, Project, Transport, TreeResult } from './types';
 
 export class ApiError extends Error {
   constructor(public code: string, message: string, public retryAfter: number | null = null) { super(message); }
@@ -50,6 +50,16 @@ export const liveTransport: Transport = {
     if (!sessionToken) throw new ApiError('EDITOR_UNAVAILABLE', 'Launch an analysis from Thonny to enable editor navigation.');
     return await (await api('/editor/navigate', { method: 'POST', body: JSON.stringify({ session_token: sessionToken, relative_path: path, line, ...(column && column > 0 ? { column } : {}) }) })).json();
   },
+  async chooseFolder() {
+    if (typeof (window as unknown as { codeStructHost?: { chooseProjectFolder?: () => Promise<unknown> } })?.codeStructHost?.chooseProjectFolder === 'function') {
+      const res = await (window as unknown as { codeStructHost: { chooseProjectFolder: () => Promise<unknown> } }).codeStructHost.chooseProjectFolder();
+      if (res && typeof res === 'object') return res as FolderSelectionResult;
+    }
+    return (await (await api('/host/choose-folder', { method: 'POST' })).json()) as FolderSelectionResult;
+  },
+  async getTree(id, signal) {
+    return (await (await api(`/analyses/${encodeURIComponent(id)}/tree`, { signal })).json()) as TreeResult;
+  },
 };
 const demoJob: AnalysisJob = { analysis_id: 'ana_canonical_12345', state: 'completed', terminal: true, progress: { phase: 'completed', percent: 100, message_code: 'ANALYSIS_COMPLETE' }, partial: false, cache_hit: false, diagnostics_summary: { info: 0, warning: 1, error: 0 } };
 export const demoTransport: Transport = {
@@ -63,5 +73,54 @@ export const demoTransport: Transport = {
   async explain() { return demoExplanation; },
   async exportDot() { return new Blob([graphToDot(demoGraph)], { type: 'text/vnd.graphviz' }); },
   async navigate() { return { status: 'demo_only' }; },
+  async chooseFolder() {
+    return { cancelled: false, root_id: 'demo_root', project_name: 'demo_project', path: '/demo/project', analysis_id: 'ana_canonical_12345' };
+  },
+  async getTree(_analysisId?: string) {
+    return {
+      api_version: 'v1',
+      request_id: 'req_demo',
+      analysis_id: 'ana_canonical_12345',
+      root_id: 'demo_root',
+      root_path: '/demo/project',
+      tree: {
+        id: 'dir_root',
+        name: 'demo_project',
+        path: '',
+        kind: 'directory' as const,
+        children: [
+          {
+            id: 'file_main',
+            name: 'main.py',
+            path: 'main.py',
+            kind: 'file' as const,
+            extension: '.py',
+            symbols: [
+              {
+                id: 'mod_main',
+                name: 'main',
+                path: 'main.py',
+                qualified_name: 'main',
+                kind: 'module' as const,
+                children: [
+                  {
+                    id: 'cls_app',
+                    name: 'App',
+                    path: 'main.py',
+                    qualified_name: 'main.App',
+                    kind: 'class' as const,
+                    children: [
+                      { id: 'fn_run', name: 'run', path: 'main.py', qualified_name: 'main.App.run', kind: 'method' as const, children: [] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      excluded: [],
+    };
+  },
 };
 export const getTransport = (): Transport => import.meta.env.VITE_CODESTRUCT_MODE === 'demo' ? demoTransport : liveTransport;

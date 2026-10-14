@@ -136,6 +136,37 @@ export type NodeExplanation = {
   provider: string;
 };
 
+export type TreeNode = {
+  id: string;
+  name: string;
+  path: string;
+  kind: "directory" | "file" | "module" | "class" | "function" | "method";
+  extension?: string;
+  line?: number | null;
+  column?: number | null;
+  qualified_name?: string;
+  symbols?: TreeNode[];
+  children?: TreeNode[];
+};
+
+export type TreeResult = {
+  api_version: string;
+  request_id: string;
+  analysis_id: string | null;
+  root_id: string;
+  root_path: string;
+  tree: TreeNode;
+  excluded: Array<{ path: string; reason: string }>;
+};
+
+export type FolderSelectionResult = {
+  cancelled: boolean;
+  root_id: string | null;
+  project_name: string | null;
+  path: string | null;
+  analysis_id: string | null;
+};
+
 export type Transport = {
   status: (analysisId: string, signal?: AbortSignal) => Promise<AnalysisJob>;
   cancel: (analysisId: string) => Promise<AnalysisJob>;
@@ -147,4 +178,6 @@ export type Transport = {
   explain: (analysisId: string, nodeId: string) => Promise<NodeExplanation>;
   exportDot: (analysisId: string) => Promise<Blob>;
   navigate: (path: string, line: number, column?: number, sessionToken?: string) => Promise<{ status: string }>;
+  chooseFolder: () => Promise<FolderSelectionResult>;
+  getTree: (analysisId: string, signal?: AbortSignal) => Promise<TreeResult>;
 };

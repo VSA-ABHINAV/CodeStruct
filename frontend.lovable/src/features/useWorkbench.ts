@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, mergePages } from './transport';
-import type { AnalysisJob, Diagnostic, GraphResult, Project, Transport } from './types';
+import type { AnalysisJob, Diagnostic, GraphResult, Project, Transport, TreeResult } from './types';
 
 export function captureHandoff() {
   const query = new URLSearchParams(window.location.search);
@@ -19,6 +19,7 @@ export function useWorkbench(transport: Transport) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProject] = useState('');
   const [graph, setGraph] = useState<GraphResult | null>(null);
+  const [tree, setTree] = useState<TreeResult | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [status, setStatus] = useState('Connecting to backend');
@@ -34,7 +35,7 @@ export function useWorkbench(transport: Transport) {
     const version = ++generation.current;
     controller.current?.abort();
     const abort = new AbortController(); controller.current = abort;
-    setBusy(true); setError(null); setGraph(null); setDiagnostics([]); setJob(null); setPaging(false); activeId.current = null;
+    setBusy(true); setError(null); setGraph(null); setTree(null); setDiagnostics([]); setJob(null); setPaging(false); activeId.current = null;
     if (!initialId) setSession(null);
     const current = () => !abort.signal.aborted && generation.current === version;
     try {
@@ -61,8 +62,15 @@ export function useWorkbench(transport: Transport) {
       }
       const result = await transport.getGraph(next.analysis_id, null, abort.signal);
       const items = await transport.getDiagnostics(next.analysis_id, abort.signal);
+      let treeData: TreeResult | null = null;
+      try {
+        treeData = await transport.getTree(next.analysis_id, abort.signal);
+      } catch {
+        // Optional tree fetch fallback
+      }
       if (!current()) return;
       setGraph(result); setDiagnostics(items);
+      if (treeData) setTree(treeData);
       setStatus(next.partial ? 'Partially completed' : next.cache_hit ? 'Cached result' : 'Analysis complete');
     } catch (err) { if (current()) { setError(message(err)); setStatus('Request failed'); } }
     finally { if (current()) setBusy(false); }
@@ -105,5 +113,31 @@ export function useWorkbench(transport: Transport) {
     try { const result = await transport.cancel(activeId.current); if (generation.current === version) { setJob(result); setStatus(result.state); } }
     catch (err) { if (generation.current === version) setError(message(err)); }
   };
-  return { projects, projectId, chooseProject, graph, diagnostics, job, status, setStatus, error, setError, busy, paging, session, analysisId: activeId.current, load: run, loadMore, cancel };
+  const openFolder = useCallback(async () => {
+    setBusy(true); setError(null);
+    try {
+      const result = await transport.chooseFolder();
+      if (result.cancelled || !result.root_id) {
+        setBusy(false);
+        return;
+      }
+      setProject(result.root_id);
+      setProjects((prev) => {
+        const name = result.project_name || result.path?.split(/[\\/]/).pop() || result.root_id!;
+        const existing = prev.find((p) => p.id === result.root_id);
+        if (existing) return prev;
+        return [{ id: result.root_id!, display_name: name, description: result.path, available: true }, ...prev];
+      });
+      if (result.analysis_id) {
+        void run(false, result.analysis_id);
+      } else {
+        void run(false);
+      }
+    } catch (err) {
+      setError(message(err));
+      setStatus('Folder selection failed');
+      setBusy(false);
+    }
+  }, [transport, run]);
+  return { projects, projectId, chooseProject, openFolder, graph, tree, diagnostics, job, status, setStatus, error, setError, busy, paging, session, analysisId: activeId.current, load: run, loadMore, cancel };
 }
