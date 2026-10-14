@@ -52,6 +52,7 @@ frontend.lovable/coverage/
 *.log
 tmp/
 temp/
+scratch/
 
 # IDE and operating-system files
 .vscode/

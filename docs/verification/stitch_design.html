@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+
+<html class="h-full select-none" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Thonny - my_project.py @ 2:47</title>
+<!-- Tailwind CSS v3 CDN with forms & container queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration for Thonny + CodeStruct design palette -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            thonny: {
+              bg: '#f0f0f0',
+              panel: '#ffffff',
+              border: '#d1d5db',
+              darkBorder: '#9ca3af',
+              activeTab: '#ffffff',
+              inactiveTab: '#e5e7eb',
+              hover: '#f3f4f6',
+              text: '#1f2937',
+              muted: '#6b7280',
+              accent: '#0d9488',
+              cyan: '#0284c7',
+              green: '#16a34a',
+              amber: '#d97706',
+              purple: '#7c3aed'
+            }
+          },
+          fontFamily: {
+            sans: ['Segoe UI', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+            mono: ['Consolas', 'Courier New', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Desktop & Canvas Styles -->
+<style data-purpose="desktop-ui-styles">
+    /* Classic desktop look & crisp rendering */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Blueprint dot grid background for interactive architecture graph */
+    .graph-grid-bg {
+      background-color: #fafbfc;
+      background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    /* Custom scrollbars matching desktop lightweight IDEs */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c5c7ca;
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a1a3a6;
+    }
+  </style>
+<!-- END: Custom Desktop & Canvas Styles -->
+</head>
+<body class="h-full bg-thonny-bg text-thonny-text overflow-hidden flex flex-col border border-gray-400">
+<!-- BEGIN: OS Window Titlebar -->
+<header class="h-8 bg-white border-b border-gray-300 flex items-center justify-between px-3 text-xs select-none" data-purpose="window-titlebar">
+<div class="flex items-center space-x-2">
+<!-- Thonny Python Logo icon -->
+<svg class="w-4 h-4 text-thonny-accent" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" viewbox="0 0 24 24">
+<path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+<path d="M2 17l10 5 10-5"></path>
+<path d="M2 12l10 5 10-5"></path>
+</svg>
+<span class="font-medium text-gray-700 tracking-tight">Thonny - my_project.py @ 2:47</span>
+</div>
+<!-- Standard Windows Window Controls -->
+<div class="flex items-center space-x-3 text-gray-500">
+<button class="hover:text-black p-1 hover:bg-gray-100 transition-colors" title="Minimize">
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 16 16">
+<path d="M2 8h12v1H2z"></path>
+</svg>
+</button>
+<button class="hover:text-black p-1 hover:bg-gray-100 transition-colors" title="Maximize">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.2" viewbox="0 0 16 16">
+<rect height="11" width="11" x="2.5" y="2.5"></rect>
+</svg>
+</button>
+<button class="hover:bg-red-500 hover:text-white p-1 transition-colors" title="Close">
+<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 16 16">
+<path d="M3.7 3L3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3z"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: OS Window Titlebar -->
+<!-- BEGIN: Classic Desktop Menu Bar -->
+<nav class="h-6 bg-thonny-bg border-b border-gray-300 flex items-center px-2 space-x-3 text-[12px] text-gray-800" data-purpose="menubar">
+<button class="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">File</button>
+<button class="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">Edit</button>
+<button class="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">View</button>
+<button class="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">Run</button>
+<!-- Active Tools item showing CodeStruct integration -->
+<div class="relative group">
+<button class="px-1.5 bg-blue-100 text-blue-900 font-medium rounded flex items-center gap-1">
+        Tools
+      </button>
+</div>
+<button class="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">Help</button>
+</nav>
+<!-- END: Classic Desktop Menu Bar -->
+<!-- BEGIN: Thonny Main Toolbar -->
+<div class="h-10 bg-thonny-bg border-b border-gray-300 flex items-center px-2 space-x-1" data-purpose="toolbar">
+<!-- Standard file actions -->
+<button class="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded" title="New file (Ctrl+N)">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+</button>
+<button class="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded" title="Open... (Ctrl+O)">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+</button>
+<button class="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded" title="Save (Ctrl+S)">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+</button>
+<div class="h-5 w-px bg-gray-300 mx-1"></div>
+<!-- Execution & Debugging icons -->
+<button class="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Run current script (F5)">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+</button>
+<button class="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded" title="Debug current script (Ctrl+F5)">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path><circle cx="12" cy="12" r="5"></circle></svg>
+</button>
+<button class="p-1.5 text-red-500 hover:bg-red-50 rounded" title="Stop/Restart backend (Ctrl+F2)">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24"><rect height="14" rx="2" width="14" x="5" y="5"></rect></svg>
+</button>
+<div class="h-5 w-px bg-gray-300 mx-1"></div>
+<!-- CodeStruct integrated Workbench Actions -->
+<button class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-teal-50 border border-teal-600 text-teal-800 rounded hover:bg-teal-100 shadow-sm transition-all" title="Run CodeStruct static analyzer on project">
+<svg class="w-3.5 h-3.5 text-teal-700" fill="none" stroke="currentColor" stroke-width="2.3" viewbox="0 0 24 24">
+<circle cx="18" cy="5" r="3"></circle>
+<circle cx="6" cy="12" r="3"></circle>
+<circle cx="18" cy="19" r="3"></circle>
+<line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line>
+<line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line>
+</svg>
+<span>Analyze with CodeStruct</span>
+</button>
+</div>
+<!-- END: Thonny Main Toolbar -->
+<!-- BEGIN: Editor & Workbench Tab Strip -->
+<div class="h-7 bg-thonny-bg flex items-end px-2 space-x-1 border-b border-gray-300 text-xs" data-purpose="tab-strip">
+<!-- Inactive Code Editor Tab -->
+<div class="h-6.5 px-3 bg-gray-200 hover:bg-gray-100 text-gray-700 border-t border-x border-gray-300 rounded-t flex items-center space-x-2 cursor-pointer transition-colors">
+<svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" x2="8" y1="13" y2="13"></line><line x1="16" x2="8" y1="17" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+<span>my_project.py</span>
+<span class="text-gray-400 hover:text-gray-700 font-bold ml-1 text-[11px]">×</span>
+</div>
+<!-- Active CodeStruct Architecture Tab -->
+<div class="h-7 px-3 bg-white text-teal-800 font-semibold border-t-2 border-t-teal-600 border-x border-gray-300 rounded-t flex items-center space-x-2 shadow-sm cursor-pointer">
+<svg class="w-3.5 h-3.5 text-teal-600" fill="none" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24">
+<rect height="7" width="7" x="3" y="3"></rect>
+<rect height="7" width="7" x="14" y="3"></rect>
+<rect height="7" width="7" x="14" y="14"></rect>
+<rect height="7" width="7" x="3" y="14"></rect>
+</svg>
+<span>CodeStruct Architecture</span>
+<span class="text-gray-400 hover:text-gray-700 font-bold ml-1 text-[11px]">×</span>
+</div>
+</div>
+<!-- END: Editor & Workbench Tab Strip -->
+<!-- BEGIN: Main Multi-Panel Workspace (CodeStruct Workbench) -->
+<main class="flex-1 flex overflow-hidden bg-white" data-purpose="workbench-workspace">
+<!-- LEFT PANEL: Project Explorer & Kind Filter -->
+<aside class="w-64 border-r border-gray-300 flex flex-col bg-gray-50 shrink-0" data-purpose="left-panel-explorer">
+<!-- Explorer Header -->
+<div class="h-8 border-b border-gray-200 px-3 flex items-center justify-between text-xs font-semibold text-gray-700 bg-gray-100">
+<span class="uppercase tracking-wider text-[11px] font-bold text-gray-600">Project Explorer</span>
+<button class="text-gray-400 hover:text-gray-600" title="Collapse Explorer">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M15 19l-7-7 7-7"></path></svg>
+</button>
+</div>
+<!-- Search Input -->
+<div class="p-2 border-b border-gray-200 bg-white">
+<div class="relative">
+<span class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none text-gray-400">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
+</span>
+<input class="w-full text-xs pl-7 pr-2 py-1 border border-gray-300 rounded bg-gray-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-600" placeholder="Search files &amp; symbols..." type="text"/>
+</div>
+</div>
+<!-- File & Symbol Tree Hierarchy -->
+<div class="flex-1 overflow-y-auto py-1 text-xs select-none space-y-0.5 font-sans" data-purpose="symbol-tree">
+<!-- Root Project -->
+<div class="flex items-center gap-1.5 px-2 py-1 text-gray-800 font-medium hover:bg-gray-100 cursor-pointer">
+<svg class="w-3 h-3 text-gray-500" fill="currentColor" viewbox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+<svg class="w-3.5 h-3.5 text-teal-600" fill="currentColor" viewbox="0 0 24 24"><path d="M3 3h18v18H3z"></path></svg>
+<span>my_project</span>
+</div>
+<!-- Package: models -->
+<div class="pl-4 flex items-center gap-1.5 px-2 py-0.5 text-gray-700 hover:bg-gray-100 cursor-pointer">
+<svg class="w-3 h-3 text-gray-500" fill="currentColor" viewbox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+<span class="w-2.5 h-2.5 rounded-full bg-cyan-600 inline-block"></span>
+<span class="font-medium">models</span>
+</div>
+<div class="pl-8 flex items-center gap-1.5 px-2 py-0.5 text-gray-600 hover:bg-gray-100 cursor-pointer">
+<span class="w-2 h-2 rounded bg-teal-500"></span>
+<span>entities.py</span>
+</div>
+<div class="pl-12 flex items-center gap-1.5 px-2 py-0.5 text-gray-600 hover:bg-teal-50 cursor-pointer">
+<span class="text-[10px] font-bold text-green-700 font-mono">C</span>
+<span>ASTNode</span>
+</div>
+<!-- Module: my_project.py (Selected) -->
+<div class="pl-4 flex items-center gap-1.5 px-2 py-1 bg-teal-50 text-teal-900 font-semibold border-l-2 border-teal-600 cursor-pointer">
+<svg class="w-3 h-3 text-teal-700" fill="currentColor" viewbox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+<span class="w-2.5 h-2.5 rounded-sm bg-teal-600 inline-block"></span>
+<span>my_project.py</span>
+</div>
+<!-- Symbols inside my_project.py -->
+<div class="pl-8 flex items-center gap-1.5 px-2 py-0.5 text-gray-800 bg-gray-100 font-medium cursor-pointer">
+<span class="text-[10px] font-bold text-green-700 font-mono bg-green-100 px-1 rounded">C</span>
+<span>ArchitectureAnalyzer</span>
+</div>
+<div class="pl-12 flex items-center gap-1.5 px-2 py-0.5 text-gray-600 hover:bg-gray-100 cursor-pointer">
+<span class="text-[10px] font-bold text-blue-600 font-mono">m</span>
+<span>__init__()</span>
+</div>
+<div class="pl-12 flex items-center gap-1.5 px-2 py-0.5 text-gray-600 hover:bg-gray-100 cursor-pointer">
+<span class="text-[10px] font-bold text-blue-600 font-mono">m</span>
+<span>build_graph()</span>
+</div>
+<div class="pl-8 flex items-center gap-1.5 px-2 py-0.5 text-gray-700 hover:bg-gray-100 cursor-pointer">
+<span class="text-[10px] font-bold text-amber-600 font-mono bg-amber-100 px-1 rounded">f</span>
+<span>analyze_ast()</span>
+</div>
+<!-- Package: utils -->
+<div class="pl-4 flex items-center gap-1.5 px-2 py-0.5 text-gray-700 hover:bg-gray-100 cursor-pointer">
+<svg class="w-3 h-3 text-gray-400" fill="currentColor" viewbox="0 0 24 24"><path d="M10 17l5-5-5-5z"></path></svg>
+<span class="w-2.5 h-2.5 rounded-full bg-cyan-600 inline-block"></span>
+<span>utils/</span>
+</div>
+</div>
+<!-- Bottom Kind Filters -->
+<div class="border-t border-gray-300 p-2 bg-gray-100" data-purpose="kind-filter-bar">
+<div class="text-[10px] uppercase font-bold text-gray-500 mb-1.5">Kind Filter</div>
+<div class="flex flex-wrap gap-1">
+<button class="px-2 py-0.5 bg-teal-600 text-white rounded text-[11px] font-medium shadow-xs">All kinds</button>
+<button class="px-2 py-0.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-[11px]">Module</button>
+<button class="px-2 py-0.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-[11px]">Class</button>
+<button class="px-2 py-0.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-[11px]">Function</button>
+<button class="px-2 py-0.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-[11px]">Method</button>
+</div>
+</div>
+</aside>
+<!-- CENTER PANEL: Interactive Architecture Graph -->
+<section class="flex-1 flex flex-col relative overflow-hidden" data-purpose="center-panel-graph">
+<!-- Graph Top Action Bar -->
+<div class="h-8 bg-white border-b border-gray-200 px-3 flex items-center justify-between text-xs select-none">
+<!-- View Mode Switcher -->
+<div class="flex items-center space-x-2">
+<button class="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border-b-2 border-teal-600 text-teal-800 font-semibold">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="18" r="3"></circle><line x1="8.5" x2="15.5" y1="8.5" y2="15.5"></line></svg>
+<span>Graph</span>
+</button>
+<button class="flex items-center gap-1.5 px-2.5 py-1 text-gray-500 hover:text-gray-800">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M3 3h18v18H3z"></path><path d="M3 9h18"></path><path d="M3 15h18"></path><path d="M9 3v18"></path></svg>
+<span>Accessible table</span>
+</button>
+</div>
+<!-- Node Status & Export Tooling -->
+<div class="flex items-center space-x-3">
+<span class="text-gray-600 text-[11px] font-medium bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
+<strong class="text-teal-700">18</strong> nodes loaded
+          </span>
+<div class="flex items-center space-x-1">
+<button class="flex items-center gap-1 px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50 text-[11px] font-medium text-gray-700">
+<svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+<span>DOT (Slice)</span>
+</button>
+<button class="flex items-center gap-1 px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50 text-[11px] font-medium text-gray-700">
+<svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+<span>DOT (Complete)</span>
+</button>
+<button class="p-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-600" title="Fit to Screen">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" x2="14" y1="3" y2="10"></line><line x1="3" x2="10" y1="21" y2="14"></line></svg>
+</button>
+</div>
+</div>
+</div>
+<!-- Graph Viewport Canvas Area -->
+<div class="flex-1 graph-grid-bg relative overflow-hidden flex items-center justify-center p-6" data-purpose="graph-viewport">
+<!-- SVG Relationship Directed Edges -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#0d9488"></path>
+</marker>
+<marker id="arrow-dashed" markerheight="6" markerwidth="6" orient="auto-start-reverse" refx="8" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b"></path>
+</marker>
+</defs>
+<!-- Edge 1: Module to Class defines -->
+<path d="M 230 140 C 230 170, 230 180, 230 215" fill="none" marker-end="url(#arrow)" stroke="#0d9488" stroke-width="1.8"></path>
+<text fill="#0d9488" font-family="sans-serif" font-size="10" font-weight="600" x="238" y="180">defines</text>
+<!-- Edge 2: Module to Function defines -->
+<path d="M 285 130 C 430 130, 480 160, 480 215" fill="none" marker-end="url(#arrow)" stroke="#0d9488" stroke-width="1.8"></path>
+<text fill="#0d9488" font-family="sans-serif" font-size="10" font-weight="600" x="390" y="160">defines</text>
+<!-- Edge 3: Class to Method -->
+<path d="M 200 280 C 180 320, 160 340, 150 370" fill="none" marker-end="url(#arrow)" stroke="#0d9488" stroke-width="1.8"></path>
+<!-- Edge 4: Class to Method -->
+<path d="M 260 280 C 280 320, 290 340, 290 370" fill="none" marker-end="url(#arrow)" stroke="#0d9488" stroke-width="1.8"></path>
+<!-- Edge 5: Function calls method (dependency / dashed) -->
+<path d="M 440 250 C 390 290, 360 350, 335 375" fill="none" marker-end="url(#arrow-dashed)" stroke="#64748b" stroke-dasharray="4,4" stroke-width="1.5"></path>
+<text fill="#64748b" font-family="sans-serif" font-size="10" x="395" y="325">invokes</text>
+</svg>
+<!-- Node 1: Module 'my_project.py' -->
+<div class="absolute top-16 left-32 w-52 bg-white border-2 border-teal-600 rounded-md shadow-md p-2.5 z-10 transition-transform hover:scale-105 cursor-pointer">
+<div class="flex items-center justify-between pb-1.5 border-b border-gray-100 mb-1.5">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-sm bg-teal-600 inline-block"></span>
+<span class="text-[10px] uppercase font-bold text-teal-800 tracking-wider">Module</span>
+</div>
+<span class="text-[10px] text-gray-400 font-mono">1.2 KB</span>
+</div>
+<div class="font-bold text-xs text-gray-900 truncate">my_project.py</div>
+<div class="text-[11px] text-gray-500 mt-0.5">Defines 2 classes, 4 funcs</div>
+</div>
+<!-- Node 2: Class 'ArchitectureAnalyzer' (Selected Node) -->
+<div class="absolute top-52 left-28 w-60 bg-teal-50/50 border-2 border-green-600 rounded-md shadow-lg p-3 z-20 ring-2 ring-green-400/40 cursor-pointer">
+<div class="flex items-center justify-between pb-1.5 border-b border-green-200 mb-1.5">
+<div class="flex items-center gap-1.5">
+<span class="px-1 py-0.2 bg-green-600 text-white font-mono text-[9px] font-bold rounded">C</span>
+<span class="text-[10px] uppercase font-bold text-green-800 tracking-wider">Class</span>
+</div>
+<span class="text-[9px] font-mono text-gray-500">L42-L118</span>
+</div>
+<div class="font-bold text-xs text-green-950 flex items-center justify-between">
+<span>ArchitectureAnalyzer</span>
+<span class="text-xs text-green-600">★</span>
+</div>
+<div class="mt-2 text-[10px] font-mono bg-white/80 p-1.5 rounded border border-green-200 text-gray-700 space-y-0.5">
+<div>+ ast_tree: ASTNode</div>
+<div>+ build_graph()</div>
+<div>+ export_dot()</div>
+</div>
+</div>
+<!-- Node 3: Function 'analyze_ast' -->
+<div class="absolute top-52 left-96 w-48 bg-white border border-amber-500 rounded-md shadow-md p-2.5 z-10 hover:border-amber-600 cursor-pointer">
+<div class="flex items-center justify-between pb-1.5 border-b border-gray-100 mb-1">
+<div class="flex items-center gap-1.5">
+<span class="px-1 py-0.2 bg-amber-500 text-white font-mono text-[9px] font-bold rounded">F</span>
+<span class="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Function</span>
+</div>
+<span class="text-[9px] font-mono text-gray-400">L122</span>
+</div>
+<div class="font-bold text-xs text-gray-900 truncate">analyze_ast()</div>
+<div class="text-[10px] text-gray-500 mt-1">Parses AST &amp; extracts AST symbols</div>
+</div>
+<!-- Node 4: Method '__init__' -->
+<div class="absolute top-96 left-16 w-40 bg-white border border-sky-400 rounded-md shadow p-2 z-10 hover:border-sky-600 cursor-pointer">
+<div class="flex items-center gap-1 mb-1">
+<span class="text-[9px] font-bold text-sky-700 font-mono">M</span>
+<span class="text-[10px] font-medium text-sky-800">__init__()</span>
+</div>
+<div class="text-[9px] text-gray-500 font-mono">params: (file_path)</div>
+</div>
+<!-- Node 5: Method 'build_graph' -->
+<div class="absolute top-96 left-64 w-44 bg-white border border-sky-400 rounded-md shadow p-2 z-10 hover:border-sky-600 cursor-pointer">
+<div class="flex items-center gap-1 mb-1">
+<span class="text-[9px] font-bold text-sky-700 font-mono">M</span>
+<span class="text-[10px] font-medium text-sky-800">build_graph()</span>
+</div>
+<div class="text-[9px] text-gray-500 font-mono">returns: Digraph</div>
+</div>
+<!-- Floating Graph Zoom & Fit HUD -->
+<div class="absolute top-3 right-3 bg-white border border-gray-300 rounded shadow-sm flex flex-col p-1 space-y-1 text-gray-600 z-30">
+<button class="p-1 hover:bg-gray-100 rounded" title="Zoom In">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+</button>
+<button class="p-1 hover:bg-gray-100 rounded" title="Zoom Out">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+</button>
+<div class="w-full h-px bg-gray-200"></div>
+<button class="p-1 hover:bg-gray-100 rounded" title="Reset Viewport">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+</button>
+</div>
+<!-- Bottom Integrated Legend -->
+<div class="absolute bottom-2 left-3 bg-white/95 backdrop-blur-xs border border-gray-300 shadow-sm px-3 py-1.5 rounded-full flex items-center space-x-3 text-[11px] text-gray-700 z-30" data-purpose="graph-legend">
+<span class="font-bold text-[10px] uppercase text-gray-400 tracking-wider">Legend</span>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-slate-700 inline-block"></span>
+<span>Project</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-cyan-600 inline-block"></span>
+<span>Package</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-sm bg-teal-600 inline-block"></span>
+<span>Module</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-sm bg-green-600 inline-block"></span>
+<span>Class</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+<span>Function</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span>
+<span>Method</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-4 h-0.5 bg-teal-600 inline-block"></span>
+<span class="text-teal-700 font-medium">defines</span>
+</div>
+</div>
+</div>
+</section>
+<!-- RIGHT PANEL: Inspector / Detail View -->
+<aside class="w-72 border-l border-gray-300 flex flex-col bg-gray-50 shrink-0" data-purpose="right-panel-inspector">
+<!-- Inspector Header -->
+<div class="h-8 border-b border-gray-200 px-3 flex items-center justify-between text-xs font-semibold text-gray-700 bg-gray-100">
+<div class="flex items-center space-x-1.5">
+<svg class="w-3.5 h-3.5 text-teal-700" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="16" y2="12"></line><line x1="12" x2="12.01" y1="8" y2="8"></line></svg>
+<span class="uppercase tracking-wider text-[11px] font-bold text-gray-600">Inspector</span>
+</div>
+<span class="text-[11px] font-normal text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">Active Node</span>
+</div>
+<!-- Inspector Detailed Body -->
+<div class="flex-1 overflow-y-auto p-3 text-xs space-y-4">
+<!-- Target Symbol Header Card -->
+<div class="bg-white border border-gray-200 rounded p-3 shadow-xs">
+<div class="flex items-center gap-1.5 text-green-700 text-[11px] font-semibold uppercase">
+<span class="px-1 py-0.2 bg-green-600 text-white rounded font-mono text-[9px]">Class</span>
+<span>Node Detail</span>
+</div>
+<h3 class="text-sm font-bold text-gray-900 mt-1 font-mono">ArchitectureAnalyzer</h3>
+<p class="text-[11px] text-gray-500 mt-0.5">Primary parsing engine for AST dependencies.</p>
+<div class="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px]">
+<span class="text-gray-500">Source:</span>
+<span class="font-mono text-teal-700 font-medium">my_project.py:42</span>
+</div>
+</div>
+<!-- Quick Code Actions -->
+<div class="space-y-1.5">
+<button class="w-full text-center py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded font-medium text-xs shadow-xs transition-colors">
+            Jump to Source in Editor
+          </button>
+<button class="w-full text-center py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded text-xs transition-colors">
+            Highlight Callers &amp; Dependencies
+          </button>
+</div>
+<!-- Defined Members / Sub-elements -->
+<div>
+<h4 class="text-[11px] font-bold uppercase text-gray-500 mb-1.5 tracking-wide">Defined Symbols (3)</h4>
+<div class="bg-white border border-gray-200 rounded divide-y divide-gray-100 font-mono text-[11px]">
+<div class="p-2 flex items-center justify-between hover:bg-gray-50">
+<div class="flex items-center gap-1.5">
+<span class="text-sky-600 font-bold">m</span>
+<span class="text-gray-800">__init__()</span>
+</div>
+<span class="text-gray-400 text-[10px]">L45</span>
+</div>
+<div class="p-2 flex items-center justify-between hover:bg-gray-50">
+<div class="flex items-center gap-1.5">
+<span class="text-sky-600 font-bold">m</span>
+<span class="text-gray-800">build_graph()</span>
+</div>
+<span class="text-gray-400 text-[10px]">L58</span>
+</div>
+<div class="p-2 flex items-center justify-between hover:bg-gray-50">
+<div class="flex items-center gap-1.5">
+<span class="text-sky-600 font-bold">m</span>
+<span class="text-gray-800">export_dot()</span>
+</div>
+<span class="text-gray-400 text-[10px]">L92</span>
+</div>
+</div>
+</div>
+<!-- Inbound / Outbound Relations -->
+<div>
+<h4 class="text-[11px] font-bold uppercase text-gray-500 mb-1.5 tracking-wide">Relationships</h4>
+<div class="space-y-2 text-[11px]">
+<div class="bg-white p-2 rounded border border-gray-200">
+<div class="text-gray-500 text-[10px]">Defined By:</div>
+<div class="font-medium text-teal-800 flex items-center gap-1 mt-0.5">
+<span class="w-2 h-2 rounded bg-teal-500"></span>
+<span>my_project.py</span>
+</div>
+</div>
+<div class="bg-white p-2 rounded border border-gray-200">
+<div class="text-gray-500 text-[10px]">Referenced By:</div>
+<div class="font-medium text-amber-700 flex items-center gap-1 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+<span>analyze_ast()</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- END: Main Multi-Panel Workspace -->
+<!-- BEGIN: Bottom Thonny Docked Panels (Shell & Diagnostics) -->
+<section class="h-44 border-t-2 border-gray-300 bg-white flex flex-col shrink-0" data-purpose="docked-bottom-panels">
+<!-- Dock Panel Tabs -->
+<div class="h-6.5 bg-thonny-bg flex items-center px-2 space-x-1 border-b border-gray-300 text-xs">
+<!-- Shell Tab (Active) -->
+<button class="px-3 h-full bg-white border-t-2 border-t-teal-700 border-x border-gray-300 font-semibold text-gray-800 flex items-center gap-1">
+<span>Shell</span>
+</button>
+<!-- Diagnostics Tab -->
+<button class="px-3 h-full text-gray-600 hover:text-gray-900 flex items-center gap-1.5">
+<span>Diagnostics</span>
+<span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">0</span>
+</button>
+</div>
+<!-- Shell Output Area with Python & CodeStruct Prompt -->
+<div class="flex-1 p-2 font-mono text-xs overflow-y-auto leading-relaxed bg-white text-gray-900 select-text" data-purpose="thonny-shell-output">
+<div class="text-purple-700 font-semibold tracking-tight">&gt;&gt;&gt; %Run -c $EDITOR_CONTENT</div>
+<div class="text-gray-700 pl-4 py-0.5">
+<div>[Thonny] Initializing local Python 3 interpreter environment...</div>
+<div>[CodeStruct] Initialized Architecture Analyzer adapter v2.4</div>
+</div>
+<div class="text-purple-700 font-semibold tracking-tight mt-1">&gt;&gt;&gt; Analyze with CodeStruct: Processed 18 symbols in my_project.py</div>
+<div class="text-teal-800 font-semibold pl-4">
+<div>✓ AST parse complete: 1 Module, 2 Classes, 5 Methods, 10 Functions discovered.</div>
+<div>✓ CodeStruct architecture graph generated successfully. Workbench synchronized.</div>
+</div>
+<div class="flex items-center text-purple-700 font-semibold mt-1">
+<span>&gt;&gt;&gt; </span>
+<span class="w-2 h-4 bg-gray-800 inline-block animate-pulse"></span>
+</div>
+</div>
+</section>
+<!-- END: Bottom Thonny Docked Panels -->
+<!-- BEGIN: Status Bar -->
+<footer class="h-6 bg-thonny-bg border-t border-gray-300 px-3 flex items-center justify-between text-[11px] text-gray-600 select-none" data-purpose="system-statusbar">
+<div class="flex items-center space-x-4">
+<span class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span>Local Python 3 • Connected to local adapter</span>
+</span>
+<span class="text-gray-400">|</span>
+<span>Encoding: <strong class="text-gray-700">UTF-8</strong></span>
+</div>
+<div class="flex items-center space-x-4">
+<span>Line 42, Col 1</span>
+<span class="text-gray-400">|</span>
+<span class="text-teal-700 font-medium">CodeStruct Workbench Active</span>
+</div>
+</footer>
+<!-- END: Status Bar -->
+</body></html>
