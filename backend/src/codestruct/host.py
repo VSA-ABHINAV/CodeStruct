@@ -38,7 +38,10 @@ def set_folder_chooser_hook(hook: Callable[[str], str | None] | None) -> None:
     _FOLDER_CHOOSER_HOOK = hook
 
 
-def choose_folder_dialog(title: str = "Select Project Folder") -> str | None:
+def choose_folder_dialog(
+    title: str = "Select Project Folder",
+    initial_path: str | None = None,
+) -> str | None:
     """Invoke the native Windows folder picker dialog.
 
     Returns the canonical string path if selected, or None if cancelled.
@@ -50,13 +53,19 @@ def choose_folder_dialog(title: str = "Select Project Folder") -> str | None:
     if env_mock:
         return env_mock
 
+    initial_folder = initial_path or os.environ.get("CODESTRUCT_INITIAL_FOLDER")
+
     # On Windows, invoke PowerShell to open the native FolderBrowserDialog
     if sys.platform == "win32":
         try:
+            selected_path_line = (
+                f"$f.SelectedPath = '{initial_folder}'; " if initial_folder else ""
+            )
             ps_script = (
                 "Add-Type -AssemblyName System.Windows.Forms; "
                 "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
                 f"$f.Description = '{title}'; "
+                f"{selected_path_line}"
                 "$f.ShowNewFolderButton = $false; "
                 "if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { "
                 "    Write-Output $f.SelectedPath "

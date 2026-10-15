@@ -871,13 +871,13 @@ export function CodeStructWorkbench() {
             <path d="M2 12l10 5 10-5" />
           </svg>
           <span className="font-medium text-gray-700 tracking-tight">
-            Thonny - {currentProjectTitle}
+            CodeStruct Architecture Workbench - {currentProjectTitle}
           </span>
         </div>
         <div className="flex items-center space-x-3 text-gray-500">
           <button
             type="button"
-            className="hover:text-black p-1 hover:bg-gray-100 transition-colors"
+            className="hover:text-black p-1 hover:bg-gray-100 transition-colors cursor-pointer"
             title="Minimize"
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
@@ -886,8 +886,14 @@ export function CodeStructWorkbench() {
           </button>
           <button
             type="button"
-            className="hover:text-black p-1 hover:bg-gray-100 transition-colors"
-            title="Maximize"
+            className="hover:text-black p-1 hover:bg-gray-100 transition-colors cursor-pointer"
+            title="Maximize / Restore"
+            onClick={() => {
+              const action = document.fullscreenElement
+                ? document.exitFullscreen?.()
+                : document.documentElement.requestFullscreen?.();
+              void action?.catch((err) => setError(err.message));
+            }}
           >
             <svg
               className="w-3.5 h-3.5"
@@ -901,8 +907,9 @@ export function CodeStructWorkbench() {
           </button>
           <button
             type="button"
-            className="hover:bg-red-500 hover:text-white p-1 transition-colors"
+            className="hover:bg-red-500 hover:text-white p-1 transition-colors cursor-pointer"
             title="Close"
+            onClick={() => window.close()}
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
               <path d="M3.7 3L3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3z" />
@@ -916,27 +923,53 @@ export function CodeStructWorkbench() {
         className="h-6 bg-[#f0f0f0] border-b border-gray-300 flex items-center px-2 space-x-3 text-[12px] text-gray-800 select-none shrink-0"
         data-purpose="menubar"
       >
-        <button type="button" className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">
+        <button
+          type="button"
+          onClick={() => void openFolder()}
+          className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded cursor-pointer"
+          title="Open Project Folder (Ctrl+O)"
+        >
           File
         </button>
-        <button type="button" className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">
+        <button
+          type="button"
+          className="px-1.5 text-gray-400 cursor-not-allowed rounded"
+          title="Edit actions disabled in static architecture view"
+          disabled
+        >
           Edit
         </button>
-        <button type="button" className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">
+        <button
+          type="button"
+          onClick={() => setView((v) => (v === "graph" ? "table" : "graph"))}
+          className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded cursor-pointer"
+          title={`Switch to ${view === "graph" ? "Accessible table" : "Graph"} view`}
+        >
           View
         </button>
-        <button type="button" className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">
+        <button
+          type="button"
+          className="px-1.5 text-gray-400 cursor-not-allowed rounded"
+          title="Run actions disabled (Static analysis non-execution invariant enforced)"
+          disabled
+        >
           Run
         </button>
         <div className="relative group">
           <button
             type="button"
-            className="px-1.5 bg-blue-100 text-blue-900 font-medium rounded flex items-center gap-1"
+            className="px-1.5 bg-blue-100 text-blue-900 font-medium rounded flex items-center gap-1 cursor-default"
+            title="Active Tool: CodeStruct Architecture Workbench"
           >
             Tools
           </button>
         </div>
-        <button type="button" className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded">
+        <button
+          type="button"
+          className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded cursor-pointer"
+          title="CodeStruct Python Static Architecture Workbench v2.4"
+          onClick={() => setDockOpen(true)}
+        >
           Help
         </button>
       </nav>
@@ -948,8 +981,9 @@ export function CodeStructWorkbench() {
       >
         <button
           type="button"
-          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded"
-          title="New file (Ctrl+N)"
+          disabled
+          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
+          title="New file (Editor action - launch from Thonny to edit files)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -958,8 +992,10 @@ export function CodeStructWorkbench() {
         </button>
         <button
           type="button"
-          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded"
-          title="Open... (Ctrl+O)"
+          onClick={() => void openFolder()}
+          disabled={busy}
+          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded cursor-pointer"
+          title="Open Project Folder (Ctrl+O)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -967,8 +1003,10 @@ export function CodeStructWorkbench() {
         </button>
         <button
           type="button"
-          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded"
-          title="Save (Ctrl+S)"
+          onClick={() => downloadSliceDot()}
+          disabled={!graph}
+          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded cursor-pointer disabled:opacity-40"
+          title="Export loaded slice as DOT"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -979,19 +1017,22 @@ export function CodeStructWorkbench() {
 
         <div className="h-5 w-px bg-gray-300 mx-1" />
 
+        {/* Execution actions disabled to enforce static-analysis non-execution invariant */}
         <button
           type="button"
-          className="p-1.5 text-green-600 hover:bg-green-50 rounded"
-          title="Run current script (F5)"
+          disabled
+          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
+          title="Run script (Disabled: CodeStruct is a static analysis workbench; code execution is prohibited)"
         >
-          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 fill-current text-gray-300" viewBox="0 0 24 24">
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
         </button>
         <button
           type="button"
-          className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
-          title="Debug current script (Ctrl+F5)"
+          disabled
+          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
+          title="Debug script (Disabled: CodeStruct is a static analysis workbench; code execution is prohibited)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
@@ -1000,10 +1041,11 @@ export function CodeStructWorkbench() {
         </button>
         <button
           type="button"
-          className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-          title="Stop/Restart backend (Ctrl+F2)"
+          disabled
+          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
+          title="Stop execution (No user code is executed during static analysis)"
         >
-          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 fill-current text-gray-300" viewBox="0 0 24 24">
             <rect height="14" rx="2" width="14" x="5" y="5" />
           </svg>
         </button>
@@ -1027,7 +1069,7 @@ export function CodeStructWorkbench() {
           onClick={() => void load(true)}
           disabled={busy || !projectId}
           className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-          title="Reanalyze project with CodeStruct"
+          title="Reanalyze project with CodeStruct (static analysis without code execution)"
         >
           <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin text-teal-600")} />
           <span>Refresh</span>
@@ -1608,34 +1650,42 @@ export function CodeStructWorkbench() {
               className="flex-1 p-2 font-mono text-xs overflow-y-auto leading-relaxed bg-white text-gray-900 select-text"
               data-purpose="thonny-shell-output"
             >
-              <div className="text-purple-700 font-semibold tracking-tight">
-                &gt;&gt;&gt; %Run -c $CODESTRUCT_WORKBENCH
+              <div className="text-slate-800 font-semibold tracking-tight">
+                [CodeStruct Architecture Workbench • Static Analysis Console]
               </div>
-              <div className="text-gray-700 pl-4 py-0.5">
-                <div>[Thonny] Initializing local Python 3 interpreter environment...</div>
-                <div>[CodeStruct] Initialized Architecture Analyzer adapter v2.4</div>
+              <div className="text-gray-600 pl-3 py-0.5 text-[11px] space-y-0.5">
+                <div>• Static Analysis Engine: AST hierarchy and dependency discovery</div>
+                <div>• Security Policy: Analyzed project source is never executed (zero execution invariant)</div>
+                <div>• Service Status: Connected to local CodeStruct REST adapter</div>
               </div>
               {graph ? (
                 <>
-                  <div className="text-purple-700 font-semibold tracking-tight mt-1">
-                    &gt;&gt;&gt; Analyze with CodeStruct: Processed {graph.nodes.length} symbols
+                  <div className="text-teal-700 font-semibold tracking-tight mt-1">
+                    [Static Analysis Complete] Discovered {graph.nodes.length} symbols in {currentProjectTitle}:
                   </div>
-                  <div className="text-teal-800 font-semibold pl-4">
+                  <div className="text-teal-800 font-medium pl-3 text-[11px] space-y-0.5">
                     <div>
-                      ✓ AST parse complete: {graph.nodes.filter((n) => n.kind === "module").length}{" "}
+                      ✓ AST symbols: {graph.nodes.filter((n) => n.kind === "module").length}{" "}
                       Module(s), {graph.nodes.filter((n) => n.kind === "class").length} Class(es),{" "}
                       {graph.nodes.filter((n) => n.kind === "function").length} Function(s),{" "}
-                      {graph.nodes.filter((n) => n.kind === "method").length} Method(s) discovered.
+                      {graph.nodes.filter((n) => n.kind === "method").length} Method(s).
                     </div>
                     <div>
-                      ✓ CodeStruct architecture graph generated successfully. Workbench synchronized.
+                      ✓ Top-to-bottom architecture graph synchronized. Project code was strictly parsed, never executed.
                     </div>
                   </div>
                 </>
-              ) : null}
-              <div className="flex items-center text-purple-700 font-semibold mt-1">
+              ) : (
+                <div className="text-gray-500 pl-3 py-1 text-[11px] italic">
+                  No project loaded. Click &quot;Open Folder&quot; to inspect project architecture.
+                </div>
+              )}
+              <div className="flex items-center text-gray-500 font-semibold mt-1">
                 <span>&gt;&gt;&gt;&nbsp;</span>
-                <span className="w-2 h-3.5 bg-gray-800 inline-block animate-pulse" />
+                <span className="text-gray-400 font-normal italic text-[11px]">
+                  (static architecture console • script execution disabled)
+                </span>
+                <span className="w-2 h-3.5 bg-gray-600 ml-1 inline-block animate-pulse" />
               </div>
             </div>
           ) : (
@@ -1701,8 +1751,8 @@ export function CodeStructWorkbench() {
       >
         <div className="flex items-center space-x-4">
           <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span>Local Python 3 • Connected to local adapter</span>
+            <span className="w-2 h-2 rounded-full bg-teal-600" />
+            <span>CodeStruct Static Analyzer • Connected to local adapter</span>
           </span>
           <span className="text-gray-400">|</span>
           <span>
@@ -1718,7 +1768,7 @@ export function CodeStructWorkbench() {
               : "Line 1, Col 1"}
           </span>
           <span className="text-gray-400">|</span>
-          <span className="text-teal-700 font-medium">CodeStruct Workbench Active</span>
+          <span className="text-teal-700 font-medium">Static Analysis Only (Non-Execution)</span>
         </div>
       </footer>
     </div>

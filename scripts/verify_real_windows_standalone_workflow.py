@@ -15,10 +15,12 @@ Exercises the whole-folder standalone workflow on a real Windows machine:
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -114,9 +116,11 @@ def main() -> int:
     print(
         "[Step 3] Launching CodeStruct prototype services and standalone desktop window..."
     )
-    # Set mock folder chooser env so that when choose-folder is invoked, it uses our fixture
+    # Set initial folder env for native FolderBrowserDialog preselection without mocking
     start_env = os.environ.copy()
-    start_env["CODESTRUCT_MOCK_CHOOSE_FOLDER"] = str(fixture_dir.resolve())
+    start_env["CODESTRUCT_INITIAL_FOLDER"] = str(fixture_dir.resolve())
+    if "CODESTRUCT_MOCK_CHOOSE_FOLDER" in start_env:
+        del start_env["CODESTRUCT_MOCK_CHOOSE_FOLDER"]
 
     start_proc = subprocess.run(
         [
@@ -165,12 +169,51 @@ def main() -> int:
     # Give services a moment to settle
     time.sleep(2)
 
-    # 5. Open Folder & Initial Analysis
-    print("[Step 5] Triggering native folder chooser and automatic project analysis...")
+    # 5. Open Folder via Native Windows Dialog & Initial Analysis
+    print("[Step 5] Triggering native Windows folder chooser and automatic project analysis...")
+    dialog_detected = threading.Event()
+    dialog_info: dict[str, str | int | None] = {"hwnd": None, "title": None}
+
+    def _watch_dialog():
+        user32 = ctypes.windll.user32
+        for _ in range(100):
+            time.sleep(0.1)
+            found = None
+
+            def enum_cb(h, _):
+                nonlocal found
+                if user32.IsWindowVisible(h):
+                    b = ctypes.create_unicode_buffer(256)
+                    user32.GetWindowTextW(h, b, 256)
+                    t = b.value
+                    if "Select Project Folder" in t or "Browse For Folder" in t or "Browse for Folder" in t:
+                        found = (h, t)
+                        return False
+                return True
+
+            cb = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(enum_cb)
+            user32.EnumWindows(cb, 0)
+            if found:
+                dialog_info["hwnd"], dialog_info["title"] = found
+                dialog_detected.set()
+                time.sleep(0.4)
+                user32.PostMessageW(found[0], 0x0111, 1, 0)  # IDOK
+                return
+
+    watcher_thread = threading.Thread(target=_watch_dialog, daemon=True)
+    watcher_thread.start()
+
     choose_resp = http_post(
         "http://127.0.0.1:8000/api/v1/host/choose-folder",
         data={},
     )
+    watcher_thread.join(timeout=10.0)
+
+    if not dialog_detected.is_set():
+        print("[ERROR] Native Windows FolderBrowserDialog was not opened or detected!")
+        return 1
+
+    print(f"  [Native Dialog Verified] HWND: {dialog_info['hwnd']}, Title: '{dialog_info['title']}', Confirmed via native IDOK.")
     print(f"  Choose folder response: {choose_resp}")
     root_id = choose_resp.get("root_id")
     analysis_id = choose_resp.get("analysis_id")
