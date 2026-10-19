@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Request
+from pydantic import BaseModel, Field
 
 from codestruct.host import (
     FolderValidationError,
@@ -80,6 +81,52 @@ async def choose_project_folder(
 
     return {
         "cancelled": False,
+        "root_id": root_id,
+        "project_name": validated_path.name,
+        "path": str(validated_path),
+        "analysis_id": job_record.analysis_id,
+    }
+
+
+class RegisterFolderRequest(BaseModel):
+    path: str = Field(..., description="Absolute path to the project root directory")
+
+
+@router.post("/register-folder")
+async def register_project_folder(
+    body: RegisterFolderRequest,
+    request: Request,
+    service: AnalysisService = Depends(analysis_service),
+    _auth: None = Depends(_verify_host_token),
+) -> dict[str, Any]:
+    """Register and analyze a project folder path directly (e.g. from Thonny File view)."""
+    try:
+        validated_path = validate_project_folder(body.path)
+    except FolderValidationError as exc:
+        raise ApiError(400, "INVALID_PROJECT_FOLDER", str(exc)) from exc
+
+    # Generate safe, deterministic root_id
+    base_slug = re.sub(r"[^a-zA-Z0-9_]+", "_", validated_path.name.lower()).strip("_")
+    if not base_slug:
+        base_slug = "proj"
+    root_id = base_slug
+    suffix = 1
+    while (
+        root_id in service.settings.authorized_roots
+        and service.settings.authorized_roots[root_id] != validated_path
+    ):
+        root_id = f"{base_slug}_{suffix}"
+        suffix += 1
+
+    # Register root dynamically
+    service.settings.authorized_roots[root_id] = validated_path
+
+    # Automatically start initial analysis
+    job_record = service.create(
+        root_id, relative_path="", refresh=False, compute_metrics=False
+    )
+
+    return {
         "root_id": root_id,
         "project_name": validated_path.name,
         "path": str(validated_path),
