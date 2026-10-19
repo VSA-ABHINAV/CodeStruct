@@ -1,183 +1,87 @@
-# Antigravity Task: M7 Corrections and Standalone Windows Project Explorer
+# Antigravity Task: Integrate the Stitch Workbench as a Thonny Editor Tab
 
-Date: 2026-10-13
+Date: 2026-10-16
 Repository: `D:\REP\Codestruct\Codestruct`
-Task owner: Antigravity. Codex authored the review and task brief; do not treat this task as permission for Codex to implement the application changes.
+Owner: Antigravity implements and verifies; Codex maintains this bounded handoff and reviews the resulting report.
 
-## Goal
+## Authoritative requirement
 
-Resolve the findings in `docs/verification/M7_CODEX_REVIEW_1.md`, then deliver the user-requested Windows-only standalone CodeStruct workbench that opens a whole project folder. Use `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md` for the visual requirements. Work through the phases below, commit each completed phase separately, keep running tests and fixing regressions until the requirements are met, then create the reports and stop for Codex review. Do not begin M8.
+This task supersedes earlier instructions in this file and older reports that describe a standalone Edge/Chrome application window, an external browser tab, or a separate folder picker. The user has clarified the required workflow:
 
-This scope is the M7 correction pass plus the standalone project-explorer/frontend-integration work requested by the user. It does **not** include CS-020–024 evaluation/release work or deferred CS-025 features.
+1. The user opens CodeStruct from Thonny's **Tools** menu.
+2. The Stitch workbench opens as a **new editor tab inside Thonny's main window**, like opening a new file in VS Code. It must not open a separate top-level application window or browser.
+3. The project root is the folder currently open in Thonny's **File** view when CodeStruct is invoked. Do not substitute the active source file's parent, a folder chooser, a configured demo root, or fixture data.
+4. The provided Stitch screen is the visual source of truth. Use the available Stitch MCP connection to inspect and implement the actual design.
 
-## Read first and verify the checkout
+The latest Codex review is `docs/verification/STITCH_FRONTEND_INTEGRATION_CODEX_REVIEW_1.md`. The prior report, `docs/verification/STITCH_FRONTEND_INTEGRATION_REVIEW_1.md`, documents a separate Edge standalone window; its UI and quality-gate results do not satisfy the Thonny-host requirement. M7 remains **Changes required** and unaccepted. Do not begin M8 or CS-020–024.
 
-Read these current sources before changing code:
+## Read and verify before changing code
 
-- `docs/verification/M7_CODEX_REVIEW_1.md` — current Codex findings and required regressions.
-- `docs/codestruct_audit.md` and `PROCESS_TRACKER.md` — stable issue IDs and current statuses.
-- `D:\REP\# CodeStruct – Technology Summary.txt` — primary product and technology direction.
-- `frontend.lovable/INTEGRATION_HANDOFF.md` and `prototype-launcher/prototype-config.json` — active frontend and launcher wiring.
-- The relevant source, tests, and launcher files for each finding.
+- Read `D:\REP\# CodeStruct – Technology Summary.txt` first; it is the primary product and technology source.
+- Read `docs/codestruct_audit.md`, `PROCESS_TRACKER.md`, this task, the latest Codex review, and the prior Stitch integration report.
+- Inspect the actual Stitch project/screen through MCP. The prior handoff identified Stitch project `projects/3997374805666523009`, screen `94361047d60944b0ab44bfb463329efb` (“Thonny IDE - Docked CodeStruct Architecture Workbench”). Confirm the current screen and record its identity, layout, typography, color, assets, and interactions from MCP rather than relying only on screenshots or the old report.
+- Confirm the repository root, branch, HEAD, and `git status --short`. Preserve all existing user/Codex changes. Do not reset, rebase, overwrite unrelated files, or stage unrelated work.
+- Inspect the active renderer and launch path from current configuration before deciding which frontend source to use. Reuse the existing live frontend and API wherever possible; do not create a second demo renderer.
+- Inspect the installed Thonny version and supported plugin APIs for adding an editor tab and obtaining the folder currently shown by Thonny's File view. Record the API/source evidence and test the host integration in real Thonny.
 
-Verify the actual Git root, branch, HEAD, remotes, and working tree before editing. The expected checkout is the existing repository on `main`; the review was performed at `590a208`, with tested M7 code at `921f930`. Do not reset, rebase, discard, or overwrite user files. The current working tree is expected to contain Codex-authored changes to `PROCESS_TRACKER.md`, `docs/codestruct_audit.md`, `docs/verification/M7_CODEX_REVIEW_1.md`, this task file, and `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md`. Preserve them and inspect every other modification before staging.
+## Phase 1 — establish the real Thonny host integration
 
-## Phase 1 — Correct M7 findings R1 and R2
+Implement a Thonny **Tools** command for the CodeStruct workbench. Invoking it must open or focus a CodeStruct workbench tab in Thonny's existing editor notebook. The visible workbench must be hosted within the Thonny main window and follow normal editor-tab behavior, including selecting and closing the tab. Use a supported Thonny extension point and a compatible embedded renderer; do not simulate integration with a menu entry that launches Edge, Chrome, `--app`, a separate Tk top-level, or another standalone window.
 
-### R1: enforce Graphviz output bounds while output is produced
+At command invocation, read the current project directory from Thonny's File view and pass that directory through the existing trusted plugin/host path to the backend. Clearly display the project root in the workbench. If Thonny has no usable folder open, show a clear in-IDE message explaining that the user must open the project folder in Thonny's File view; do not silently fall back to another root or launch a folder chooser. If the user changes the File view folder and invokes CodeStruct again, the displayed/analyzed project must correspond to that current folder, with no stale project state.
 
-In `backend/src/codestruct/graph/export_dot.py`, replace the post-`communicate()` output-size check with enforcement that bounds stdout and stderr as they are consumed. Terminate the renderer and descendants promptly when a stream exceeds its cap. Bound or safely discard diagnostics on stderr. Enforce an output bound on DOT serialization as well; node/edge counts alone do not bound label sizes. Preserve timeout behavior, format validation, safe errors, API status mapping, and Windows process-tree cleanup.
+Before building out the full screen, prove in the real installed Thonny that the Tools command opens the tab in the same main window and can load the active File view folder. Add plugin tests for command registration, editor-tab lifecycle, root selection, missing-folder behavior, and switching folders. Do not declare success from mocked-only UI tests.
 
-Add regressions for a renderer that emits well beyond the configured stdout cap, a renderer that floods stderr, and an oversized DOT label/serialization. Tests must prove the limit is enforced, the child is terminated, and callers receive the documented output-limit failure without buffering the full output. Cover the relevant API error response too.
+If a supported embedded editor-tab approach requires a dependency or host change, choose the smallest maintainable option compatible with Thonny and document it. Continue investigating and implementing within scope. If the current Thonny host genuinely cannot support the required integrated tab, do not substitute a separate window; document the exact API/host evidence and the remaining blocker for the owner.
 
-### R2: enforce the persistent cache byte limit
+## Phase 2 — connect the Stitch workbench to live CodeStruct behavior
 
-In `backend/src/codestruct/storage/file_cache.py`, make eviction continue until the cache fits both the entry-count and byte budgets after the incoming entry, or skip caching an entry that cannot fit by itself. Preserve LRU behavior, transactions, and concurrency safety.
+Adapt the active frontend to the Stitch design while keeping it inside the Thonny editor tab. Match the target's main layout, typography, spacing, colors, hierarchy, and interactions as closely as the existing stack permits. Reuse existing backend routes and capability boundaries; document and test any necessary contract change.
 
-Add tests for byte-only pressure, simultaneous count and byte pressure, and one entry larger than the configured byte budget. Assert both `entries <= max_entries` and `total_bytes <= max_bytes` after insertion. The review's direct failing example is ten existing 10-byte entries under a 100-byte budget followed by an 80-byte entry; the resulting stored total must not exceed 100 bytes.
+The workbench must preserve the user's functional requirements:
 
-Do not weaken existing analysis or cache-key invariants. Keep the complete-result cache and per-file cache behavior intact.
+- Show the current Thonny File view folder as the project root and load that whole project using real backend data.
+- Present architecture from folders/files through modules, classes, functions, and methods in clear top-to-bottom hierarchical order. Keep nodes and labels readable; provide useful pan, zoom, fit, and expand/collapse behavior.
+- Keep a navigable project/file explorer with Python modules, classes, functions, and methods nested under their files, and an independently closable left drawer.
+- Keep an independently closable right inspector showing the selected node's name, source-location pointer, project-relative path, relationships, and evidence-grounded architectural explanation. Related-node navigation must select the corresponding live node.
+- Keep **Refresh** for the currently open project. Remove the separate **Analyze** action, theme toggle, project-source selector, demo-root/demo-data controls, and standalone **Open Folder** action.
+- Use only real API results. Preserve graph IDs, locations, relationship status/confidence, pagination, diagnostics, cancellation, loading/error/partial states, and existing navigation back to Thonny source files. Never fabricate success or fall back to fixtures after an API failure.
+- Keep static analysis non-executing. Opening, refreshing, and navigating a project must never run its source code. Preserve canonical-root containment, traversal/reparse/symlink protections, loopback restrictions, and capability-token secrecy.
+- Do not duplicate Thonny's outer application chrome as fake controls. Stitch defines the workbench content; Thonny owns its native menu bar and editor tabs. Every control rendered inside the workbench must have a real behavior or be clearly disabled/labeled.
 
-## Phase 2 — Windows standalone window and whole-folder workflow
+Keep the existing React Flow decision unless measured evidence shows it cannot meet the design and hierarchy requirements. Do not replace a graph library merely to match a technology-summary name.
 
-Create a top-level Windows desktop application window for the visualization. It must open as an application window and must not send the user to a Chrome/Edge browser tab. Inspect the existing Python/FastAPI/Vite stack and choose the smallest reliable Windows host that fits it; document the choice and any required runtime. Do not add a large framework or package installer without evidence it is necessary. Keep backend and window process startup/shutdown under the existing launcher lifecycle, with no orphan processes.
+## Phase 3 — real workflow, regression gates, and safe cleanup
 
-The user selected these product decisions:
+Use a disposable nested project with distinctive files/symbols and run the actual Thonny application with the installed CodeStruct plugin. Through the visible Thonny UI:
 
-- **Windows-only standalone app window.**
-- **Open a whole folder/project**, not an individual Python file.
-- Use only the new standalone panel in the application.
-- Visual frontend creation belongs to Lovable; Antigravity owns the native shell, backend/API, and integration work. Use the provided Lovable brief. Do not author a substitute visual design, contact external services, or access a Lovable account. The user will provide the Lovable-generated UI in the active frontend source for integration. Do not invent or substitute demo UI/data.
+1. Open the fixture folder in Thonny's File view.
+2. Select **Tools → CodeStruct** and verify a new editor tab opens in Thonny's existing main window, without an external browser or separate app window.
+3. Verify the displayed project root equals the File view folder and that the live explorer, architecture hierarchy, selection, inspector fields, relationship navigation, both drawer controls, Refresh, and editor navigation work.
+4. Change Thonny's File view to a second fixture and invoke the Tools command again; prove CodeStruct uses the second folder and cannot display stale data from the first.
+5. Verify missing-folder handling, tab close/reopen and process shutdown. Confirm analysis and refresh do not execute fixture code.
 
-Provide a native **Open Folder** action that opens a Windows folder chooser. The selected directory becomes the current project root and starts the initial analysis automatically. Do not use a browser file input. Add or adapt a host-to-renderer bridge and backend flow safely: a browser-originated unauthenticated request must not be able to register arbitrary filesystem paths. Preserve canonical-root containment, traversal and reparse/symlink protections, local capability boundaries, and static-analysis non-execution. Do not make source code run as part of opening or refreshing a project.
+Capture screenshots showing the actual Thonny window, editor tab, File view folder, and live workbench. Compare the embedded workbench with the MCP Stitch target at a recorded viewport and report material differences. Verify window ownership/parenting so screenshots cannot be mistaken for a standalone window.
 
-The project explorer must represent the complete selected folder tree. Add a safe backend/API contract for directory and symbol data if the existing graph API does not provide it. Every in-root entry must remain navigable, using lazy expansion or pagination for large projects. Under Python files, show the module, classes, functions, and methods in source order; nest methods under their classes. Keep ignored/generated directories safe and explain exclusions rather than silently claiming a complete tree when an entry was skipped.
+Run all configured frontend lint, typecheck, tests, and production build; the full backend pytest suite and coverage threshold; Ruff, Mypy, Python compilation, and all affected Thonny plugin tests. Run focused tests during development and rerun the complete applicable gates after the last code change. Record exact commands, exit codes, counts, and summaries. If a check fails, diagnose and fix it, then rerun the relevant gates; do not stop at a partial pass.
 
-## Phase 3 — Integrate the Lovable workbench requirements
+After the integrated Thonny tab is working, inventory old standalone launchers, host code, and assets. Search code, tests, packaging, shortcuts, scripts, and documentation before deleting anything. Remove only files proven unused by the final Thonny flow; preserve the active frontend, backend, user data, test fixtures, and useful reports. Record every removed path and its reference checks. Commit each completed implementation/cleanup phase separately; do not push and do not include unrelated user changes.
 
-Use `docs/LOVABLE_STANDALONE_PANEL_BRIEF.md` as the UI acceptance source. The user will create the visual screen in Lovable; do not author a replacement visual design in React/CSS or access Lovable externally. Complete the shell, APIs, security, and test work that does not depend on the new export. When the Lovable-generated files are available in the active frontend, wire the host bridge and real data into them and verify the full workbench. Until then, preserve the current frontend and report the exact external handoff needed rather than claiming the visual phase passed. Preserve the existing React Flow decision unless a measured requirement proves it cannot support the top-down hierarchy; the audit explicitly says not to rewrite a graph library solely to match a technology-summary name.
+## Report and tracker requirements
 
-The workbench must:
+Write `docs/verification/THONNY_STITCH_EDITOR_TAB_INTEGRATION.md` with:
 
-- Present a readable, IDE-like single-theme interface. Remove the theme toggle; do not add dark/light mode switching.
-- Open a whole folder through the native host. Remove the project-source selector and demo-root/demo-data options.
-- Remove the separate Analyze action. Opening a folder starts analysis; a visible **Refresh** action reanalyzes the currently open project.
-- Show the architecture in a clear top-to-bottom hierarchy from folder/file to module, class, function, and final method. Keep object dimensions and labels readable; use expand/collapse, pan/zoom, and fit-to-view instead of shrinking the graph until labels are unreadable. Show real relationships without obscuring the parent-child hierarchy.
-- Provide an independently collapsible left drawer with the full folder/file tree and nested Python symbols. Selecting an item synchronizes the tree and graph.
-- Provide an independently collapsible right inspector with the selected node's name, source-location pointer, project-relative path, relationships, and architectural explanation. Related nodes should be navigable. Explanations must use the existing evidence-backed service and distinguish evidence from interpretation.
-- Preserve real graph IDs, location data, relationship status/confidence, pagination, cancellation, diagnostics, error states, and existing Thonny/editor navigation where available. Never substitute fixtures after a live API failure.
-- Make DOT export labels explicit about loaded-slice versus complete-graph behavior; satisfy R3 from the review in the active standalone UI.
+- Confirmed Stitch MCP project/screen identity and concise design-to-workbench mapping.
+- The Thonny version, plugin/editor-tab integration approach, File view root-discovery method, and evidence that the tab is inside Thonny's existing main window.
+- Tested implementation commit(s), report commit(s), changed files, and any safe cleanup inventory.
+- Screenshots and the actual user-visible workflow results, including the two-folder switch test and non-execution evidence.
+- Exact quality-gate commands/results, failures and fixes, untested cases, remaining limitations, final `git status --short`, and `git diff --check` result.
+- Any blocker stated plainly. Do not claim integration based on an Edge/Chrome window, a mock, API-only test, or a report from the earlier standalone implementation.
 
-Do not redesign unrelated product areas or change API contracts without documenting and testing the compatibility impact.
+Update `PROCESS_TRACKER.md` and `docs/codestruct_audit.md` to reflect verified results only. Keep M7 unaccepted until Codex review, and keep M8 not started. Synchronize the designated external audit mirror if the existing workflow permits, and record exact path/hash parity or the blocker. Commit each finished phase with scoped files; never push.
 
-## Frontend folder cleanup
-
-The user explicitly requested removal of frontend files that will not be used by the standalone panel. Perform cleanup only after the replacement is integrated and verified:
-
-1. Inventory frontend directories, entrypoints, build outputs, tests, package manifests/lockfiles, launcher paths, backend bundling, CI, scripts, and documentation references with `rg` and direct inspection.
-2. Identify the actual source needed to build and launch the standalone renderer. Keep `frontend.lovable/` if it remains the active Lovable source. Do not infer that `frontend/` or any subfolder is safe to delete merely because the prototype launcher does not point to it; migrate or remove its tests/build references deliberately.
-3. Delete only exact, proven-unused frontend source folders/files after the new app builds and launches from its retained source. Do not remove historical verification reports, user data, databases, logs, screenshots, lockfiles with live dependency provenance, backend assets, or Thonny files.
-4. Record each removed path and the reference/build/package checks that justified its removal. Verify the final working tree and repository tree; leave no task-created temporary databases or build artifacts unless they are required outputs.
-
-Codex's review attempt created `D:\REP\_codestruct_m7_review.sqlite3` and `D:\REP\_codex_m7_review_tmp_20261013`. Verify these exact paths and that no process is using them; remove them as task-created review artifacts if accessible. Do not broaden cleanup to other files in `D:\REP`.
-
-## Required verification
-
-Keep fixing and rerunning until the applicable gates pass. Record exact commands, exit codes, counts, and evidence; distinguish automated tests from real desktop and visual checks.
-
-- M7: focused cache/export regressions; full backend pytest and configured coverage threshold; Ruff check/format; Mypy; Python compilation; M7 verification runner updated for the corrected behavior.
-- Frontend: active renderer typecheck, unit tests, lint, and production build. Ensure tests exercise tree hierarchy, selected node details, refresh, and partial/complete export labels.
-- Thonny: existing plugin suite and any affected real editor-navigation workflow. Do not claim Thonny integration if not exercised.
-- Real Windows workflow: start the project through its supported shortcut/launcher; observe a separate CodeStruct app window with no browser tab; choose a whole fixture/project folder with the native dialog; inspect a nested Python file, class, function, and method; refresh; select a node and verify its source pointer, relationships, and explanation; verify the left and right drawers open/close; stop the app and confirm task-owned processes/ports are gone.
-- Security: verify invalid roots, traversal, symlink/reparse escape, and unauthenticated root registration are rejected; confirm analysis remains static and does not execute source files.
-- Run `git diff --check` on the complete phase diffs and the final tree. Remove the known trailing whitespace in `docs/verification/M6_REPORT_ACCEPTED.md:3` only if that exact line remains and include the cleanup in a scoped documentation commit.
-- Use isolated test databases and temporary directories under a writable, task-owned location. Never point tests at the prototype user's persistent database.
-
-If a test or runtime flow fails, diagnose and fix it; do not stop after the first test run. If an external dependency blocks the Lovable export or the actual Windows runtime, complete all independent work, preserve the current usable app, record the exact blocker and evidence, and do not claim the standalone visual workflow is complete.
-
-## Phase commits, tracker, audit, and reports
-
-- Commit each completed implementation phase separately, with scoped files and clear messages. The repository already exists: do not create a nested repository, reset history, or push to a remote.
-- Do not stage unrelated user files. Keep the Codex-authored review and brief changes intact.
-- Update `PROCESS_TRACKER.md` and `docs/codestruct_audit.md` only to reflect verified outcomes. Antigravity may mark a phase **Ready for Codex review**; only Codex marks issues Accepted. Do not claim M7 Accepted and do not start M8.
-- Keep the external audit mirror identified in `docs/codestruct_audit.md` synchronized after the audit changes; verify byte/hash parity and record the result. Do not overwrite the archived original audit.
-- Create `docs/verification/M7_CORRECTIONS_1.md` and `docs/verification/STANDALONE_PANEL.md` with implementation commits, exact tests and results, the real Windows workflow evidence, cleanup inventory, failed attempts, untested cases, and remaining limitations. Compare tested code commits with report commits so documentation-only commits cannot conceal implementation changes.
-- Continue through all applicable phases and quality gates before sending **READY FOR REVIEW**. At the end, stop and wait for Codex review; do not begin another milestone. If the Lovable export is not yet available, report the completed non-frontend work and the precise external handoff needed, and leave the active frontend and its dependencies intact.
-
-## Current follow-up — report and evidence reconciliation (2026-10-14)
-
-Antigravity submitted `docs/verification/M7_CORRECTIONS_1.md` and `docs/verification/STANDALONE_PANEL.md` as complete. This follow-up closes reporting and verification gaps against the original task above. Stay within M7 corrections and the standalone project-explorer scope. Do not begin M8. Codex is relying on Antigravity's reports for this pass and is not asking Antigravity to treat an unrecorded check as evidence.
-
-### Required work
-
-1. **Reconcile current status without erasing history.** Update the current milestone row and current-status section in `PROCESS_TRACKER.md` and `docs/codestruct_audit.md` so they reflect the submitted M7 corrections and standalone work as **Ready for Codex review**, with both report links. Preserve the earlier M7 “Changes required” review as historical evidence and state clearly that M7 is not Accepted. Update document dates. Verify SHA-256 parity with the external audit mirror named in `docs/codestruct_audit.md`; if it cannot be accessed, record that as unverified rather than claiming parity.
-
-2. **Run and document the missing real Windows workflow evidence.** Start the application through its supported launcher and capture the actual standalone window. In the native folder picker, open a disposable fixture project containing nested folders and a Python file with a module, class, top-level function, and class method. Record that the tree and canvas show the expected hierarchy; exercise Refresh; select a symbol and verify the right inspector shows its name, source pointer, project-relative path, relationships, and architectural explanation; navigate a relationship; independently open and close both drawers; and record whether the layout, font, and object sizes remain readable at the target window size. Confirm the standalone window has no browser tab/address bar. If any step fails, fix it within this task's scope and repeat the affected workflow. Do not execute project source as part of opening or refreshing it. Save real screenshots or other reproducible evidence under `docs/verification/` and link them in the reports.
-
-3. **Reconcile verification commands and results.** Add exact commands and exit codes for the backend suite/coverage, frontend tests and build, Ruff, Mypy, M7 runtime verification, and Windows workflow. Reconcile the frontend test-count discrepancy between the reports (one reports a skipped test and the other does not); report passed, failed, and skipped counts from the same final checkout. List failed attempts, untested cases, and remaining limitations explicitly. Do not claim a visual or interactive acceptance criterion based only on unit tests or source inspection.
-
-4. **Record commit and cleanup evidence.** Identify the implementation commits and final report/documentation commit. Record the tested-code-to-report commit comparison and confirm whether changes after the tested implementation are documentation/tracker-only. Inventory the exact frontend paths removed, or state that none were removed; include the reference/build/package checks used to justify each deletion. Verify only proven-unused files were removed and no historical reports, user data, databases, or live dependency files were deleted. Check the two exact temporary review-artifact paths listed in the original task, verify no process is using them, and remove them if present. Record final `git status --short` and `git diff --check` results.
-
-5. **Commit and stop.** Commit this scoped evidence/status reconciliation (and any necessary in-scope fixes) separately. Do not push. Update both reports and `PROCESS_TRACKER.md`; stop only after the required evidence is recorded and all applicable gates pass. If a required gate remains blocked, report the exact blocker and do not label the task complete. Do not start another milestone.
-
-## Current follow-up 2 — verify the actual standalone UI workflow (2026-10-14)
-
-The submitted reports reconcile the test counts, commit comparison, cleanup inventory, and tracker status. However, the recorded “Native Folder Selection” step sends a mock fixture path directly to `POST /api/v1/host/choose-folder`; the report does not show selection through the native dialog or the requested interactions in the actual workbench. The reports also omit frontend lint/typecheck results and current audit-mirror hash evidence. Continue only within M7 corrections and the standalone explorer scope. Do not begin M8.
-
-### Required work
-
-1. Launch using the supported Windows launcher and interact with the real standalone window. Click **Open Folder** in the workbench and select the disposable fixture through the displayed Windows folder chooser. Do not substitute a direct API request with a supplied/mock path for this step. Capture evidence of the app window and the selected project view.
-2. In that same UI session, confirm the left explorer displays the nested folder and file structure and the module/class/function/method hierarchy; confirm the canvas presents the architecture top-to-bottom at a readable size. Select a symbol from the tree and verify the right inspector visibly shows its name, source-location pointer, project-relative path, relationships, and architectural explanation. Follow a relationship to another node. Collapse and reopen the left and right drawers independently. Trigger **Refresh** from the UI and confirm the project reloads successfully.
-3. Capture real screenshots for the relevant UI states under `docs/verification/`. Record the tested window size, font/readability observations, object visibility, and any deviations from the requested IDE-like appearance. Do not claim these visual or interaction criteria from API responses, source inspection, or unit tests alone. If any in-scope UI behavior fails, fix it and repeat the affected workflow.
-4. Complete the remaining verification evidence: run the active renderer's lint and typecheck commands if configured, plus the required test/build gates; record exact commands, exit codes, and results. If a gate is not configured, say so explicitly. Verify and record SHA-256 parity between `docs/codestruct_audit.md` and the external audit mirror, or record the exact access blocker without claiming parity.
-5. Update both reports and `PROCESS_TRACKER.md` to separate verified UI interactions from API/test evidence. Preserve **Ready for Codex review** and **not Accepted** status. Record screenshots, test outcomes, audit mirror result, final `git status --short`, and `git diff --check`. Make a scoped commit for this follow-up; do not push. Stop for Codex review only after all accessible required checks pass. If a required UI step is blocked, report it accurately and do not call that criterion passed. Do not begin M8.
-
-## Current authorized task — implement the user-created Stitch design
-
-**This section supersedes the two report/evidence follow-ups immediately above and the prior Lovable visual-ownership instruction wherever they conflict.** Those follow-ups were based on a misunderstanding of the design workflow. Do not continue them as separate work. The user has now created the desired frontend design in Stitch.ai, which is available through Antigravity's Stitch MCP connection. Implement and connect that specific design in the existing CodeStruct standalone application.
-
-The Stitch design is the visual source of truth. Do not create a replacement design, reuse the old Lovable brief as a visual specification, or improvise a different interface. The old brief and previous reports remain useful for behavioral requirements and backend/API context only. The task is frontend design integration and backend connection; it is not Milestone 8 (CS-020–024), and it does not mark M7 Accepted.
-
-### Phase 1 — Inspect and record the Stitch handoff
-
-1. Use the available Stitch MCP tools to locate the design the user just created for CodeStruct, then inspect its screens, components, assets, typography, colors, layout, and interactions. Record the Stitch design/project identity and the source files or assets returned by MCP.
-2. If MCP shows no matching CodeStruct design or leaves multiple designs genuinely ambiguous, do not guess and do not start implementation. Record the precise blocker and stop for Codex review.
-3. Identify the renderer actually launched by `prototype-launcher/prototype-config.json` and map each Stitch screen and interaction to the existing standalone app and backend/API behavior before integrating it. Keep real data and existing API contracts; never leave demo fixtures or fake success states in the live flow.
-
-### Phase 2 — Integrate the design and connect existing behavior
-
-1. Implement the supplied Stitch design in the active standalone renderer, preserving its visible structure, styling, typography, spacing, and assets as closely as the existing stack permits. Adapt the project explorer, architecture canvas, toolbar, and inspector to the supplied design while keeping the user's functional requirements below.
-2. Keep the Windows standalone application window and native **Open Folder** flow. Selecting a whole folder must start analysis and display live project data. Keep **Refresh** in the UI and remove the Analyze action, theme switch, project-source selector, and demo-root/demo-data controls if present.
-3. Preserve top-to-bottom architecture navigation and readable node sizes. Keep an independently collapsible left project/file explorer with nested modules, classes, functions, and methods under their files. Keep an independently collapsible right inspector with the selected node's name, source pointer, project-relative path, relationships, and architectural explanation. Selecting or following a relationship must navigate to the corresponding live node.
-4. Preserve the current backend routes, security boundaries, static-analysis non-execution invariant, errors/loading/cancellation behavior, and editor integration where supported. Do not modify backend contracts merely to fit the UI; if a contract change is truly necessary, document and test its compatibility impact before proceeding.
-5. Keep the existing app usable throughout integration. Do not delete the current renderer, dependencies, assets, tests, reports, or user data until the Stitch version is integrated and verified. At cleanup, inventory references and remove only files proven unused by the active renderer, launcher, tests, packaging, scripts, or docs. Record every removed path and the checks that justified it.
-
-### Required verification and completion report
-
-- Run the active frontend's configured lint, typecheck, tests, and production build. Run backend tests and static checks if backend code or contracts change.
-- Launch through the supported Windows shortcut/launcher. In the standalone window, use **Open Folder** and the actual native folder chooser to open a disposable fixture project. Verify the live tree and canvas hierarchy, selection and inspector fields, relationship navigation, both drawer controls, and UI-triggered Refresh. Capture screenshots of the supplied design running with live project data; record window size and any visual differences from the Stitch source.
-- Confirm the app remains a standalone window, process shutdown leaves no task-owned processes, and analysis/refresh do not execute project code. Use isolated databases and disposable fixtures.
-- Continue fixing and rerunning until the applicable gates pass. Record exact commands, exit codes, counts, screenshots, failures, untested cases, and limitations in `docs/verification/STITCH_FRONTEND_INTEGRATION.md`. Update `PROCESS_TRACKER.md` to identify this as the Stitch design integration task, not M8 and not M7 acceptance. Update `docs/codestruct_audit.md` only if verified scope/status requires it; if changed, synchronize and record the audit-mirror hash or state why unavailable.
-- Commit each completed implementation phase separately with scoped files. Do not push. Preserve unrelated working-tree changes and do not stage unrelated files. Finish the report and cleanup, then stop for Codex review. Do not begin CS-020–024 or any other milestone.
+Continue implementation, testing, and safe cleanup until all requirements above pass or a genuine host/API blocker is evidenced and reported. Then share the report and mark the task ready for review. Do not begin M8 or any work outside this scope.
 
 ## Launch prompt
 
-> <span style="color:green">Read ANTIGRAVITY_TASK.md and implement the user's CodeStruct frontend design from Stitch.ai through the available Stitch MCP connection. Treat that design as the visual source of truth, integrate it into the active Windows standalone renderer, and connect every project/explorer/canvas/inspector/refresh interaction to the existing backend. Preserve the whole-folder native picker, live hierarchical project data, security boundaries, and user data. Run the required frontend and affected backend gates plus the real Windows standalone workflow, fix failures, clean up only proven-unused files, commit each completed phase, and write docs/verification/STITCH_FRONTEND_INTEGRATION.md with evidence. Update PROCESS_TRACKER.md, then stop for Codex review. Do not begin Milestone 8 or CS-020–024.</span>
-
-## Current review follow-up — Stitch integration acceptance evidence (2026-10-15)
-
-Antigravity submitted `docs/verification/STITCH_FRONTEND_INTEGRATION.md` at implementation commit `aa94367`. The report establishes Stitch handoff identity and reports frontend typecheck/tests/build, backend tests, and a Windows standalone launch. This follow-up closes acceptance evidence that is not present in that report; it is not a redesign and does not reopen M7 or start M8.
-
-### Required work
-
-1. **Verify the real UI flow, not only the workflow script/API.** Launch the current standalone app and operate its actual **Open Folder** button. Select a disposable nested Python fixture through the Windows folder picker. In the same visible UI session, demonstrate the folder tree and nested symbols, top-to-bottom graph, selecting a node, all required inspector fields, relationship navigation, independently collapsing/reopening left and right drawers, and UI-triggered Refresh. Capture screenshots of the relevant states and document the exact interactions. If the existing script uses a direct request or supplied path instead of the visible folder dialog, do not count that as native-picker verification.
-
-2. **Verify design fidelity and truthful controls.** Compare screenshots of the running app with the Stitch target at a recorded viewport and identify any material differences. The product is a standalone CodeStruct window styled from the Stitch design; do not describe it as embedded or docked inside Thonny unless it actually is. Inventory visible menu/toolbar/shell actions, including Run, Debug, Save, and the `>>>` prompt. Wire supported actions to real behavior; disable or clearly label unsupported actions. The architecture workbench must not execute analyzed project source or present fabricated runtime/interpreter status as live data. Preserve the Stitch look while keeping each control truthful.
-
-3. **Complete frontend quality gates.** The report lists typecheck, tests, and build but no lint result. Run the active renderer's configured lint command. If no lint script is configured, state that explicitly and run the repository's intended equivalent if present. Record exact command, exit code, and output summary. Rerun only affected tests/builds after any changes; run the complete applicable gates before completion.
-
-4. **Reconcile documentation and finish.** Update `PROCESS_TRACKER.md` to replace the stale statement that visual creation belongs to Lovable with the current Stitch.ai design / Antigravity integration workflow. Update `docs/verification/STITCH_FRONTEND_INTEGRATION.md` or add `docs/verification/STITCH_FRONTEND_INTEGRATION_REVIEW_1.md` with real UI evidence, design comparison, control behavior, lint result, failed attempts, untested cases, limitations, final `git status --short`, and `git diff --check`. Preserve M7 as not Accepted and do not begin CS-020–024. Commit the scoped follow-up; do not push. Stop for Codex review when complete.
-
-## Current launch prompt
-
-> <span style="color:green">Read ANTIGRAVITY_TASK.md and complete the Current review follow-up for Stitch integration acceptance evidence. Use the actual standalone UI and native Open Folder dialog to verify the whole-project workflow, explorer, graph, inspector fields, relationship navigation, both drawers, and UI Refresh; capture screenshots and compare the running app with the Stitch target. Verify Run/Debug/Shell and other visible controls are truthful and cannot execute analyzed project source. Run and report the configured frontend lint gate and all affected quality checks, update PROCESS_TRACKER.md, make a scoped commit, then stop for Codex review. Do not begin M8 or CS-020–024.</span>
+> <span style="color:green">Read ANTIGRAVITY_TASK.md and implement the Stitch workbench as a real Thonny editor tab, launched from Tools and rooted in the folder currently open in Thonny's File view. Do not use an Edge/Chrome or standalone window or a separate folder picker. Keep working through implementation, actual Thonny/backend/frontend verification, and safe cleanup until every requirement passes; update PROCESS_TRACKER.md and the audit, commit each completed phase, record full evidence in docs/verification/THONNY_STITCH_EDITOR_TAB_INTEGRATION.md, then send READY FOR REVIEW. Do not begin Milestone 8, do not mark anything Accepted, and do not push.</span>
