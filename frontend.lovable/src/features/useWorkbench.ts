@@ -4,7 +4,12 @@ import type { AnalysisJob, Diagnostic, GraphResult, Project, Transport, TreeResu
 
 export function captureHandoff() {
   const query = new URLSearchParams(window.location.search);
-  return { analysisId: query.get('analysis_id'), token: query.get('session_token') };
+  return {
+    analysisId: query.get('analysis_id'),
+    token: query.get('session_token'),
+    projectId: query.get('project_id'),
+    embed: query.get('embed'),
+  };
 }
 const message = (error: unknown) => error instanceof Error ? error.message : 'The request failed.';
 const delay = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -17,7 +22,7 @@ const delay = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, r
 export function useWorkbench(transport: Transport) {
   const [handoff] = useState(captureHandoff);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProject] = useState('');
+  const [projectId, setProject] = useState(handoff.projectId || '');
   const [graph, setGraph] = useState<GraphResult | null>(null);
   const [tree, setTree] = useState<TreeResult | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
@@ -79,13 +84,20 @@ export function useWorkbench(transport: Transport) {
   // Capture once before scrubbing; each StrictMode replay loads the captured ID.
   useEffect(() => {
     const url = new URL(window.location.href);
-    url.searchParams.delete('session_token'); url.searchParams.delete('analysis_id');
+    url.searchParams.delete('session_token');
+    url.searchParams.delete('analysis_id');
+    url.searchParams.delete('project_id');
+    url.searchParams.delete('embed');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
     let disposed = false;
     void transport.listProjects().then(items => {
       if (disposed) return;
-      setProjects(items); setProject(items.find(p => p.available)?.id ?? '');
-      if (!handoff.analysisId) setStatus(items.some(p => p.available) ? 'Select a project and Analyze' : 'No authorized projects available');
+      setProjects(items);
+      const targetProj = (handoff.projectId && items.some(p => p.id === handoff.projectId))
+        ? handoff.projectId
+        : (handoff.projectId || (items.find(p => p.available)?.id ?? ''));
+      setProject(targetProj);
+      if (!handoff.analysisId) setStatus(items.some(p => p.available) ? 'Ready' : 'No authorized projects available');
     }).catch(err => { if (!disposed) setError(message(err)); });
     if (handoff.analysisId) void run(false, handoff.analysisId);
     return () => { disposed = true; ++generation.current; controller.current?.abort(); };

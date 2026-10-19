@@ -667,7 +667,6 @@ export function CodeStructWorkbench() {
   const {
     projects,
     projectId,
-    openFolder,
     graph,
     tree,
     diagnostics,
@@ -833,13 +832,6 @@ export function CodeStructWorkbench() {
     projects.find((p) => p.id === projectId)?.display_name ||
     "my_project";
 
-  const activeFileTab = useMemo(() => {
-    if (selectedNode?.location?.path) {
-      return selectedNode.location.path.split(/[\\/]/).pop() || "project.py";
-    }
-    return "project.py";
-  }, [selectedNode]);
-
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#f0f0f0] text-gray-800 select-none">
       {error ? (
@@ -851,278 +843,124 @@ export function CodeStructWorkbench() {
         {status}
       </span>
 
-      {/* BEGIN: OS Window Titlebar */}
+      {/* BEGIN: Docked CodeStruct Architecture Workbench Header */}
       <header
-        className="h-8 bg-white border-b border-gray-300 flex items-center justify-between px-3 text-xs select-none shrink-0"
-        data-purpose="window-titlebar"
+        className="h-9 bg-[#f0f0f0] border-b border-gray-300 flex items-center justify-between px-3 text-xs select-none shrink-0"
+        data-purpose="workbench-header"
       >
+        {/* Left: Branding & Current Project Root Badge */}
         <div className="flex items-center space-x-2">
-          <svg
-            className="w-4 h-4 text-teal-600"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2.2"
-            viewBox="0 0 24 24"
-          >
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-          <span className="font-medium text-gray-700 tracking-tight">
-            CodeStruct Architecture Workbench - {currentProjectTitle}
-          </span>
-        </div>
-        <div className="flex items-center space-x-3 text-gray-500">
-          <button
-            type="button"
-            className="hover:text-black p-1 hover:bg-gray-100 transition-colors cursor-pointer"
-            title="Minimize"
-          >
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M2 8h12v1H2z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="hover:text-black p-1 hover:bg-gray-100 transition-colors cursor-pointer"
-            title="Maximize / Restore"
-            onClick={() => {
-              const action = document.fullscreenElement
-                ? document.exitFullscreen?.()
-                : document.documentElement.requestFullscreen?.();
-              void action?.catch((err) => setError(err.message));
-            }}
-          >
+          <div className="flex items-center space-x-1.5 font-bold text-teal-800">
             <svg
-              className="w-3.5 h-3.5"
+              className="w-4 h-4 text-teal-600"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.2"
-              viewBox="0 0 16 16"
+              strokeWidth="2.5"
+              viewBox="0 0 24 24"
             >
-              <rect height="11" width="11" x="2.5" y="2.5" />
+              <rect height="7" width="7" x="3" y="3" />
+              <rect height="7" width="7" x="14" y="3" />
+              <rect height="7" width="7" x="14" y="14" />
+              <rect height="7" width="7" x="3" y="14" />
             </svg>
-          </button>
+            <span className="tracking-tight text-xs font-semibold">CodeStruct</span>
+          </div>
+
+          <div className="h-4 w-px bg-gray-300 mx-1" />
+
+          {/* Project Root Badge displaying Thonny File view folder */}
+          <div
+            className="flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-300 rounded text-[11px] text-gray-700 font-mono shadow-xs max-w-[420px] truncate"
+            title={`Active Project Root: ${currentProjectTitle}`}
+          >
+            <span className="text-gray-400 font-sans font-medium text-[10px] uppercase tracking-wider">Root:</span>
+            <span className="truncate font-semibold text-gray-800">{currentProjectTitle}</span>
+          </div>
+        </div>
+
+        {/* Center: Search & Refresh Action */}
+        <div className="flex items-center space-x-2 flex-1 max-w-sm mx-4">
+          <div className="relative flex-1">
+            <span className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none text-gray-400">
+              <Search size={13} />
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search files & symbols..."
+              className="w-full text-xs pl-7 pr-6 py-1 border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-teal-600 font-sans shadow-xs"
+            />
+            {search ? (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <X size={12} />
+              </button>
+            ) : null}
+          </div>
+
           <button
             type="button"
-            className="hover:bg-red-500 hover:text-white p-1 transition-colors cursor-pointer"
-            title="Close"
-            onClick={() => window.close()}
+            onClick={() => void load(true)}
+            disabled={busy || !projectId}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-teal-50 hover:text-teal-900 hover:border-teal-400 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            title="Refresh architecture analysis for current project"
           >
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M3.7 3L3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3z" />
-            </svg>
+            <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin text-teal-600")} />
+            <span>Refresh</span>
           </button>
+        </div>
+
+        {/* Right: Drawer Toggles, Export Tooling & Status */}
+        <div className="flex items-center space-x-2">
+          {/* Drawer controls */}
+          <button
+            type="button"
+            onClick={() => setLeftOpen((prev) => !prev)}
+            className={cn(
+              "flex items-center gap-1 px-2 py-0.5 text-xs font-medium border rounded transition-colors cursor-pointer",
+              leftOpen
+                ? "bg-teal-50 border-teal-300 text-teal-800"
+                : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+            )}
+            title={leftOpen ? "Collapse Project Explorer" : "Expand Project Explorer"}
+          >
+            {leftOpen ? <PanelLeftClose size={13} /> : <PanelLeftOpen size={13} />}
+            <span>Explorer</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRightOpen((prev) => !prev)}
+            className={cn(
+              "flex items-center gap-1 px-2 py-0.5 text-xs font-medium border rounded transition-colors cursor-pointer",
+              rightOpen
+                ? "bg-teal-50 border-teal-300 text-teal-800"
+                : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+            )}
+            title={rightOpen ? "Collapse Inspector" : "Expand Inspector"}
+          >
+            {rightOpen ? <PanelRightClose size={13} /> : <PanelRightOpen size={13} />}
+            <span>Inspector</span>
+          </button>
+
+          <div className="h-4 w-px bg-gray-300 mx-0.5" />
+
+          {/* Status Indicator */}
+          <div className="flex items-center gap-1.5 px-1.5 text-xs text-gray-600">
+            <span
+              className={cn(
+                "w-2 h-2 rounded-full",
+                busy ? "bg-amber-500 animate-pulse" : "bg-teal-600"
+              )}
+            />
+            <span className="font-sans text-[11px] truncate max-w-[160px]">{status}</span>
+          </div>
         </div>
       </header>
-
-      {/* BEGIN: Classic Desktop Menu Bar */}
-      <nav
-        className="h-6 bg-[#f0f0f0] border-b border-gray-300 flex items-center px-2 space-x-3 text-[12px] text-gray-800 select-none shrink-0"
-        data-purpose="menubar"
-      >
-        <button
-          type="button"
-          onClick={() => void openFolder()}
-          className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded cursor-pointer"
-          title="Open Project Folder (Ctrl+O)"
-        >
-          File
-        </button>
-        <button
-          type="button"
-          className="px-1.5 text-gray-400 cursor-not-allowed rounded"
-          title="Edit actions disabled in static architecture view"
-          disabled
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => setView((v) => (v === "graph" ? "table" : "graph"))}
-          className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded cursor-pointer"
-          title={`Switch to ${view === "graph" ? "Accessible table" : "Graph"} view`}
-        >
-          View
-        </button>
-        <button
-          type="button"
-          className="px-1.5 text-gray-400 cursor-not-allowed rounded"
-          title="Run actions disabled (Static analysis non-execution invariant enforced)"
-          disabled
-        >
-          Run
-        </button>
-        <div className="relative group">
-          <button
-            type="button"
-            className="px-1.5 bg-blue-100 text-blue-900 font-medium rounded flex items-center gap-1 cursor-default"
-            title="Active Tool: CodeStruct Architecture Workbench"
-          >
-            Tools
-          </button>
-        </div>
-        <button
-          type="button"
-          className="px-1.5 hover:bg-blue-100 hover:text-blue-900 rounded cursor-pointer"
-          title="CodeStruct Python Static Architecture Workbench v2.4"
-          onClick={() => setDockOpen(true)}
-        >
-          Help
-        </button>
-      </nav>
-
-      {/* BEGIN: Thonny Main Toolbar */}
-      <div
-        className="h-10 bg-[#f0f0f0] border-b border-gray-300 flex items-center px-2 space-x-1 select-none shrink-0"
-        data-purpose="toolbar"
-      >
-        <button
-          type="button"
-          disabled
-          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
-          title="New file (Editor action - launch from Thonny to edit files)"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-            <polyline points="13 2 13 9 20 9" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={() => void openFolder()}
-          disabled={busy}
-          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded cursor-pointer"
-          title="Open Project Folder (Ctrl+O)"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={() => downloadSliceDot()}
-          disabled={!graph}
-          className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded cursor-pointer disabled:opacity-40"
-          title="Export loaded slice as DOT"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-            <polyline points="17 21 17 13 7 13 7 21" />
-            <polyline points="7 3 7 8 15 8" />
-          </svg>
-        </button>
-
-        <div className="h-5 w-px bg-gray-300 mx-1" />
-
-        {/* Execution actions disabled to enforce static-analysis non-execution invariant */}
-        <button
-          type="button"
-          disabled
-          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
-          title="Run script (Disabled: CodeStruct is a static analysis workbench; code execution is prohibited)"
-        >
-          <svg className="w-4 h-4 fill-current text-gray-300" viewBox="0 0 24 24">
-            <polygon points="5 3 19 12 5 21 5 3" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          disabled
-          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
-          title="Debug script (Disabled: CodeStruct is a static analysis workbench; code execution is prohibited)"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
-            <circle cx="12" cy="12" r="5" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          disabled
-          className="p-1.5 text-gray-300 cursor-not-allowed rounded"
-          title="Stop execution (No user code is executed during static analysis)"
-        >
-          <svg className="w-4 h-4 fill-current text-gray-300" viewBox="0 0 24 24">
-            <rect height="14" rx="2" width="14" x="5" y="5" />
-          </svg>
-        </button>
-
-        <div className="h-5 w-px bg-gray-300 mx-1" />
-
-        {/* CodeStruct integrated Workbench Actions */}
-        <button
-          type="button"
-          onClick={() => void openFolder()}
-          disabled={busy}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-teal-50 border border-teal-600 text-teal-800 rounded hover:bg-teal-100 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-          title="Open project folder in CodeStruct"
-        >
-          <FolderOpen className="w-3.5 h-3.5 text-teal-700" />
-          <span>Open Folder</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={busy || !projectId}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-          title="Reanalyze project with CodeStruct (static analysis without code execution)"
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", busy && "animate-spin text-teal-600")} />
-          <span>Refresh</span>
-        </button>
-
-        {busy && job ? (
-          <button
-            type="button"
-            onClick={() => void cancel()}
-            className="px-2 py-1 text-xs font-medium bg-white border border-red-300 text-red-700 rounded hover:bg-red-50 cursor-pointer"
-          >
-            Cancel
-          </button>
-        ) : null}
-
-        <div className="ml-auto flex items-center gap-2 px-2 text-xs text-gray-600">
-          <span
-            className={cn(
-              "w-2 h-2 rounded-full",
-              busy ? "bg-amber-500 animate-pulse" : "bg-teal-600"
-            )}
-          />
-          <span className="font-sans text-[11px] truncate max-w-[280px]">{status}</span>
-        </div>
-      </div>
-
-      {/* BEGIN: Editor & Workbench Tab Strip */}
-      <div
-        className="h-7 bg-[#f0f0f0] flex items-end px-2 space-x-1 border-b border-gray-300 text-xs select-none shrink-0"
-        data-purpose="tab-strip"
-      >
-        <div className="h-6 px-3 bg-gray-200 hover:bg-gray-100 text-gray-700 border-t border-x border-gray-300 rounded-t flex items-center space-x-2 cursor-pointer transition-colors">
-          <FileCode2 className="w-3.5 h-3.5 text-gray-500" />
-          <span className="font-mono text-[11px]">{activeFileTab}</span>
-          <span className="text-gray-400 hover:text-gray-700 font-bold ml-1 text-[11px]">×</span>
-        </div>
-        <div className="h-7 px-3 bg-white text-teal-800 font-semibold border-t-2 border-t-teal-600 border-x border-gray-300 rounded-t flex items-center space-x-2 shadow-xs cursor-pointer">
-          <svg
-            className="w-3.5 h-3.5 text-teal-600"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            viewBox="0 0 24 24"
-          >
-            <rect height="7" width="7" x="3" y="3" />
-            <rect height="7" width="7" x="14" y="3" />
-            <rect height="7" width="7" x="14" y="14" />
-            <rect height="7" width="7" x="3" y="14" />
-          </svg>
-          <span>CodeStruct Architecture</span>
-          <span className="text-gray-400 hover:text-gray-700 font-bold ml-1 text-[11px]">×</span>
-        </div>
-      </div>
 
       {/* BEGIN: Main Multi-Panel Workspace */}
       <div className="flex-1 flex overflow-hidden bg-white relative">
