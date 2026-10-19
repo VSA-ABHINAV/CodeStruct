@@ -11,7 +11,9 @@ import logging
 import os
 import queue
 import stat as _stat_module
+import tempfile
 import threading
+import tkinter as tk
 import tkinter.filedialog
 import tkinter.messagebox
 import urllib.error
@@ -19,6 +21,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from pathlib import Path
+from tkinter import ttk
 from typing import Any, Optional, Tuple
 
 try:
@@ -27,6 +30,22 @@ except ImportError:
     # Allow importing and testing outside of full Thonny runtime
     def get_workbench() -> Any:
         return None
+
+try:
+    from thonny.codeview import CodeViewText
+    from thonny.editors import Editor
+except ImportError:
+    class Editor(ttk.Frame):  # type: ignore[no-redef]
+        pass
+
+    class CodeViewText:  # type: ignore[no-redef]
+        def __init__(self, master: Any) -> None:
+            self.master = master
+
+try:
+    import tkwry
+except ImportError:
+    tkwry = None
 
 
 logger = logging.getLogger(__name__)
@@ -44,6 +63,7 @@ _state_lock = threading.Lock()
 # Set to the capability_id after a successful analysis so the poll loop can
 # identify which pending navigate command belongs to this Thonny session.
 _nav_session_token: Optional[str] = None
+_nav_registered_root: Optional[Path] = None
 _nav_registered_file: Optional[Path] = None
 _nav_registered_file_resolved: Optional[Path] = None
 _nav_poll_active: bool = False
@@ -145,6 +165,35 @@ def build_viewer_url(
     return urllib.parse.urlunsplit(
         (parts.scheme, parts.netloc, parts.path, new_query, parts.fragment)
     )
+
+
+def build_workbench_viewer_url(
+    base_url: str,
+    analysis_id: str,
+    project_id: str,
+    session_token: Optional[str] = None,
+) -> str:
+    """
+    Construct viewer URL for embedded Thonny editor tab workbench.
+    Passes embed=thonny, analysis_id, project_id, and optional session_token.
+    """
+    parts = urllib.parse.urlsplit(base_url.strip())
+    existing_params = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    filtered_params = [
+        (k, v)
+        for k, v in existing_params
+        if k not in ("analysis_id", "session_token", "project_id", "embed")
+    ]
+    filtered_params.append(("embed", "thonny"))
+    filtered_params.append(("analysis_id", analysis_id))
+    filtered_params.append(("project_id", project_id))
+    if session_token:
+        filtered_params.append(("session_token", session_token))
+    new_query = urllib.parse.urlencode(filtered_params)
+    return urllib.parse.urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, new_query, parts.fragment)
+    )
+
 
 
 def parse_root_mappings(raw_str: Optional[str] = None) -> dict[str, Path]:
@@ -510,6 +559,350 @@ class CodeStructAnalysisWorker:
                 f"Could not connect to CodeStruct backend at {self.backend_url}.\n"
                 "Please verify that the backend server is running."
             ) from err
+
+
+class DummyCodeView:
+    """Lightweight dummy CodeView satisfying Thonny Editor internal expectations."""
+
+    def __init__(self, master: Any) -> None:
+        self.master = master
+        self.text = master
+
+    def focus_set(self) -> None:
+        pass
+
+    def get_text_widget(self) -> Any:
+        return self.text
+
+
+class CodeStructEditorTab(Editor):
+    """Real Thonny editor tab hosting the CodeStruct Stitch architecture workbench via WebView2."""
+
+    def __init__(self, master: Any, viewer_url: str, project_path: str) -> None:
+        ttk.Frame.__init__(self, master)
+        self.master = master
+        self.viewer_url = viewer_url
+        self.project_path = str(Path(project_path).resolve())
+
+        # Satisfy Thonny's internal _code_view requirement without a full source editor
+        try:
+            self._dummy_text: Any = CodeViewText(self)
+        except Exception:
+            self._dummy_text = DummyCodeView(self)
+        self._code_view: Any = DummyCodeView(self)
+
+        self._webview: Any = None
+        self._container: Any = None
+        if tkwry is not None:
+            try:
+                self._container = tk.Frame(self)
+                webview_dir = Path(tempfile.gettempdir()) / "codestruct_thonny_webview"
+                webview_dir.mkdir(parents=True, exist_ok=True)
+                self._webview = tkwry.WebView(
+                    self._container,
+                    url=viewer_url,
+                    data_directory=str(webview_dir),
+                )
+                self._webview.pack(fill="both", expand=True)
+            except Exception as exc:
+                logger.warning("Could not initialize WebView2 in editor tab: %s", exc)
+                self._webview = None
+                if self._container is not None:
+                    try:
+                        self._container.destroy()
+                    except Exception:
+                        pass
+                    self._container = None
+
+        if self._webview is None:
+            self._fallback_label = ttk.Label(
+                self,
+                text=f"CodeStruct Architecture Workbench\nProject: {self.project_path}\nURL: {viewer_url}",
+                anchor="center",
+                justify="center",
+            )
+            self._fallback_label.pack(fill="both", expand=True, padx=20, pady=20)
+
+    def focus_set(self) -> None:
+        if self._webview is not None:
+            try:
+                self._webview.focus_set()
+                return
+            except Exception:
+                pass
+        try:
+            ttk.Frame.focus_set(self)
+        except Exception:
+            pass
+
+    def is_focused(self) -> bool:
+        try:
+            focused = self.focus_get()
+            return focused == self or (self._webview is not None and focused == self._webview)
+        except Exception:
+            return False
+
+    def get_text_widget(self) -> Any:
+        return self._dummy_text
+
+    def get_long_description(self) -> str:
+        return f"CodeStruct: {self.project_path}"
+
+    def get_title(self) -> str:
+        name = Path(self.project_path).name or self.project_path
+        return f"CodeStruct: {name}"
+
+    def get_uri(self) -> str:
+        return f"codestruct://{self.project_path}"
+
+    def get_target_path(self) -> str:
+        return self.project_path
+
+    def is_local(self) -> bool:
+        return True
+
+    def is_remote(self) -> bool:
+        return False
+
+    def is_untitled(self) -> bool:
+        return False
+
+    def is_modified(self) -> bool:
+        return False
+
+    def save_file_enabled(self) -> bool:
+        return False
+
+    def check_for_external_changes(self) -> None:
+        pass
+
+    def update_url(self, new_url: str, new_project_path: str) -> None:
+        self.viewer_url = new_url
+        self.project_path = str(Path(new_project_path).resolve())
+        if self._webview is not None:
+            try:
+                self._webview.load_url(new_url)
+            except Exception as exc:
+                logger.warning("Failed to load URL in webview: %s", exc)
+        elif hasattr(self, "_fallback_label"):
+            self._fallback_label.config(
+                text=f"CodeStruct Architecture Workbench\nProject: {self.project_path}\nURL: {new_url}"
+            )
+
+    def close(self) -> None:
+        if self._webview is not None:
+            try:
+                self._webview.destroy()
+            except Exception:
+                pass
+            self._webview = None
+        if getattr(self, "_container", None) is not None:
+            try:
+                self._container.destroy()
+            except Exception:
+                pass
+            self._container = None
+        try:
+            ttk.Frame.destroy(self)
+        except Exception:
+            pass
+
+    def destroy(self) -> None:
+        if self._webview is not None:
+            try:
+                self._webview.destroy()
+            except Exception:
+                pass
+            self._webview = None
+        if getattr(self, "_container", None) is not None:
+            try:
+                self._container.destroy()
+            except Exception:
+                pass
+            self._container = None
+        try:
+            ttk.Frame.destroy(self)
+        except Exception:
+            pass
+
+
+def get_file_view_folder(wb: Any) -> Optional[str]:
+    """Retrieve the directory path currently open in Thonny's File view, if any."""
+    if wb is None:
+        return None
+    try:
+        files_view = None
+        if hasattr(wb, "get_view"):
+            files_view = wb.get_view("FilesView", create=False)
+        if files_view is not None and hasattr(files_view, "local_files"):
+            current_focus = getattr(files_view.local_files, "current_focus", None)
+            if current_focus and isinstance(current_focus, str) and os.path.isdir(current_focus):
+                return str(Path(current_focus).resolve())
+    except Exception as exc:
+        logger.debug("Could not read File view folder: %s", exc)
+    return None
+
+
+def open_codestruct_workbench(event: Any = None) -> None:
+    """Action invoked from Thonny Tools menu to open CodeStruct workbench as an editor tab."""
+    wb = get_workbench()
+    if wb is None:
+        return
+
+    # 1. Read current project directory from Thonny's File view
+    folder = get_file_view_folder(wb)
+    if not folder:
+        tkinter.messagebox.showinfo(
+            "No Folder Open in File View",
+            "No project folder is currently open in Thonny's File view.\n\n"
+            "Please open your project folder in Thonny's File view (View → Files) before launching CodeStruct.",
+            parent=wb,
+        )
+        return
+
+    folder_path = Path(folder)
+    try:
+        resolved_folder = folder_path.resolve(strict=True)
+    except (OSError, RuntimeError) as err:
+        tkinter.messagebox.showerror(
+            "Folder Inaccessible",
+            f"The selected project folder cannot be accessed on disk:\n\n{folder}\n({err})",
+            parent=wb,
+        )
+        return
+
+    if not resolved_folder.is_dir():
+        tkinter.messagebox.showerror(
+            "Invalid Directory",
+            f"The selected path is not a directory:\n\n{resolved_folder}",
+            parent=wb,
+        )
+        return
+
+    if resolved_folder == Path(resolved_folder.anchor):
+        tkinter.messagebox.showerror(
+            "Drive Root Rejected",
+            f"Cannot analyze a drive root directly:\n\n{resolved_folder}",
+            parent=wb,
+        )
+        return
+
+    if _has_link_component(resolved_folder) or _is_link_or_reparse(resolved_folder):
+        tkinter.messagebox.showerror(
+            "Symlinks Not Supported",
+            f"CodeStruct does not support symlinks or reparse points for security reasons:\n\n{resolved_folder}",
+            parent=wb,
+        )
+        return
+
+    # 2. Validate URLs as loopback-only
+    backend_url = os.environ.get("CODESTRUCT_BACKEND_URL", DEFAULT_BACKEND_URL)
+    frontend_url = os.environ.get("CODESTRUCT_FRONTEND_URL", DEFAULT_FRONTEND_URL)
+
+    if not is_loopback_url(backend_url):
+        tkinter.messagebox.showerror(
+            "Security Configuration Error",
+            f"The configured backend URL is not a loopback address:\n  {backend_url}\n\n"
+            "CodeStruct only permits loopback addresses (127.0.0.1, localhost, ::1).",
+            parent=wb,
+        )
+        return
+
+    if not is_loopback_url(frontend_url):
+        tkinter.messagebox.showerror(
+            "Security Configuration Error",
+            f"The configured frontend viewer URL is not a loopback address:\n  {frontend_url}\n\n"
+            "CodeStruct only permits loopback addresses (127.0.0.1, localhost, ::1).",
+            parent=wb,
+        )
+        return
+
+    _set_status_message(wb, f"CodeStruct: Registering project folder '{resolved_folder.name}'...")
+
+    # 3. Register folder with backend via POST /api/v1/host/register-folder
+    try:
+        reg_url = f"{backend_url.rstrip('/')}/api/v1/host/register-folder"
+        headers: dict[str, str] = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        host_token = os.environ.get("CODESTRUCT_HOST_TOKEN")
+        if host_token:
+            headers["X-CodeStruct-Host-Token"] = host_token
+
+        payload = json.dumps({"path": str(resolved_folder)}).encode("utf-8")
+        req = urllib.request.Request(reg_url, data=payload, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        root_id = data.get("root_id")
+        analysis_id = data.get("analysis_id")
+        if not root_id or not analysis_id:
+            raise RuntimeError("Backend registration response missing 'root_id' or 'analysis_id'.")
+    except Exception as exc:
+        logger.exception("Failed to register project folder with CodeStruct backend: %s", exc)
+        tkinter.messagebox.showerror(
+            "Backend Connection Error",
+            f"Could not register project folder with CodeStruct backend:\n\n{exc}",
+            parent=wb,
+        )
+        _set_status_message(wb, "CodeStruct: Backend registration failed.")
+        return
+
+    # 4. Construct viewer URL with embed=thonny
+    viewer_url = build_workbench_viewer_url(
+        frontend_url,
+        analysis_id=analysis_id,
+        project_id=root_id,
+        session_token=root_id,
+    )
+
+    editor_notebook = getattr(wb, "get_editor_notebook", lambda: None)()
+    if editor_notebook is None:
+        tkinter.messagebox.showerror(
+            "Thonny Integration Error",
+            "Thonny editor notebook is not available.",
+            parent=wb,
+        )
+        return
+
+    canonical_folder_str = str(resolved_folder)
+
+    # 5. Open or update CodeStructEditorTab in editor_notebook
+    existing_tab: Optional[CodeStructEditorTab] = None
+    for child in editor_notebook.winfo_children():
+        if isinstance(child, CodeStructEditorTab):
+            existing_tab = child
+            break
+
+    if existing_tab is not None:
+        if existing_tab.project_path == canonical_folder_str:
+            editor_notebook.select(existing_tab)
+            existing_tab.focus_set()
+        else:
+            existing_tab.update_url(viewer_url, canonical_folder_str)
+            try:
+                editor_notebook.tab(existing_tab, text=existing_tab.get_title())
+            except Exception:
+                pass
+            editor_notebook.select(existing_tab)
+            existing_tab.focus_set()
+    else:
+        new_tab = CodeStructEditorTab(editor_notebook, viewer_url, canonical_folder_str)
+        editor_notebook.add(new_tab, text=new_tab.get_title())
+        editor_notebook.select(new_tab)
+        new_tab.focus_set()
+
+    # 6. Bind navigation session to the registered root and start navigation polling
+    global _nav_session_token, _nav_registered_root, _nav_registered_file, _nav_registered_file_resolved
+    with _state_lock:
+        _nav_session_token = root_id
+        _nav_registered_root = resolved_folder
+        _nav_registered_file = None
+        _nav_registered_file_resolved = None
+
+    _start_navigation_polling(wb, backend_url)
+    _set_status_message(wb, f"CodeStruct: Workbench loaded for '{resolved_folder.name}'.")
 
 
 def analyze_current_project(event: Any = None) -> None:
@@ -1006,16 +1399,16 @@ def _execute_navigate(
     generation: int = 0,
 ) -> None:
     """Open the specified file at line in Thonny. Runs on the Tk main thread."""
-    global _nav_registered_file, _nav_registered_file_resolved, _nav_session_token
+    global _nav_registered_file, _nav_registered_file_resolved, _nav_registered_root, _nav_session_token
 
-    # 1. Bind to the registered session's file and check generation
+    # 1. Bind to the registered session's file/root and check generation
     if (
         _is_shutting_down
-        or _nav_registered_file is None
+        or (_nav_registered_file is None and _nav_registered_root is None)
         or _nav_session_token != session_token
     ):
         logger.warning(
-            "Navigation rejected: session mismatch or no file registered for session %s.",
+            "Navigation rejected: session mismatch or no file/root registered for session %s.",
             session_token,
         )
         _acknowledge_navigate(
@@ -1042,7 +1435,7 @@ def _execute_navigate(
         )
         return
 
-    # 2. Scope validation: check relative path against registered file
+    # 2. Scope validation: check relative path against registered root or file
     clean_slash = relative_path.replace("\\", "/").strip()
     raw_parts = [p for p in clean_slash.split("/") if p]
     if ".." in raw_parts:
@@ -1063,23 +1456,46 @@ def _execute_navigate(
         clean_rel = clean_rel[2:]
     clean_rel = clean_rel.strip()
 
-    if clean_rel != _nav_registered_file.name:
-        logger.warning(
-            "Navigation rejected: target '%s' does not match session-registered file '%s'.",
-            clean_rel,
-            _nav_registered_file.name,
-        )
-        _acknowledge_navigate(
-            backend_url,
-            session_token,
-            command_id,
-            status="failed",
-            reason="scope_mismatch",
-        )
+    if _nav_registered_root is not None:
+        try:
+            target_path = (_nav_registered_root / clean_rel).resolve(strict=True)
+            if not target_path.is_relative_to(_nav_registered_root):
+                raise ValueError("Target escapes registered root")
+        except Exception as scope_err:
+            logger.warning(
+                "Navigation rejected: target '%s' invalid or escapes root '%s' (%s).",
+                clean_rel,
+                _nav_registered_root,
+                scope_err,
+            )
+            _acknowledge_navigate(
+                backend_url,
+                session_token,
+                command_id,
+                status="failed",
+                reason="scope_mismatch",
+            )
+            return
+    elif _nav_registered_file is not None:
+        if clean_rel != _nav_registered_file.name:
+            logger.warning(
+                "Navigation rejected: target '%s' does not match session-registered file '%s'.",
+                clean_rel,
+                _nav_registered_file.name,
+            )
+            _acknowledge_navigate(
+                backend_url,
+                session_token,
+                command_id,
+                status="failed",
+                reason="scope_mismatch",
+            )
+            return
+        target_path = _nav_registered_file
+    else:
         return
 
     # 3. Canonical containment, path identity & symlink check (defense in depth)
-    target_path = _nav_registered_file
     if _has_link_component(target_path.absolute()) or _is_link_or_reparse(target_path):
         logger.warning("Navigation rejected: target path contains a link or junction.")
         _acknowledge_navigate(
@@ -1117,7 +1533,18 @@ def _execute_navigate(
         )
         return
 
-    if (
+    if _nav_registered_root is not None:
+        if not resolved.is_relative_to(_nav_registered_root):
+            logger.warning("Navigation rejected: resolved file escapes registered root.")
+            _acknowledge_navigate(
+                backend_url,
+                session_token,
+                command_id,
+                status="failed",
+                reason="path_identity_mismatch",
+            )
+            return
+    elif (
         _nav_registered_file_resolved is not None
         and resolved != _nav_registered_file_resolved
     ):
@@ -1283,12 +1710,23 @@ def load_plugin() -> None:
     if wb is None:
         return
 
+    # Primary workbench editor tab command
+    wb.add_command(
+        command_id="codestruct",
+        menu_name="tools",
+        command_label="CodeStruct",
+        handler=open_codestruct_workbench,
+        group=70,
+        caption="CodeStruct Architecture Workbench",
+    )
+
+    # Legacy file analyze command for backwards compatibility
     wb.add_command(
         command_id="codestruct_analyze",
         menu_name="tools",
         command_label="Analyze with CodeStruct",
         handler=analyze_current_project,
-        group=70,
+        group=71,
         caption="Analyze with CodeStruct",
     )
 

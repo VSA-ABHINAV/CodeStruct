@@ -1440,5 +1440,261 @@ class TestPluginNavigation(unittest.TestCase):
             )
 
 
+class TestThonnyStitchEditorTab(unittest.TestCase):
+    """Unit tests for Phase 1: Thonny editor tab integration and File view folder rooting."""
+
+    def setUp(self):
+        self._orig_token = cs._nav_session_token
+        self._orig_root = cs._nav_registered_root
+        self._orig_file = cs._nav_registered_file
+        self._orig_file_res = cs._nav_registered_file_resolved
+        self._orig_gen = cs._nav_poll_generation
+        self._orig_active = cs._nav_poll_active
+
+    def tearDown(self):
+        cs._nav_session_token = self._orig_token
+        cs._nav_registered_root = self._orig_root
+        cs._nav_registered_file = self._orig_file
+        cs._nav_registered_file_resolved = self._orig_file_res
+        cs._nav_poll_generation = self._orig_gen
+        cs._nav_poll_active = self._orig_active
+
+    def test_get_file_view_folder_none_when_no_workbench(self):
+        self.assertIsNone(cs.get_file_view_folder(None))
+
+    def test_get_file_view_folder_none_when_no_files_view(self):
+        wb = MagicMock()
+        wb.get_view.return_value = None
+        self.assertIsNone(cs.get_file_view_folder(wb))
+
+    def test_get_file_view_folder_none_when_invalid_focus(self):
+        wb = MagicMock()
+        files_view = MagicMock()
+        files_view.local_files.current_focus = "/nonexistent/folder/12345"
+        wb.get_view.return_value = files_view
+        self.assertIsNone(cs.get_file_view_folder(wb))
+
+    def test_get_file_view_folder_success(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            files_view.local_files.current_focus = temp_dir
+            wb.get_view.return_value = files_view
+            resolved = cs.get_file_view_folder(wb)
+            self.assertEqual(resolved, str(Path(temp_dir).resolve()))
+
+    def test_build_workbench_viewer_url(self):
+        url = cs.build_workbench_viewer_url(
+            "http://127.0.0.1:5173",
+            analysis_id="an_999",
+            project_id="proj_root",
+            session_token="cap_token_abc",
+        )
+        self.assertIn("embed=thonny", url)
+        self.assertIn("analysis_id=an_999", url)
+        self.assertIn("project_id=proj_root", url)
+        self.assertIn("session_token=cap_token_abc", url)
+
+    def test_open_codestruct_workbench_no_folder_shows_info_dialog(self):
+        wb = MagicMock()
+        wb.get_view.return_value = None
+        with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
+             patch("tkinter.messagebox.showinfo") as mock_info:
+            cs.open_codestruct_workbench()
+            mock_info.assert_called_once()
+            args, _kwargs = mock_info.call_args
+            self.assertEqual(args[0], "No Folder Open in File View")
+            self.assertIn("File view", args[1])
+
+    def test_open_codestruct_workbench_drive_root_rejected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            drive_root = str(Path(temp_dir).resolve().anchor)
+            files_view.local_files.current_focus = drive_root
+            wb.get_view.return_value = files_view
+            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
+                 patch("tkinter.messagebox.showerror") as mock_err:
+                cs.open_codestruct_workbench()
+                mock_err.assert_called_once()
+                args, _ = mock_err.call_args
+                self.assertEqual(args[0], "Drive Root Rejected")
+
+    def test_open_codestruct_workbench_non_loopback_rejected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            files_view.local_files.current_focus = temp_dir
+            wb.get_view.return_value = files_view
+            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
+                 patch.dict(os.environ, {"CODESTRUCT_BACKEND_URL": "http://evil.com"}), \
+                 patch("tkinter.messagebox.showerror") as mock_err:
+                cs.open_codestruct_workbench()
+                mock_err.assert_called_once()
+                args, _ = mock_err.call_args
+                self.assertEqual(args[0], "Security Configuration Error")
+
+    def test_open_codestruct_workbench_creates_tab_and_starts_nav(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            files_view.local_files.current_focus = temp_dir
+            wb.get_view.return_value = files_view
+
+            editor_notebook = MagicMock()
+            editor_notebook.winfo_children.return_value = []
+            wb.get_editor_notebook.return_value = editor_notebook
+
+            resp_data = json.dumps({"root_id": "test_root", "analysis_id": "an_101"}).encode("utf-8")
+            resp_mock = MagicMock()
+            resp_mock.read.return_value = resp_data
+            resp_mock.__enter__.return_value = resp_mock
+
+            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
+                 patch("urllib.request.urlopen", return_value=resp_mock), \
+                 patch("thonnycontrib.codestruct._start_navigation_polling") as mock_poll:
+                cs.open_codestruct_workbench()
+
+                # Verify editor_notebook.add was called with a CodeStructEditorTab
+                editor_notebook.add.assert_called_once()
+                added_tab = editor_notebook.add.call_args[0][0]
+                self.assertIsInstance(added_tab, cs.CodeStructEditorTab)
+                self.assertEqual(added_tab.project_path, str(Path(temp_dir).resolve()))
+                self.assertIn("embed=thonny", added_tab.viewer_url)
+
+                # Verify tab selected
+                editor_notebook.select.assert_called_once_with(added_tab)
+
+                # Verify nav state updated & polling started
+                self.assertEqual(cs._nav_session_token, "test_root")
+                self.assertEqual(cs._nav_registered_root, Path(temp_dir).resolve())
+                mock_poll.assert_called_once_with(wb, "http://127.0.0.1:8000")
+
+    def test_open_codestruct_workbench_switches_folder_updates_tab(self):
+        with tempfile.TemporaryDirectory() as temp_dir_a, tempfile.TemporaryDirectory() as temp_dir_b:
+            wb = MagicMock()
+            files_view = MagicMock()
+            wb.get_view.return_value = files_view
+
+            editor_notebook = MagicMock()
+            existing_tab = cs.CodeStructEditorTab(
+                editor_notebook,
+                "http://127.0.0.1:5173/?embed=thonny&analysis_id=1",
+                temp_dir_a,
+            )
+            editor_notebook.winfo_children.return_value = [existing_tab]
+            wb.get_editor_notebook.return_value = editor_notebook
+
+            # Switch File view to temp_dir_b
+            files_view.local_files.current_focus = temp_dir_b
+
+            resp_data = json.dumps({"root_id": "root_b", "analysis_id": "an_b"}).encode("utf-8")
+            resp_mock = MagicMock()
+            resp_mock.read.return_value = resp_data
+            resp_mock.__enter__.return_value = resp_mock
+
+            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
+                 patch("urllib.request.urlopen", return_value=resp_mock), \
+                 patch("thonnycontrib.codestruct._start_navigation_polling"):
+                cs.open_codestruct_workbench()
+
+                # No new tab should be added (reuse existing tab)
+                editor_notebook.add.assert_not_called()
+                # Existing tab updated to temp_dir_b
+                self.assertEqual(existing_tab.project_path, str(Path(temp_dir_b).resolve()))
+                self.assertIn("analysis_id=an_b", existing_tab.viewer_url)
+                # Tab selected
+                editor_notebook.select.assert_called_with(existing_tab)
+
+    def test_editor_tab_lifecycle_and_methods(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            master = MagicMock()
+            tab = cs.CodeStructEditorTab(master, "http://127.0.0.1:5173/?embed=thonny", temp_dir)
+
+            self.assertTrue(tab.is_local())
+            self.assertFalse(tab.is_remote())
+            self.assertFalse(tab.is_untitled())
+            self.assertFalse(tab.is_modified())
+            self.assertFalse(tab.save_file_enabled())
+            tab.check_for_external_changes()  # should not raise
+
+            self.assertEqual(tab.get_target_path(), str(Path(temp_dir).resolve()))
+            self.assertEqual(tab.get_uri(), f"codestruct://{Path(temp_dir).resolve()}")
+            self.assertIn("CodeStruct", tab.get_title())
+            self.assertIn("CodeStruct", tab.get_long_description())
+            self.assertIsNotNone(tab.get_text_widget())
+
+            # Update URL
+            tab.update_url("http://127.0.0.1:5173/?embed=thonny&v=2", temp_dir)
+            self.assertEqual(tab.viewer_url, "http://127.0.0.1:5173/?embed=thonny&v=2")
+
+            # Clean close/destroy
+            tab.close()
+
+    def test_execute_navigate_project_root_success(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sub = Path(temp_dir) / "sub"
+            sub.mkdir()
+            target_file = sub / "core.py"
+            target_file.write_text("class Engine: pass\n", encoding="utf-8")
+
+            cs._nav_session_token = "proj_session_1"
+            cs._nav_poll_generation = 1
+            cs._nav_registered_root = Path(temp_dir).resolve()
+            cs._nav_registered_file = None
+
+            wb = MagicMock()
+            editor_notebook = MagicMock()
+            wb.get_editor_notebook.return_value = editor_notebook
+
+            with patch("thonnycontrib.codestruct._acknowledge_navigate") as mock_ack:
+                cs._execute_navigate(
+                    wb=wb,
+                    backend_url="http://127.0.0.1:8000",
+                    session_token="proj_session_1",
+                    command_id="cmd_nav_root",
+                    relative_path="sub/core.py",
+                    line=1,
+                    column=1,
+                    generation=1,
+                )
+                editor_notebook.show_file_at_line.assert_called_once_with(
+                    str(target_file.resolve()), 1, 0
+                )
+                mock_ack.assert_called_once_with(
+                    "http://127.0.0.1:8000",
+                    "proj_session_1",
+                    "cmd_nav_root",
+                    status="delivered",
+                )
+
+    def test_execute_navigate_project_root_traversal_rejected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cs._nav_session_token = "proj_session_traversal"
+            cs._nav_poll_generation = 1
+            cs._nav_registered_root = Path(temp_dir).resolve()
+            cs._nav_registered_file = None
+
+            wb = MagicMock()
+            with patch("thonnycontrib.codestruct._acknowledge_navigate") as mock_ack:
+                cs._execute_navigate(
+                    wb=wb,
+                    backend_url="http://127.0.0.1:8000",
+                    session_token="proj_session_traversal",
+                    command_id="cmd_traversal",
+                    relative_path="../../etc/passwd",
+                    line=1,
+                    column=1,
+                    generation=1,
+                )
+                mock_ack.assert_called_once_with(
+                    "http://127.0.0.1:8000",
+                    "proj_session_traversal",
+                    "cmd_traversal",
+                    status="failed",
+                    reason="traversal_rejected",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

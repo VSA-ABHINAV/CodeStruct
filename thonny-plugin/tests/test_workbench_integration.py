@@ -17,16 +17,23 @@ class TestThonnyWorkbenchIntegration(unittest.TestCase):
         thonny._workbench = wb_mock
         try:
             thonnycontrib.codestruct.load_plugin()
-            wb_mock.add_command.assert_called_once()
-            args, kwargs = wb_mock.add_command.call_args
-            cmd_id = kwargs.get("command_id") or args[0]
-            menu = kwargs.get("menu_name") or args[1]
-            label = kwargs.get("command_label") or args[2]
-            self.assertEqual(cmd_id, "codestruct_analyze")
-            self.assertEqual(menu, "tools")
-            self.assertEqual(label, "Analyze with CodeStruct")
+            self.assertEqual(wb_mock.add_command.call_count, 2)
+            calls = wb_mock.add_command.call_args_list
+            registered_ids = {c.kwargs.get("command_id") for c in calls}
+            self.assertIn("codestruct", registered_ids)
+            self.assertIn("codestruct_analyze", registered_ids)
+
+            # Check primary workbench command
+            workbench_call = next(c for c in calls if c.kwargs.get("command_id") == "codestruct")
+            self.assertEqual(workbench_call.kwargs.get("menu_name"), "tools")
+            self.assertEqual(workbench_call.kwargs.get("command_label"), "CodeStruct")
+
+            # Check legacy analyze command
+            analyze_call = next(c for c in calls if c.kwargs.get("command_id") == "codestruct_analyze")
+            self.assertEqual(analyze_call.kwargs.get("menu_name"), "tools")
+            self.assertEqual(analyze_call.kwargs.get("command_label"), "Analyze with CodeStruct")
             print(
-                "PASS: load_plugin successfully registered codestruct_analyze command on Workbench autospec!"
+                "PASS: load_plugin successfully registered both codestruct and codestruct_analyze commands on Workbench autospec!"
             )
         finally:
             thonny._workbench = None
