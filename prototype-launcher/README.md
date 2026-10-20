@@ -13,9 +13,9 @@ This folder provides a complete double-click launcher system for running the Cod
    - Start or safely reuse the backend server on loopback (`http://127.0.0.1:8000`).
    - Start or safely reuse the frontend viewer on loopback (`http://127.0.0.1:5173`).
    - Launch the Thonny IDE with the CodeStruct adapter and an isolated user profile configured.
-3. In Thonny, open any Python file from your project (for example, `main.py`).
-4. Click **Tools → Analyze with CodeStruct** from the top menu bar.
-5. In the confirmation dialog, confirm the project folder to start analysis. The analysis result will automatically open in your default web browser.
+3. In Thonny, ensure your project directory is open in Thonny's **File** view.
+4. Click **Tools → CodeStruct** from the top menu bar.
+5. The CodeStruct architecture workbench opens as an editor tab docked directly in Thonny's main window, automatically analyzing the project folder shown in the File view. No separate browser or external application window is launched.
 
 ### Stopping the Prototype
 1. **Double-click** the **`Stop CodeStruct Prototype`** shortcut on your Windows Desktop (or double-click `Stop-CodeStruct-Prototype.cmd` in this directory).

@@ -326,7 +326,7 @@ function Rollback-NewlyStartedServices {
 }
 
 # 6. Start Backend Service if not reused
-Write-Host "[1/4] Starting / Verifying CodeStruct Backend on $backendUrl..." -ForegroundColor Yellow
+Write-Host "[1/3] Starting / Verifying CodeStruct Backend on $backendUrl..." -ForegroundColor Yellow
 
 if (-not $canReuseBackend) {
     Write-Host "  Launching backend service..." -ForegroundColor Gray
@@ -402,7 +402,7 @@ if (-not $canReuseBackend) {
 }
 
 # 7. Start Frontend Service if not reused
-Write-Host "[2/4] Starting / Verifying CodeStruct Frontend on $frontendUrl..." -ForegroundColor Yellow
+Write-Host "[2/3] Starting / Verifying CodeStruct Frontend on $frontendUrl..." -ForegroundColor Yellow
 
 if (-not $canReuseFrontend) {
     Write-Host "  Launching frontend service with proxy -> $backendUrl..." -ForegroundColor Gray
@@ -470,33 +470,6 @@ if (-not $canReuseFrontend) {
     Write-Host "  Frontend is ready and proxy verified (PID: $frontendPid)." -ForegroundColor Green
 }
 
-# 8. Standalone Windows Desktop Application Window
-Write-Host "[3/4] Launching CodeStruct Standalone Desktop Window..." -ForegroundColor Yellow
-
-$edgePaths = @(
-    "$env:ProgramFiles (x86)\Microsoft\Edge\Application\msedge.exe",
-    "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
-    "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
-)
-$edgeExe = $null
-foreach ($ep in $edgePaths) {
-    if (Test-Path $ep) { $edgeExe = $ep; break }
-}
-
-$appWindowPid = $null
-$appWindowStartTime = $null
-if ($edgeExe) {
-    $appProfileDir = Join-Path $RuntimeDir "app_profile"
-    if (-not (Test-Path $appProfileDir)) { New-Item -ItemType Directory -Path $appProfileDir -Force | Out-Null }
-    $appArgs = "--app=$frontendUrl --window-size=1440,900 --user-data-dir=`"$appProfileDir`""
-    $appProc = Start-Process -FilePath $edgeExe -ArgumentList $appArgs -PassThru
-    $appWindowPid = $appProc.Id
-    $appWindowStartTime = $appProc.StartTime.ToString("o")
-    Write-Host "  CodeStruct Standalone Application Window launched (PID: $appWindowPid)." -ForegroundColor Green
-} else {
-    Write-Host "  [WARN] Native Edge application host not found on system." -ForegroundColor Yellow
-}
-
 # Persist Complete Combined State
 $stateData = [ordered]@{
     backend = [ordered]@{
@@ -509,12 +482,6 @@ $stateData = [ordered]@{
         startTime = $frontendStartTime
         port = $config.frontendPort
     }
-    appWindow = if ($appWindowPid) {
-        [ordered]@{
-            pid = $appWindowPid
-            startTime = $appWindowStartTime
-        }
-    } else { $null }
     rootId = $rootId
     projectDir = $projectDir
     databasePath = $databasePath
@@ -522,8 +489,8 @@ $stateData = [ordered]@{
 }
 Save-LauncherState $stateData
 
-# 9. Thonny Config & Adapter Preflight Check & Launch
-Write-Host "[4/4] Verifying Thonny profile configuration and adapter..." -ForegroundColor Yellow
+# 8. Thonny Config & Adapter Preflight Check & Launch
+Write-Host "[3/3] Verifying Thonny profile configuration and launching Thonny IDE..." -ForegroundColor Yellow
 
 $thonnyPyPath = "$($config.thonnyDirectory);$($config.thonnyPluginDirectory)"
 
@@ -554,8 +521,8 @@ $thonnyProc = [System.Diagnostics.Process]::Start($psiT)
 
 Write-Host "  Thonny IDE launched successfully (PID: $($thonnyProc.Id))." -ForegroundColor Green
 
-# 10. Success Summary
-Write-Host "`n[4/4] CodeStruct Prototype Started Successfully!" -ForegroundColor Green
+# 9. Success Summary
+Write-Host "`n[3/3] CodeStruct Prototype Started Successfully!" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host " Backend Server:    $backendUrl (PID: $backendPid)" -ForegroundColor White
 Write-Host " Frontend Viewer:   $frontendUrl (PID: $frontendPid)" -ForegroundColor White
@@ -565,10 +532,10 @@ Write-Host " Thonny Profile:    $profileDir" -ForegroundColor White
 Write-Host " Logs Directory:    $LogsDir" -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host " Instructions:" -ForegroundColor Yellow
-Write-Host "  1. In Thonny, open your project file (e.g. main.py)." -ForegroundColor White
-Write-Host "  2. In the top menu, click Tools -> Analyze with CodeStruct." -ForegroundColor White
-Write-Host "  3. Confirm the folder to submit analysis and view results in browser." -ForegroundColor White
-Write-Host "  4. To stop services, double-click 'Stop CodeStruct Prototype'." -ForegroundColor White
+Write-Host "  1. Thonny IDE is your primary application window." -ForegroundColor White
+Write-Host "  2. In Thonny's top menu, click Tools -> CodeStruct to open the embedded architecture tab." -ForegroundColor White
+Write-Host "  3. The workbench will analyze and display the project folder open in Thonny's File view." -ForegroundColor White
+Write-Host "  4. To stop background services, run Stop-CodeStruct-Prototype." -ForegroundColor White
 Write-Host "============================================================`n" -ForegroundColor Cyan
 
 Release-Lock

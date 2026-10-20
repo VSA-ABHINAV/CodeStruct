@@ -97,11 +97,7 @@ function Stop-VerifiedProcess([string]$name, [int]$targetPid, [string]$targetSta
 
 $allStopped = $true
 
-# 4. Stop app window, backend, and frontend if verified
-if ($state.appWindow -and $state.appWindow.pid) {
-    $aRes = Stop-VerifiedProcess "Standalone App Window" ([int]$state.appWindow.pid) ([string]$state.appWindow.startTime)
-    if (-not $aRes) { $allStopped = $false }
-}
+# 4. Stop backend and frontend if verified
 
 if ($state.backend -and $state.backend.pid) {
     $bRes = Stop-VerifiedProcess "Backend" ([int]$state.backend.pid) ([string]$state.backend.startTime)
