@@ -1611,7 +1611,7 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             master = MagicMock()
             tab = cs.CodeStructEditorTab(master, "http://127.0.0.1:5173/?embed=thonny", temp_dir)
 
-            self.assertTrue(tab.is_local())
+            self.assertFalse(tab.is_local())
             self.assertFalse(tab.is_remote())
             self.assertFalse(tab.is_untitled())
             self.assertFalse(tab.is_modified())
@@ -1694,6 +1694,42 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
                     status="failed",
                     reason="traversal_rejected",
                 )
+
+    def test_get_file_view_folder_resolves_file_to_containing_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sample_file = Path(temp_dir) / "nested" / "app.py"
+            sample_file.parent.mkdir(parents=True, exist_ok=True)
+            sample_file.write_text("print(1)\n")
+
+            wb = MagicMock()
+            files_view = MagicMock()
+            wb.get_view.return_value = files_view
+
+            # When get_active_local_dir points to a file, resolve to parent directory
+            files_view.get_active_local_dir.return_value = str(sample_file)
+            resolved = cs.get_file_view_folder(wb)
+            self.assertEqual(resolved, str(sample_file.parent.resolve()))
+
+    def test_get_file_view_folder_uses_get_active_directory_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            wb.get_view.return_value = files_view
+
+            # get_active_local_dir raises or returns None
+            files_view.get_active_local_dir.side_effect = AttributeError
+            files_view.local_files.get_active_directory.return_value = temp_dir
+            resolved = cs.get_file_view_folder(wb)
+            self.assertEqual(resolved, str(Path(temp_dir).resolve()))
+
+    def test_load_plugin_registers_only_codestruct_workbench_command(self):
+        wb = MagicMock()
+        with patch("thonnycontrib.codestruct.get_workbench", return_value=wb):
+            cs.load_plugin()
+            # Verify only command_id="codestruct" was added
+            cmd_ids = [call.kwargs.get("command_id") for call in wb.add_command.call_args_list]
+            self.assertIn("codestruct", cmd_ids)
+            self.assertNotIn("codestruct_analyze", cmd_ids)
 
 
 if __name__ == "__main__":

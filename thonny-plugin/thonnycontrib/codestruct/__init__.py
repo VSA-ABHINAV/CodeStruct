@@ -561,12 +561,69 @@ class CodeStructAnalysisWorker:
             ) from err
 
 
+class DummyCodeViewText:
+    """Mock text widget satisfying Thonny Editor internal expectations."""
+
+    def __init__(self, master: Any) -> None:
+        self.master = master
+        self.indent_width = 4
+        self.tab_width = 4
+
+    def update_tab_stops(self) -> None:
+        pass
+
+    def event_generate(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    def set_read_only(self, ro: bool) -> None:
+        pass
+
+    def edit_modified(self, val: bool | None = None) -> bool:
+        return False
+
+    def index(self, idx: str) -> str:
+        return "1.0"
+
+    def see(self, idx: str) -> None:
+        pass
+
+    def bind(self, *args: Any, **kwargs: Any) -> str:
+        return ""
+
+    def focus_set(self) -> None:
+        pass
+
+
 class DummyCodeView:
     """Lightweight dummy CodeView satisfying Thonny Editor internal expectations."""
 
     def __init__(self, master: Any) -> None:
         self.master = master
-        self.text = master
+        self.text = DummyCodeViewText(master)
+
+    def set_gutter_visibility(self, visible: bool) -> None:
+        pass
+
+    def set_line_length_margin(self, margin: int) -> None:
+        pass
+
+    def grid_main_widgets(self) -> None:
+        pass
+
+    def set_file_type(self, ft: str) -> None:
+        pass
+
+    def set_content(self, c: str) -> None:
+        pass
+
+    def set_content_as_bytes(self, b: bytes, keep_undo: bool = False) -> bool:
+        return True
+
+    def get_content(self, up_to_end: bool = False) -> str:
+        return ""
+
+    def get_content_as_bytes(self) -> bytes:
+        return b""
 
     def focus_set(self) -> None:
         pass
@@ -583,20 +640,17 @@ class CodeStructEditorTab(Editor):
         self.master = master
         self.viewer_url = viewer_url
         self.project_path = str(Path(project_path).resolve())
+        self._uri = f"codestruct://{self.project_path}"
 
-        # Satisfy Thonny's internal _code_view requirement without a full source editor
-        try:
-            self._dummy_text: Any = CodeViewText(self)
-        except Exception:
-            self._dummy_text = DummyCodeView(self)
         self._code_view: Any = DummyCodeView(self)
+        self._dummy_text: Any = self._code_view.text
 
         self._webview: Any = None
         self._container: Any = None
         if tkwry is not None:
             try:
                 self._container = tk.Frame(self)
-                webview_dir = Path(tempfile.gettempdir()) / "codestruct_thonny_webview"
+                webview_dir = Path(tempfile.gettempdir()) / f"codestruct_thonny_webview_{os.getpid()}"
                 webview_dir.mkdir(parents=True, exist_ok=True)
                 self._webview = tkwry.WebView(
                     self._container,
@@ -638,7 +692,11 @@ class CodeStructEditorTab(Editor):
     def is_focused(self) -> bool:
         try:
             focused = self.focus_get()
-            return focused == self or (self._webview is not None and focused == self._webview)
+            return (
+                focused == self
+                or (self._container is not None and focused == self._container)
+                or (self._webview is not None and focused == self._webview)
+            )
         except Exception:
             return False
 
@@ -653,13 +711,13 @@ class CodeStructEditorTab(Editor):
         return f"CodeStruct: {name}"
 
     def get_uri(self) -> str:
-        return f"codestruct://{self.project_path}"
+        return self._uri
 
     def get_target_path(self) -> str:
         return self.project_path
 
     def is_local(self) -> bool:
-        return True
+        return False
 
     def is_remote(self) -> bool:
         return False
@@ -676,9 +734,19 @@ class CodeStructEditorTab(Editor):
     def check_for_external_changes(self) -> None:
         pass
 
+    def update_appearance(self) -> None:
+        pass
+
+    def update_file_type(self) -> None:
+        pass
+
+    def get_content(self, up_to_end: bool = False) -> str:
+        return ""
+
     def update_url(self, new_url: str, new_project_path: str) -> None:
         self.viewer_url = new_url
         self.project_path = str(Path(new_project_path).resolve())
+        self._uri = f"codestruct://{self.project_path}"
         if self._webview is not None:
             try:
                 self._webview.load_url(new_url)
@@ -734,10 +802,47 @@ def get_file_view_folder(wb: Any) -> Optional[str]:
         files_view = None
         if hasattr(wb, "get_view"):
             files_view = wb.get_view("FilesView", create=False)
-        if files_view is not None and hasattr(files_view, "local_files"):
-            current_focus = getattr(files_view.local_files, "current_focus", None)
-            if current_focus and isinstance(current_focus, str) and os.path.isdir(current_focus):
-                return str(Path(current_focus).resolve())
+            if files_view is None:
+                files_view = wb.get_view("FilesView", create=True)
+
+        if files_view is not None:
+            raw_path: Optional[str] = None
+            # 1. Primary supported Thonny API: get_active_local_dir()
+            if hasattr(files_view, "get_active_local_dir"):
+                try:
+                    res = files_view.get_active_local_dir()
+                    if isinstance(res, str) and res.strip():
+                        raw_path = res.strip()
+                except Exception:
+                    raw_path = None
+
+            # 2. Direct local_files browser API: get_active_directory()
+            if not raw_path and hasattr(files_view, "local_files"):
+                local_files = files_view.local_files
+                if hasattr(local_files, "get_active_directory"):
+                    try:
+                        res = local_files.get_active_directory()
+                        if isinstance(res, str) and res.strip():
+                            raw_path = res.strip()
+                    except Exception:
+                        pass
+
+                # 3. Fallback: inspect current_focus if active directory was unset
+                if not raw_path and hasattr(local_files, "current_focus"):
+                    res = getattr(local_files, "current_focus", None)
+                    if isinstance(res, str) and res.strip():
+                        raw_path = res.strip()
+
+            if raw_path and isinstance(raw_path, str) and raw_path.strip():
+                p = Path(raw_path.strip())
+                try:
+                    # If pointed at a file, determine the containing folder view/root
+                    if p.is_file():
+                        p = p.parent
+                    if p.is_dir():
+                        return str(p.resolve())
+                except OSError:
+                    pass
     except Exception as exc:
         logger.debug("Could not read File view folder: %s", exc)
     return None
@@ -1720,16 +1825,6 @@ def load_plugin() -> None:
         caption="CodeStruct Architecture Workbench",
     )
 
-    # Legacy file analyze command for backwards compatibility
-    wb.add_command(
-        command_id="codestruct_analyze",
-        menu_name="tools",
-        command_label="Analyze with CodeStruct",
-        handler=analyze_current_project,
-        group=71,
-        caption="Analyze with CodeStruct",
-    )
-
     try:
         wb.bind("WorkbenchClose", on_workbench_shutdown, True)
     except Exception:
@@ -1738,5 +1833,4 @@ def load_plugin() -> None:
         wb.bind("<Destroy>", on_workbench_shutdown, True)
     except Exception:
         pass
-
     logger.info("CodeStruct Thonny plugin loaded successfully")

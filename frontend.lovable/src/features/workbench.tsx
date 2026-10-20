@@ -1239,7 +1239,7 @@ export function CodeStructWorkbench() {
                   <MiniMap
                     nodeColor={(node) => {
                       const k = (
-                        node.data?.node as GraphNode | undefined
+                        node.data?.["node"] as GraphNode | undefined
                       )?.kind?.toLowerCase();
                       if (k === "class") return "#16a34a";
                       if (k === "function") return "#d97706";
