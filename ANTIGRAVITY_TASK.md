@@ -2,7 +2,9 @@
 
 > **Current handoff (2026-10-21):** M7 has been accepted on the report-based review recorded in `docs/verification/M7_CODEX_REVIEW_2_ACCEPTED_REPORT_BASED.md`. The next authorized task is M8 (CS-020–024), specified in `ANTIGRAVITY_M8_TASK.md`. That file supersedes the historical M7 instructions below. M8 is not started until Antigravity begins.
 
-> <span style="color:green">Read ANTIGRAVITY_M8_TASK.md and implement Milestone 8 (CS-020–024) within its scope. Run the reproducible accuracy/performance evaluation, storage-fault checks, available manual accessibility observation, documentation reconciliation, and clean-package install/lifecycle workflow; keep fixing and rerunning applicable gates until requirements pass or a genuine owner/environment blocker is evidenced. Update PROCESS_TRACKER.md and docs/codestruct_audit.md, write docs/verification/M8.md, commit scoped phases, then send READY FOR REVIEW and stop. Do not mark M8 Accepted, do not implement CS-025, and do not push, publish, deploy, or expose services publicly.</span>
+> **Latest user instruction (2026-10-21):** Complete M8 owner-default finalization and push the scoped changes to the existing Git remote under `ANTIGRAVITY_M8_FINALIZATION_TASK.md`. This supersedes the earlier no-push restriction for this specific authorized Git sync only. Do not publish packages or change repository visibility.
+
+> <span style="color:green">Read ANTIGRAVITY_M8_FINALIZATION_TASK.md and complete the authorized M8 closeout. Apply the approved MIT/license, maintainer-handle, and Git-only distribution defaults; keep human Narrator observation explicitly pending and provide the owner checklist. Reconcile the M8 report/tracker/audit, rerun the applicable full gates and clean-package lifecycle, commit scoped changes, then push only to the existing remote/current branch without force or visibility changes. Do not publish packages, create tags/releases, mark M8 Accepted, or begin work beyond M8. Record commits and push evidence, send READY FOR REVIEW, and stop.</span>
 
 Date: 2026-10-16
 Repository: `D:\REP\Codestruct\Codestruct`

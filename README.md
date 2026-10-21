@@ -197,7 +197,13 @@ CodeStruct Milestone 1 through Milestone 8 implementations and evaluations are c
 - **Accessibility Verification (M8 / CS-022):** Automated keyboard navigation, ARIA landmarks/roles, focus rings, and reduced-motion checks verified; live screen reader observation protocol documented.
 - **Packaging & Clean Installation (M8 / CS-024):** Frontend production build bundled into Python wheel (`codestruct-0.1.0.dev0-py3-none-any.whl`); verified clean virtualenv installation, CLI doctor diagnostics, startup/shutdown/restart lifecycle, upgrade/reinstall, and permissive dependency license audit.
 
-Advanced CS-025 features (e.g. distributed multi-tenant execution) remain deferred beyond Milestone 8. Public release, PyPI publication, and project ownership metadata (license, maintainers) remain explicit owner decisions.
+Advanced CS-025 features (e.g. distributed multi-tenant execution) remain deferred beyond Milestone 8.
+
+## License and Maintainers
+
+- **License:** CodeStruct is licensed under the [MIT License](LICENSE), Copyright (c) 2026 `VSA-ABHINAV`. Third-party dependencies and bundled assets retain their respective permissive licenses (MIT, BSD-3-Clause, Apache-2.0, PSF).
+- **Maintainer:** `VSA-ABHINAV` ([GitHub](https://github.com/VSA-ABHINAV)).
+- **Distribution:** Source and packaged builds are distributed exclusively via the official Git repository (`https://github.com/VSA-ABHINAV/CodeStruct.git`). Public PyPI package publishing is not authorized.
 
 Contribution and release practices are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 Security reporting guidance is in [SECURITY.md](SECURITY.md).
