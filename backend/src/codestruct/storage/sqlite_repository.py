@@ -275,6 +275,7 @@ class SQLiteRepository:
                 connection.execute(
                     "UPDATE cache_results SET invalid=1 WHERE cache_key=?", (key,)
                 )
+                connection.commit()
                 raise CorruptCacheEntryError("cached graph integrity check failed")
             try:
                 graph = json.loads(raw)
@@ -283,6 +284,7 @@ class SQLiteRepository:
                 connection.execute(
                     "UPDATE cache_results SET invalid=1 WHERE cache_key=?", (key,)
                 )
+                connection.commit()
                 raise CorruptCacheEntryError(
                     "cached graph validation failed"
                 ) from error
