@@ -173,14 +173,31 @@ removes only ignored generated fixtures under the repository test-output area:
 python tests/performance/benchmark.py
 ```
 
+## Thonny IDE integration and single-window workflow
+
+CodeStruct integrates natively into the Thonny IDE as an embedded editor tab:
+
+1. Launch through the Windows prototype script (`Start-CodeStruct-Prototype.cmd` or `prototype-launcher/Start-CodeStruct-Prototype.ps1`). This starts the local backend and frontend services on loopback and launches Thonny as the single application window (zero standalone browser windows).
+2. Open a Python project in Thonny's **File view**.
+3. Click **Tools → CodeStruct** to open or focus the architecture workbench inside Thonny's editor notebook (`CodeStructEditorTab`).
+4. Explore project architecture, search symbols, inspect nodes/relationships, switch between the interactive graph and accessible table, and click **Open in editor** to navigate directly to the source definition in Thonny.
+5. Close or restart services using `prototype-launcher/Stop-CodeStruct-Prototype.ps1` safely without terminating Thonny.
+
 ## Project status
 
-Deterministic AST analysis, conservative static graph resolution, the v1
-background-job API, persistent caching, and interactive graph exploration are
-implemented. Dynamic analysis, incremental file caching, architecture metrics,
-LLM features, and editor integration are not part of the current application.
-Large graphs are not virtualized, source navigation is unavailable, and macOS,
-Linux, real screen readers, 200% zoom, and complete fault injection remain pending.
+CodeStruct Milestone 1 through Milestone 8 implementations and evaluations are complete:
+
+- **Static Analysis & Graph Resolution (M1–M3):** Deterministic AST extraction, conservative static resolution, type stub (`.pyi`) handling, and schema-validated dependency graphs. Target code is never executed during static analysis.
+- **Frontend & Navigation (M4):** React Flow visual workbench with accessible synchronized table, search/filter controls, and two-way in-IDE source navigation (`POST /api/v1/editor/navigate`).
+- **Dynamic Runtime Tracing (M5):** Optional, user-consented dynamic call tracing (`DynamicTracer`) using `sys.setprofile` hooks with full call stack accounting, hook restoration, and evidence merging.
+- **Grounded Semantic Layer (M6):** Architectural role explanations with canonical source citations, deterministic offline rule-based fallback, and strict Pydantic contract validation.
+- **Incremental Caching & Graphviz Export (M7):** Bounded per-file parse cache (`PersistentFileParseCache`) with strict LRU byte budget eviction, streaming Graphviz DOT generation (Slice vs Complete Graph), and embedded Thonny editor tab (`tkwry.WebView` in `CodeStructEditorTab`).
+- **Accuracy & Performance Evaluation (M8 / CS-020):** Reproducible evaluation benchmark suite (`scripts/evaluate_accuracy_performance.py`) across 4 ground-truth projects (`small_project`, `nested_project`, `typed_project`, `larger_project`), achieving 100% precision, 100% recall, and 1.0000 F1 across all supported entity and relationship categories within verified scale budgets.
+- **Storage Fault Tolerance (M8 / CS-021):** Handled unwritable databases (HTTP 503 `STORAGE_UNAVAILABLE`), transaction rollback guarantees, corrupt cache detection/eviction, and restart recovery transitioning interrupted jobs to `FAILED` (`PROCESS_RESTARTED`) while preserving completed analyses.
+- **Accessibility Verification (M8 / CS-022):** Automated keyboard navigation, ARIA landmarks/roles, focus rings, and reduced-motion checks verified; live screen reader observation protocol documented.
+- **Packaging & Clean Installation (M8 / CS-024):** Frontend production build bundled into Python wheel (`codestruct-0.1.0.dev0-py3-none-any.whl`); verified clean virtualenv installation, CLI doctor diagnostics, startup/shutdown/restart lifecycle, upgrade/reinstall, and permissive dependency license audit.
+
+Advanced CS-025 features (e.g. distributed multi-tenant execution) remain deferred beyond Milestone 8. Public release, PyPI publication, and project ownership metadata (license, maintainers) remain explicit owner decisions.
 
 Contribution and release practices are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 Security reporting guidance is in [SECURITY.md](SECURITY.md).

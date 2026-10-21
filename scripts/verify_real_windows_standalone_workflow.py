@@ -170,7 +170,9 @@ def main() -> int:
     time.sleep(2)
 
     # 5. Open Folder via Native Windows Dialog & Initial Analysis
-    print("[Step 5] Triggering native Windows folder chooser and automatic project analysis...")
+    print(
+        "[Step 5] Triggering native Windows folder chooser and automatic project analysis..."
+    )
     dialog_detected = threading.Event()
     dialog_info: dict[str, str | int | None] = {"hwnd": None, "title": None}
 
@@ -186,12 +188,18 @@ def main() -> int:
                     b = ctypes.create_unicode_buffer(256)
                     user32.GetWindowTextW(h, b, 256)
                     t = b.value
-                    if "Select Project Folder" in t or "Browse For Folder" in t or "Browse for Folder" in t:
+                    if (
+                        "Select Project Folder" in t
+                        or "Browse For Folder" in t
+                        or "Browse for Folder" in t
+                    ):
                         found = (h, t)
                         return False
                 return True
 
-            cb = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(enum_cb)
+            cb = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(
+                enum_cb
+            )
             user32.EnumWindows(cb, 0)
             if found:
                 dialog_info["hwnd"], dialog_info["title"] = found
@@ -213,7 +221,9 @@ def main() -> int:
         print("[ERROR] Native Windows FolderBrowserDialog was not opened or detected!")
         return 1
 
-    print(f"  [Native Dialog Verified] HWND: {dialog_info['hwnd']}, Title: '{dialog_info['title']}', Confirmed via native IDOK.")
+    print(
+        f"  [Native Dialog Verified] HWND: {dialog_info['hwnd']}, Title: '{dialog_info['title']}', Confirmed via native IDOK."
+    )
     print(f"  Choose folder response: {choose_resp}")
     root_id = choose_resp.get("root_id")
     analysis_id = choose_resp.get("analysis_id")

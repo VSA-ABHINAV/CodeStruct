@@ -32,7 +32,9 @@ RUNTIME_DIR = LAUNCHER_DIR / "runtime"
 STATE_FILE = RUNTIME_DIR / "prototype-state.json"
 APP_PROFILE_DIR = RUNTIME_DIR / "app_profile"
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger("verify_single_window")
 
 
@@ -116,7 +118,9 @@ def main() -> int:
     time.sleep(1)
 
     # Verify runtime app_profile does not exist
-    assert not APP_PROFILE_DIR.exists(), f"app_profile directory should not exist: {APP_PROFILE_DIR}"
+    assert not APP_PROFILE_DIR.exists(), (
+        f"app_profile directory should not exist: {APP_PROFILE_DIR}"
+    )
     logger.info("  Clean initial state confirmed. runtime/app_profile does not exist.")
 
     # 2. Execute prototype shortcut: Start-CodeStruct-Prototype.cmd
@@ -150,7 +154,9 @@ def main() -> int:
     logger.info("  Backend PID: %d, Frontend PID: %d", backend_pid, frontend_pid)
 
     # 4. Verify HTTP and Proxy Readiness
-    logger.info("[Step 4] Verifying Backend (8000), Frontend (5173), and Proxy readiness...")
+    logger.info(
+        "[Step 4] Verifying Backend (8000), Frontend (5173), and Proxy readiness..."
+    )
     b_status, b_body = http_get("http://127.0.0.1:8000/api/v1/projects")
     assert b_status == 200, f"Backend HTTP status {b_status}"
     logger.info("  Backend /api/v1/projects: HTTP 200 OK")
@@ -164,7 +170,9 @@ def main() -> int:
     logger.info("  Frontend Proxy /api/v1/projects: HTTP 200 OK")
 
     # 5. Verify Visible Windows & Edge Processes
-    logger.info("[Step 5] Checking visible top-level windows and process command lines...")
+    logger.info(
+        "[Step 5] Checking visible top-level windows and process command lines..."
+    )
     visible_windows = get_visible_windows()
     logger.info("  Detected %d visible top-level windows:", len(visible_windows))
     thonny_window_found = False
@@ -178,15 +186,27 @@ def main() -> int:
         if "thonny" in title.lower():
             thonny_window_found = True
             thonny_pid = pid
-            logger.info("  -> FOUND THONNY WINDOW: HWND=%s, PID=%d, Title='%s'", w["hwnd"], pid, title)
+            logger.info(
+                "  -> FOUND THONNY WINDOW: HWND=%s, PID=%d, Title='%s'",
+                w["hwnd"],
+                pid,
+                title,
+            )
         elif "codestruct" in title.lower():
             # Check if this is an external standalone window
-            logger.warning("  -> NOTICE: Window with 'CodeStruct' in title: HWND=%s, PID=%d, Title='%s'", w["hwnd"], pid, title)
+            logger.warning(
+                "  -> NOTICE: Window with 'CodeStruct' in title: HWND=%s, PID=%d, Title='%s'",
+                w["hwnd"],
+                pid,
+                title,
+            )
             # If it's a standalone Edge window, record it
             standalone_edge_window_found = True
 
     assert thonny_window_found, "Thonny top-level window must be visible!"
-    assert not standalone_edge_window_found, "Standalone CodeStruct window must NOT exist!"
+    assert not standalone_edge_window_found, (
+        "Standalone CodeStruct window must NOT exist!"
+    )
     logger.info("  Confirmed: NO standalone CodeStruct application window found.")
 
     # Check all msedge processes for --app flag
@@ -198,11 +218,17 @@ def main() -> int:
         pid = ep.get("ProcessId")
         if "--app=" in cmdline and "5173" in cmdline:
             standalone_edge_procs.append(ep)
-            logger.error("  -> FOUND STANDALONE EDGE APP PROCESS: PID=%s, CmdLine=%s", pid, cmdline)
+            logger.error(
+                "  -> FOUND STANDALONE EDGE APP PROCESS: PID=%s, CmdLine=%s",
+                pid,
+                cmdline,
+            )
         else:
             logger.info("  -> Non-standalone Edge process: PID=%s", pid)
 
-    assert len(standalone_edge_procs) == 0, f"Found {len(standalone_edge_procs)} standalone Edge --app processes!"
+    assert len(standalone_edge_procs) == 0, (
+        f"Found {len(standalone_edge_procs)} standalone Edge --app processes!"
+    )
     logger.info("  Confirmed: Exactly 0 standalone Edge --app processes running.")
 
     # Check Thonny process is alive
@@ -213,11 +239,15 @@ def main() -> int:
         if "thonny" in cmdline.lower():
             thonny_found = True
             thonny_pid = int(tp.get("ProcessId"))
-            logger.info("  Found active Thonny process: PID=%d, CmdLine=%s", thonny_pid, cmdline)
+            logger.info(
+                "  Found active Thonny process: PID=%d, CmdLine=%s", thonny_pid, cmdline
+            )
             break
 
     assert thonny_found, "Thonny process must be running after prototype start."
-    logger.info("  Confirmed: Thonny IDE is running and is the single application window.")
+    logger.info(
+        "  Confirmed: Thonny IDE is running and is the single application window."
+    )
 
     # 6. Verify Stop Leaves Thonny Safe
     logger.info("[Step 6] Testing Stop-CodeStruct-Prototype.cmd...")
@@ -234,7 +264,9 @@ def main() -> int:
 
     # Ports must be freed
     assert not is_port_listening(8000), "Backend port 8000 must be released after Stop."
-    assert not is_port_listening(5173), "Frontend port 5173 must be released after Stop."
+    assert not is_port_listening(5173), (
+        "Frontend port 5173 must be released after Stop."
+    )
     assert not STATE_FILE.exists(), "State file must be removed after clean Stop."
     logger.info("  Ports 8000 and 5173 are freed. State file cleared.")
 
@@ -247,8 +279,13 @@ def main() -> int:
             thonny_still_alive = True
             break
 
-    assert thonny_still_alive, f"Thonny process (PID {thonny_pid}) was terminated by Stop! It must remain running."
-    logger.info("  SUCCESS: Thonny IDE (PID %d) remained safely alive and open after Stop.", thonny_pid)
+    assert thonny_still_alive, (
+        f"Thonny process (PID {thonny_pid}) was terminated by Stop! It must remain running."
+    )
+    logger.info(
+        "  SUCCESS: Thonny IDE (PID %d) remained safely alive and open after Stop.",
+        thonny_pid,
+    )
 
     # 7. Verify Restart
     logger.info("[Step 7] Testing Restart via Start-CodeStruct-Prototype.cmd...")
@@ -265,18 +302,26 @@ def main() -> int:
 
     # Verify ports listening again
     assert is_port_listening(8000), "Backend port 8000 must be listening after Restart."
-    assert is_port_listening(5173), "Frontend port 5173 must be listening after Restart."
+    assert is_port_listening(5173), (
+        "Frontend port 5173 must be listening after Restart."
+    )
 
     # Verify again NO standalone Edge app
     edge_procs_restart = get_command_lines_for_process("msedge.exe")
     for ep in edge_procs_restart:
         cmdline = ep.get("CommandLine") or ""
-        assert "--app=" not in cmdline or "5173" not in cmdline, f"Standalone Edge app detected on restart: {cmdline}"
+        assert "--app=" not in cmdline or "5173" not in cmdline, (
+            f"Standalone Edge app detected on restart: {cmdline}"
+        )
 
-    logger.info("  SUCCESS: Restart clean, services restored, ZERO duplicate or standalone windows.")
+    logger.info(
+        "  SUCCESS: Restart clean, services restored, ZERO duplicate or standalone windows."
+    )
 
     # 8. Final Clean Stop & Close Test Thonny
-    logger.info("[Step 8] Final cleanup: stopping services and terminating test Thonny...")
+    logger.info(
+        "[Step 8] Final cleanup: stopping services and terminating test Thonny..."
+    )
     subprocess.run(
         ["cmd.exe", "/c", str(LAUNCHER_DIR / "Stop-CodeStruct-Prototype.cmd")],
         capture_output=True,
@@ -288,7 +333,11 @@ def main() -> int:
     if thonny_pid:
         try:
             logger.info("  Terminating test Thonny PID %d...", thonny_pid)
-            subprocess.run(["taskkill", "/PID", str(thonny_pid), "/T", "/F"], capture_output=True, check=False)
+            subprocess.run(
+                ["taskkill", "/PID", str(thonny_pid), "/T", "/F"],
+                capture_output=True,
+                check=False,
+            )
         except Exception:
             pass
 

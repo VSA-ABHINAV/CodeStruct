@@ -1498,8 +1498,10 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
     def test_open_codestruct_workbench_no_folder_shows_info_dialog(self):
         wb = MagicMock()
         wb.get_view.return_value = None
-        with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
-             patch("tkinter.messagebox.showinfo") as mock_info:
+        with (
+            patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+            patch("tkinter.messagebox.showinfo") as mock_info,
+        ):
             cs.open_codestruct_workbench()
             mock_info.assert_called_once()
             args, _kwargs = mock_info.call_args
@@ -1513,8 +1515,10 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             drive_root = str(Path(temp_dir).resolve().anchor)
             files_view.local_files.current_focus = drive_root
             wb.get_view.return_value = files_view
-            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
-                 patch("tkinter.messagebox.showerror") as mock_err:
+            with (
+                patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+                patch("tkinter.messagebox.showerror") as mock_err,
+            ):
                 cs.open_codestruct_workbench()
                 mock_err.assert_called_once()
                 args, _ = mock_err.call_args
@@ -1526,9 +1530,11 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             files_view = MagicMock()
             files_view.local_files.current_focus = temp_dir
             wb.get_view.return_value = files_view
-            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
-                 patch.dict(os.environ, {"CODESTRUCT_BACKEND_URL": "http://evil.com"}), \
-                 patch("tkinter.messagebox.showerror") as mock_err:
+            with (
+                patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+                patch.dict(os.environ, {"CODESTRUCT_BACKEND_URL": "http://evil.com"}),
+                patch("tkinter.messagebox.showerror") as mock_err,
+            ):
                 cs.open_codestruct_workbench()
                 mock_err.assert_called_once()
                 args, _ = mock_err.call_args
@@ -1545,14 +1551,20 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             editor_notebook.winfo_children.return_value = []
             wb.get_editor_notebook.return_value = editor_notebook
 
-            resp_data = json.dumps({"root_id": "test_root", "analysis_id": "an_101"}).encode("utf-8")
+            resp_data = json.dumps(
+                {"root_id": "test_root", "analysis_id": "an_101"}
+            ).encode("utf-8")
             resp_mock = MagicMock()
             resp_mock.read.return_value = resp_data
             resp_mock.__enter__.return_value = resp_mock
 
-            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
-                 patch("urllib.request.urlopen", return_value=resp_mock), \
-                 patch("thonnycontrib.codestruct._start_navigation_polling") as mock_poll:
+            with (
+                patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+                patch("urllib.request.urlopen", return_value=resp_mock),
+                patch(
+                    "thonnycontrib.codestruct._start_navigation_polling"
+                ) as mock_poll,
+            ):
                 cs.open_codestruct_workbench()
 
                 # Verify editor_notebook.add was called with a CodeStructEditorTab
@@ -1571,7 +1583,10 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
                 mock_poll.assert_called_once_with(wb, "http://127.0.0.1:8000")
 
     def test_open_codestruct_workbench_switches_folder_updates_tab(self):
-        with tempfile.TemporaryDirectory() as temp_dir_a, tempfile.TemporaryDirectory() as temp_dir_b:
+        with (
+            tempfile.TemporaryDirectory() as temp_dir_a,
+            tempfile.TemporaryDirectory() as temp_dir_b,
+        ):
             wb = MagicMock()
             files_view = MagicMock()
             wb.get_view.return_value = files_view
@@ -1588,20 +1603,26 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             # Switch File view to temp_dir_b
             files_view.local_files.current_focus = temp_dir_b
 
-            resp_data = json.dumps({"root_id": "root_b", "analysis_id": "an_b"}).encode("utf-8")
+            resp_data = json.dumps({"root_id": "root_b", "analysis_id": "an_b"}).encode(
+                "utf-8"
+            )
             resp_mock = MagicMock()
             resp_mock.read.return_value = resp_data
             resp_mock.__enter__.return_value = resp_mock
 
-            with patch("thonnycontrib.codestruct.get_workbench", return_value=wb), \
-                 patch("urllib.request.urlopen", return_value=resp_mock), \
-                 patch("thonnycontrib.codestruct._start_navigation_polling"):
+            with (
+                patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+                patch("urllib.request.urlopen", return_value=resp_mock),
+                patch("thonnycontrib.codestruct._start_navigation_polling"),
+            ):
                 cs.open_codestruct_workbench()
 
                 # No new tab should be added (reuse existing tab)
                 editor_notebook.add.assert_not_called()
                 # Existing tab updated to temp_dir_b
-                self.assertEqual(existing_tab.project_path, str(Path(temp_dir_b).resolve()))
+                self.assertEqual(
+                    existing_tab.project_path, str(Path(temp_dir_b).resolve())
+                )
                 self.assertIn("analysis_id=an_b", existing_tab.viewer_url)
                 # Tab selected
                 editor_notebook.select.assert_called_with(existing_tab)
@@ -1609,7 +1630,9 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
     def test_editor_tab_lifecycle_and_methods(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             master = MagicMock()
-            tab = cs.CodeStructEditorTab(master, "http://127.0.0.1:5173/?embed=thonny", temp_dir)
+            tab = cs.CodeStructEditorTab(
+                master, "http://127.0.0.1:5173/?embed=thonny", temp_dir
+            )
 
             self.assertFalse(tab.is_local())
             self.assertFalse(tab.is_remote())
@@ -1727,7 +1750,9 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
         with patch("thonnycontrib.codestruct.get_workbench", return_value=wb):
             cs.load_plugin()
             # Verify only command_id="codestruct" was added
-            cmd_ids = [call.kwargs.get("command_id") for call in wb.add_command.call_args_list]
+            cmd_ids = [
+                call.kwargs.get("command_id") for call in wb.add_command.call_args_list
+            ]
             self.assertIn("codestruct", cmd_ids)
             self.assertNotIn("codestruct_analyze", cmd_ids)
 

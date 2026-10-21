@@ -24,7 +24,9 @@ class TestThonnyWorkbenchIntegration(unittest.TestCase):
             self.assertNotIn("codestruct_analyze", registered_ids)
 
             # Check primary workbench command
-            workbench_call = next(c for c in calls if c.kwargs.get("command_id") == "codestruct")
+            workbench_call = next(
+                c for c in calls if c.kwargs.get("command_id") == "codestruct"
+            )
             self.assertEqual(workbench_call.kwargs.get("menu_name"), "tools")
             self.assertEqual(workbench_call.kwargs.get("command_label"), "CodeStruct")
             print(

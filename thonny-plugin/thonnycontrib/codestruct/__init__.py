@@ -31,16 +31,19 @@ except ImportError:
     def get_workbench() -> Any:
         return None
 
+
 try:
     from thonny.codeview import CodeViewText
     from thonny.editors import Editor
 except ImportError:
+
     class Editor(ttk.Frame):  # type: ignore[no-redef]
         pass
 
     class CodeViewText:  # type: ignore[no-redef]
         def __init__(self, master: Any) -> None:
             self.master = master
+
 
 try:
     import tkwry
@@ -193,7 +196,6 @@ def build_workbench_viewer_url(
     return urllib.parse.urlunsplit(
         (parts.scheme, parts.netloc, parts.path, new_query, parts.fragment)
     )
-
 
 
 def parse_root_mappings(raw_str: Optional[str] = None) -> dict[str, Path]:
@@ -650,7 +652,10 @@ class CodeStructEditorTab(Editor):
         if tkwry is not None:
             try:
                 self._container = tk.Frame(self)
-                webview_dir = Path(tempfile.gettempdir()) / f"codestruct_thonny_webview_{os.getpid()}"
+                webview_dir = (
+                    Path(tempfile.gettempdir())
+                    / f"codestruct_thonny_webview_{os.getpid()}"
+                )
                 webview_dir.mkdir(parents=True, exist_ok=True)
                 self._webview = tkwry.WebView(
                     self._container,
@@ -922,7 +927,9 @@ def open_codestruct_workbench(event: Any = None) -> None:
         )
         return
 
-    _set_status_message(wb, f"CodeStruct: Registering project folder '{resolved_folder.name}'...")
+    _set_status_message(
+        wb, f"CodeStruct: Registering project folder '{resolved_folder.name}'..."
+    )
 
     # 3. Register folder with backend via POST /api/v1/host/register-folder
     try:
@@ -936,16 +943,22 @@ def open_codestruct_workbench(event: Any = None) -> None:
             headers["X-CodeStruct-Host-Token"] = host_token
 
         payload = json.dumps({"path": str(resolved_folder)}).encode("utf-8")
-        req = urllib.request.Request(reg_url, data=payload, headers=headers, method="POST")
+        req = urllib.request.Request(
+            reg_url, data=payload, headers=headers, method="POST"
+        )
         with urllib.request.urlopen(req, timeout=10.0) as resp:
             data = json.loads(resp.read().decode("utf-8"))
 
         root_id = data.get("root_id")
         analysis_id = data.get("analysis_id")
         if not root_id or not analysis_id:
-            raise RuntimeError("Backend registration response missing 'root_id' or 'analysis_id'.")
+            raise RuntimeError(
+                "Backend registration response missing 'root_id' or 'analysis_id'."
+            )
     except Exception as exc:
-        logger.exception("Failed to register project folder with CodeStruct backend: %s", exc)
+        logger.exception(
+            "Failed to register project folder with CodeStruct backend: %s", exc
+        )
         tkinter.messagebox.showerror(
             "Backend Connection Error",
             f"Could not register project folder with CodeStruct backend:\n\n{exc}",
@@ -999,7 +1012,11 @@ def open_codestruct_workbench(event: Any = None) -> None:
         new_tab.focus_set()
 
     # 6. Bind navigation session to the registered root and start navigation polling
-    global _nav_session_token, _nav_registered_root, _nav_registered_file, _nav_registered_file_resolved
+    global \
+        _nav_session_token, \
+        _nav_registered_root, \
+        _nav_registered_file, \
+        _nav_registered_file_resolved
     with _state_lock:
         _nav_session_token = root_id
         _nav_registered_root = resolved_folder
@@ -1007,7 +1024,9 @@ def open_codestruct_workbench(event: Any = None) -> None:
         _nav_registered_file_resolved = None
 
     _start_navigation_polling(wb, backend_url)
-    _set_status_message(wb, f"CodeStruct: Workbench loaded for '{resolved_folder.name}'.")
+    _set_status_message(
+        wb, f"CodeStruct: Workbench loaded for '{resolved_folder.name}'."
+    )
 
 
 def analyze_current_project(event: Any = None) -> None:
@@ -1504,7 +1523,11 @@ def _execute_navigate(
     generation: int = 0,
 ) -> None:
     """Open the specified file at line in Thonny. Runs on the Tk main thread."""
-    global _nav_registered_file, _nav_registered_file_resolved, _nav_registered_root, _nav_session_token
+    global \
+        _nav_registered_file, \
+        _nav_registered_file_resolved, \
+        _nav_registered_root, \
+        _nav_session_token
 
     # 1. Bind to the registered session's file/root and check generation
     if (
@@ -1640,7 +1663,9 @@ def _execute_navigate(
 
     if _nav_registered_root is not None:
         if not resolved.is_relative_to(_nav_registered_root):
-            logger.warning("Navigation rejected: resolved file escapes registered root.")
+            logger.warning(
+                "Navigation rejected: resolved file escapes registered root."
+            )
             _acknowledge_navigate(
                 backend_url,
                 session_token,

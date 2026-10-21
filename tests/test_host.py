@@ -192,10 +192,15 @@ def test_host_register_folder_api_success_and_disambiguation(tmp_path: Path):
     assert data_a["analysis_id"] is not None
 
     # Verify authorized_roots has proj_a
-    assert app.state.analysis_service.settings.authorized_roots["my_project"] == proj_a.resolve()
+    assert (
+        app.state.analysis_service.settings.authorized_roots["my_project"]
+        == proj_a.resolve()
+    )
 
     # Re-registering proj_a should return same root_id
-    resp_a_repeat = client.post("/api/v1/host/register-folder", json={"path": str(proj_a)})
+    resp_a_repeat = client.post(
+        "/api/v1/host/register-folder", json={"path": str(proj_a)}
+    )
     assert resp_a_repeat.status_code == 200
     assert resp_a_repeat.json()["root_id"] == "my_project"
 
@@ -208,7 +213,10 @@ def test_host_register_folder_api_success_and_disambiguation(tmp_path: Path):
     assert data_b["path"] == str(proj_b.resolve())
     assert data_b["analysis_id"] is not None
 
-    assert app.state.analysis_service.settings.authorized_roots["my_project_1"] == proj_b.resolve()
+    assert (
+        app.state.analysis_service.settings.authorized_roots["my_project_1"]
+        == proj_b.resolve()
+    )
 
 
 def test_host_register_folder_api_validation_errors(tmp_path: Path):

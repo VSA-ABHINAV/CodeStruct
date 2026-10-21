@@ -50,12 +50,16 @@ sys.path.insert(0, str(THONNY_ROOT))
 sys.path.insert(0, str(WORKSPACE_ROOT / "thonny-plugin"))
 sys.path.insert(0, str(WORKSPACE_ROOT / "backend" / "src"))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger("verify_real_thonny_tab")
 
 SCREENSHOT_DIR = WORKSPACE_ROOT / "docs" / "verification" / "screenshots"
 SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
-ARTIFACT_DIR = Path(r"C:\Users\ABHINAV\.gemini\antigravity-ide\brain\4fda842f-5c51-411b-b338-e842886b640c")
+ARTIFACT_DIR = Path(
+    r"C:\Users\ABHINAV\.gemini\antigravity-ide\brain\4fda842f-5c51-411b-b338-e842886b640c"
+)
 
 
 def wait_for_url(url: str, timeout: float = 15.0) -> bool:
@@ -95,10 +99,21 @@ def capture_window_screenshot(window_widget: Any, output_path: Path) -> bool:
             logger.info("Screenshot saved via ImageGrab: %s (%dx%d)", output_path, w, h)
             saved = True
         except Exception as grab_exc:
-            logger.info("ImageGrab failed (%s); falling back to Win32 PrintWindow...", grab_exc)
+            logger.info(
+                "ImageGrab failed (%s); falling back to Win32 PrintWindow...", grab_exc
+            )
 
         if not saved and sys.platform == "win32":
-            from ctypes import byref, c_int, c_long, c_short, c_ubyte, sizeof, Structure, windll
+            from ctypes import (
+                byref,
+                c_int,
+                c_long,
+                c_short,
+                c_ubyte,
+                sizeof,
+                Structure,
+                windll,
+            )
 
             class BITMAPINFOHEADER(Structure):
                 _fields_ = [
@@ -145,7 +160,9 @@ def capture_window_screenshot(window_widget: Any, output_path: Path) -> bool:
             gdi32.DeleteObject(hbm)
             gdi32.DeleteDC(hdc_mem)
             user32.ReleaseDC(hwnd, hdc_window)
-            logger.info("Screenshot saved via PrintWindow: %s (%dx%d)", output_path, w, h)
+            logger.info(
+                "Screenshot saved via PrintWindow: %s (%dx%d)", output_path, w, h
+            )
             saved = True
 
         if saved and ARTIFACT_DIR.is_dir():
@@ -202,9 +219,22 @@ def run_verification() -> int:
         logger.info("Backend is healthy and responding.")
 
         # 2. Start Frontend Server
-        logger.info("[2/10] Starting CodeStruct frontend preview on http://127.0.0.1:5173...")
+        logger.info(
+            "[2/10] Starting CodeStruct frontend preview on http://127.0.0.1:5173..."
+        )
         frontend_proc = subprocess.Popen(
-            ["npm.cmd", "--prefix", "frontend.lovable", "run", "preview", "--", "--port", "5173", "--host", "127.0.0.1"],
+            [
+                "npm.cmd",
+                "--prefix",
+                "frontend.lovable",
+                "run",
+                "preview",
+                "--",
+                "--port",
+                "5173",
+                "--host",
+                "127.0.0.1",
+            ],
             cwd=str(WORKSPACE_ROOT),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -317,10 +347,16 @@ def run_verification() -> int:
             encoding="utf-8",
         )
 
-        logger.info("Fixtures created:\n  Alpha (nested): %s\n  Beta (nested): %s", fixture_alpha, fixture_beta)
+        logger.info(
+            "Fixtures created:\n  Alpha (nested): %s\n  Beta (nested): %s",
+            fixture_alpha,
+            fixture_beta,
+        )
 
         # 4. Initialize real Thonny Workbench
-        logger.info("[4/10] Initializing real Thonny Workbench with FilesView & EditorNotebook...")
+        logger.info(
+            "[4/10] Initializing real Thonny Workbench with FilesView & EditorNotebook..."
+        )
         from thonny.main import _parse_arguments_to_dict
         from thonny.workbench import Workbench
         import thonny
@@ -355,11 +391,18 @@ def run_verification() -> int:
         wb.update()
 
         pre_open_tabs = editor_notebook.winfo_children()
-        assert len(pre_open_tabs) == 2, f"Expected 2 open source tabs, got {len(pre_open_tabs)}"
-        logger.info("Verified pre-open source tabs in Thonny: %s", [t.get_title() for t in pre_open_tabs])
+        assert len(pre_open_tabs) == 2, (
+            f"Expected 2 open source tabs, got {len(pre_open_tabs)}"
+        )
+        logger.info(
+            "Verified pre-open source tabs in Thonny: %s",
+            [t.get_title() for t in pre_open_tabs],
+        )
 
         # 5. Open Fixture Alpha in File view & trigger CodeStruct
-        logger.info("[5/10] Testing Phase 1: Launch CodeStruct workbench for Fixture Alpha...")
+        logger.info(
+            "[5/10] Testing Phase 1: Launch CodeStruct workbench for Fixture Alpha..."
+        )
         files_view.local_files.focus_into(str(fixture_alpha.resolve()))
         wb.update()
 
@@ -369,7 +412,11 @@ def run_verification() -> int:
         assert detected_folder == str(fixture_alpha.resolve()), (
             f"Expected containing project root '{fixture_alpha}', got '{detected_folder}'"
         )
-        logger.info("PASS: Selecting file '%s' resolved to containing folder '%s'", alpha_analytics.name, detected_folder)
+        logger.info(
+            "PASS: Selecting file '%s' resolved to containing folder '%s'",
+            alpha_analytics.name,
+            detected_folder,
+        )
 
         # Trigger Tools -> CodeStruct
         cs.open_codestruct_workbench()
@@ -378,20 +425,28 @@ def run_verification() -> int:
 
         # Verify CodeStruct tab was added alongside source tabs in the same Thonny window
         all_tabs = editor_notebook.winfo_children()
-        assert len(all_tabs) == 3, f"Expected 3 tabs (2 source + 1 CodeStruct), got {len(all_tabs)}"
+        assert len(all_tabs) == 3, (
+            f"Expected 3 tabs (2 source + 1 CodeStruct), got {len(all_tabs)}"
+        )
         cs_tabs = [c for c in all_tabs if isinstance(c, CodeStructEditorTab)]
         assert len(cs_tabs) == 1, f"Expected 1 CodeStruct tab, found {len(cs_tabs)}"
         alpha_tab = cs_tabs[0]
 
         # Verify docked properties
-        assert alpha_tab.winfo_toplevel() == wb, "Tab is not inside Thonny's main window!"
+        assert alpha_tab.winfo_toplevel() == wb, (
+            "Tab is not inside Thonny's main window!"
+        )
         assert alpha_tab.project_path == str(fixture_alpha.resolve())
         assert alpha_tab.get_title() == f"CodeStruct: {fixture_alpha.name}"
         assert "embed=thonny" in alpha_tab.viewer_url
         assert cs._nav_session_token is not None
         assert cs._nav_registered_root == fixture_alpha.resolve()
-        assert editor_notebook.get_current_editor() == alpha_tab, "CodeStruct tab should be selected"
-        logger.info("PASS: Tab docked in Thonny main window, rooted in %s", fixture_alpha.name)
+        assert editor_notebook.get_current_editor() == alpha_tab, (
+            "CodeStruct tab should be selected"
+        )
+        logger.info(
+            "PASS: Tab docked in Thonny main window, rooted in %s", fixture_alpha.name
+        )
 
         # 6. Test Tab Switching Back and Forth Between Source Tabs and CodeStruct Tab
         logger.info("[6/10] Testing Tab Switching in Thonny Editor Notebook...")
@@ -435,26 +490,43 @@ def run_verification() -> int:
         wb.update()
 
         # 7. Verify Whole-Project Analysis
-        logger.info("[7/10] Verifying whole-folder analysis symbols across nested directories...")
+        logger.info(
+            "[7/10] Verifying whole-folder analysis symbols across nested directories..."
+        )
         # Verify via backend API that all nested files and symbols were indexed
         parsed_url = urllib.parse.urlsplit(alpha_tab.viewer_url)
         query_params = dict(urllib.parse.parse_qsl(parsed_url.query))
         analysis_id = query_params.get("analysis_id")
         assert analysis_id, f"analysis_id must be in viewer_url: {alpha_tab.viewer_url}"
-        req = urllib.request.Request(f"http://127.0.0.1:8000/api/v1/analyses/{analysis_id}/graph")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:8000/api/v1/analyses/{analysis_id}/graph"
+        )
         with urllib.request.urlopen(req, timeout=5.0) as resp:
             graph_data = json.loads(resp.read().decode("utf-8"))
             nodes = graph_data.get("nodes", [])
             node_labels = [n.get("label") or n.get("name") for n in nodes]
-            logger.info("Analyzed %d nodes in project: %s", len(nodes), node_labels[:10])
+            logger.info(
+                "Analyzed %d nodes in project: %s", len(nodes), node_labels[:10]
+            )
             # Check for nested symbols
-            assert any("AnalyticsService" in str(l) for l in node_labels), "Missing AnalyticsService from services/"
-            assert any("UserSession" in str(l) or "EventRecord" in str(l) for l in node_labels), "Missing models from domain/"
-            assert any("format_timestamp" in str(l) or "sanitize_input" in str(l) for l in node_labels), "Missing helpers from utils/"
-            logger.info("PASS: Whole-folder analysis includes symbols from domain/, services/, and utils/.")
+            assert any("AnalyticsService" in str(l) for l in node_labels), (
+                "Missing AnalyticsService from services/"
+            )
+            assert any(
+                "UserSession" in str(l) or "EventRecord" in str(l) for l in node_labels
+            ), "Missing models from domain/"
+            assert any(
+                "format_timestamp" in str(l) or "sanitize_input" in str(l)
+                for l in node_labels
+            ), "Missing helpers from utils/"
+            logger.info(
+                "PASS: Whole-folder analysis includes symbols from domain/, services/, and utils/."
+            )
 
         # 8. Test Multi-Folder Switching: Switch to Fixture Beta
-        logger.info("[8/10] Testing Multi-Folder Switching: Switch File view to Fixture Beta...")
+        logger.info(
+            "[8/10] Testing Multi-Folder Switching: Switch File view to Fixture Beta..."
+        )
         files_view.local_files.focus_into(str(fixture_beta.resolve()))
         wb.update()
         detected_beta = cs.get_file_view_folder(wb)
@@ -470,14 +542,22 @@ def run_verification() -> int:
         wb.update_idletasks()
         wb.update()
 
-        tabs_after = [c for c in editor_notebook.winfo_children() if isinstance(c, CodeStructEditorTab)]
-        assert len(tabs_after) == 1, f"Tab count should remain 1 on folder switch, got {len(tabs_after)}"
+        tabs_after = [
+            c
+            for c in editor_notebook.winfo_children()
+            if isinstance(c, CodeStructEditorTab)
+        ]
+        assert len(tabs_after) == 1, (
+            f"Tab count should remain 1 on folder switch, got {len(tabs_after)}"
+        )
         beta_tab = tabs_after[0]
         assert beta_tab is alpha_tab, "Tab instance should be reused and updated"
         assert beta_tab.project_path == str(fixture_beta.resolve())
         assert beta_tab.get_title() == f"CodeStruct: {fixture_beta.name}"
         assert cs._nav_registered_root == fixture_beta.resolve()
-        logger.info("PASS: Existing tab smoothly updated to Fixture Beta without creating a duplicate tab.")
+        logger.info(
+            "PASS: Existing tab smoothly updated to Fixture Beta without creating a duplicate tab."
+        )
 
         logger.info("Allowing WebView2 4 seconds to render Beta workbench...")
         time.sleep(4.0)
@@ -491,15 +571,25 @@ def run_verification() -> int:
         beta_parsed = urllib.parse.urlsplit(beta_tab.viewer_url)
         beta_params = dict(urllib.parse.parse_qsl(beta_parsed.query))
         beta_analysis_id = beta_params.get("analysis_id")
-        assert beta_analysis_id, f"analysis_id must be in beta viewer_url: {beta_tab.viewer_url}"
-        req = urllib.request.Request(f"http://127.0.0.1:8000/api/v1/analyses/{beta_analysis_id}/graph")
+        assert beta_analysis_id, (
+            f"analysis_id must be in beta viewer_url: {beta_tab.viewer_url}"
+        )
+        req = urllib.request.Request(
+            f"http://127.0.0.1:8000/api/v1/analyses/{beta_analysis_id}/graph"
+        )
         with urllib.request.urlopen(req, timeout=5.0) as resp:
             beta_graph = json.loads(resp.read().decode("utf-8"))
             beta_nodes = beta_graph.get("nodes", [])
             beta_labels = [n.get("label") or n.get("name") for n in beta_nodes]
-            assert any("DataPipeline" in str(l) for l in beta_labels), "Missing DataPipeline from core/"
-            assert any("DatabaseStore" in str(l) for l in beta_labels), "Missing DatabaseStore from storage/"
-            assert not any("AnalyticsService" in str(l) for l in beta_labels), "Stale Alpha symbols found in Beta analysis!"
+            assert any("DataPipeline" in str(l) for l in beta_labels), (
+                "Missing DataPipeline from core/"
+            )
+            assert any("DatabaseStore" in str(l) for l in beta_labels), (
+                "Missing DatabaseStore from storage/"
+            )
+            assert not any("AnalyticsService" in str(l) for l in beta_labels), (
+                "Stale Alpha symbols found in Beta analysis!"
+            )
             logger.info("PASS: Beta analysis verified with no stale Alpha symbols.")
 
         # 9. Test In-IDE Navigation to Source File
@@ -520,8 +610,12 @@ def run_verification() -> int:
 
         current_editor = editor_notebook.get_current_editor()
         assert current_editor is not None
-        assert current_editor.get_target_path() == str((fixture_beta / "core" / "pipeline.py").resolve())
-        logger.info("PASS: Navigation correctly opened core/pipeline.py in Thonny at line 4.")
+        assert current_editor.get_target_path() == str(
+            (fixture_beta / "core" / "pipeline.py").resolve()
+        )
+        logger.info(
+            "PASS: Navigation correctly opened core/pipeline.py in Thonny at line 4."
+        )
 
         screenshot_nav = SCREENSHOT_DIR / "thonny_navigated_source_file.png"
         capture_window_screenshot(wb, screenshot_nav)
@@ -538,24 +632,35 @@ def run_verification() -> int:
         assert cs.get_file_view_folder(wb) is None
 
         info_shown = False
+
         def fake_showinfo(title: str, msg: str, parent: Any = None) -> None:
             nonlocal info_shown
             info_shown = True
-            logger.info("Verified in-IDE info dialog: '%s': %s", title, msg.splitlines()[0])
+            logger.info(
+                "Verified in-IDE info dialog: '%s': %s", title, msg.splitlines()[0]
+            )
 
         with patch("tkinter.messagebox.showinfo", side_effect=fake_showinfo):
             cs.open_codestruct_workbench()
 
-        assert info_shown, "showinfo dialog must be displayed when no folder is open in File view"
+        assert info_shown, (
+            "showinfo dialog must be displayed when no folder is open in File view"
+        )
         logger.info("PASS: Missing folder alert displayed, no fallback root used.")
 
         # Verify Static Non-Execution Invariant
         logger.info("Verifying Static Non-Execution Safety Invariant...")
-        assert "danger" not in sys.modules, "Hostile marker module 'danger' must never be imported!"
+        assert "danger" not in sys.modules, (
+            "Hostile marker module 'danger' must never be imported!"
+        )
         for mod_name in list(sys.modules.keys()):
             if "alpha" in mod_name or "beta" in mod_name:
-                assert False, f"Project code '{mod_name}' was imported into Python runtime!"
-        logger.info("PASS: Source code was NEVER executed during analysis or folder switching.")
+                assert False, (
+                    f"Project code '{mod_name}' was imported into Python runtime!"
+                )
+        logger.info(
+            "PASS: Source code was NEVER executed during analysis or folder switching."
+        )
 
         # Tab Close & Clean Shutdown
         logger.info("Testing Tab Close & Shutdown...")
@@ -564,7 +669,11 @@ def run_verification() -> int:
         wb.update_idletasks()
         wb.update()
 
-        remaining_cs_tabs = [c for c in editor_notebook.winfo_children() if isinstance(c, CodeStructEditorTab)]
+        remaining_cs_tabs = [
+            c
+            for c in editor_notebook.winfo_children()
+            if isinstance(c, CodeStructEditorTab)
+        ]
         assert len(remaining_cs_tabs) == 0, "Tab was not cleanly removed on close"
         logger.info("PASS: CodeStruct tab closed cleanly without errors.")
 
@@ -586,7 +695,10 @@ def run_verification() -> int:
             backend_proc.wait()
             logger.info("Backend process terminated.")
         if frontend_proc is not None:
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(frontend_proc.pid)], capture_output=True)
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(frontend_proc.pid)],
+                capture_output=True,
+            )
             logger.info("Frontend process terminated.")
 
 

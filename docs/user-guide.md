@@ -31,24 +31,25 @@ was found, not that runtime execution fails. **External** is outside this graph.
 **Partially completed** source analysis differs from a **partially loaded** graph.
 **Cached** means a validated compatible stored result was reused.
 
-## Analyze active Python file from Thonny IDE
+## Analyze projects and files from Thonny IDE
 
-CodeStruct integrates directly into the Thonny Python IDE:
+CodeStruct integrates natively into the Thonny Python IDE:
 
-1. Open any Python file (`.py` or `.pyw`) in Thonny.
-2. Select **Tools → Analyze with CodeStruct** (or press the configured shortcut).
-3. The plugin verifies that the active editor is saved, local, and accessible. If there are unsaved changes or an untitled buffer, Thonny prompts you to save first.
-4. The plugin registers the active file via loopback with the CodeStruct backend, generating a temporary single-file analysis capability that analyzes *only* that file (sibling files in the directory are never scanned or authorized).
-5. Once submitted, CodeStruct automatically launches your default web browser displaying the interactive architectural view at `http://127.0.0.1:5173/?analysis_id=<analysis-id>`.
+1. Launch CodeStruct through the Windows prototype script (`Start-CodeStruct-Prototype.cmd` or `prototype-launcher/Start-CodeStruct-Prototype.ps1`). This launches Thonny as the single application window with local backend and frontend services running on loopback.
+2. In Thonny's **File view**, navigate to and open your Python project folder.
+3. Select **Tools → CodeStruct** (or press the configured shortcut).
+4. CodeStruct registers the active folder with the backend, performs whole-folder static analysis across all Python source files recursively, and opens the architecture workbench directly inside Thonny as an embedded editor tab (`CodeStructEditorTab`).
+5. When switching folders in Thonny's File view, selecting **Tools → CodeStruct** reuses and updates the existing tab without tab duplication.
+6. Selecting any architectural node and clicking **Open in editor** navigates back to Thonny, opening the source file at the exact line of code.
 
 ### Configured project roots vs. temporary editor capabilities
 
 - **Configured Project Roots (`CODESTRUCT_AUTHORIZED_ROOTS`):** Persistent directory trees authorized globally in backend configuration. When analyzing a configured project, CodeStruct scans and analyzes all matching files throughout that directory tree.
-- **Temporary Single-File Capabilities (`cap_*`):** Short-lived, expiring tokens generated through `POST /api/v1/editor/selection`.
-  - **Single-File Scope:** A valid editor capability permits analysis of **only the selected file**.
-  - **Access Outside Configured Roots:** Capability analysis safely analyzes files located anywhere on the local filesystem outside configured project roots without granting directory-wide access.
-  - **Per-Job Policy Isolation:** The backend constructs an isolated per-job `AnalysisPolicy` that authorizes only the resolved directory containing the selected file, restricting `single_file_name` and `include_patterns` to that exact file. Sibling files in that directory are never scanned, parsed, or included.
-  - **No Global Leakage:** The target directory is never added to global `Settings.authorized_roots`, preserving strict least-privilege security.
+- **Temporary Host Capabilities (`cap_*`):** Short-lived tokens generated through `POST /api/v1/host/register-folder` or `POST /api/v1/editor/selection`.
+  - **Folder Scope:** A valid host registration capability authorizes the directory currently active in Thonny's File view.
+  - **Access Outside Configured Roots:** Safely analyzes projects located on the local filesystem without requiring manual edits to global server configuration.
+  - **Per-Job Policy Isolation:** Sibling folders outside the target directory are never scanned, parsed, or included.
+  - **No Global Leakage:** Target directories are bound to the session lifecycle and never pollute global persistent configuration.
 
 
 ## Open an existing analysis by URL
