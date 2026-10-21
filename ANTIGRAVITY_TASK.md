@@ -1,5 +1,9 @@
 # Antigravity Task: Integrate the Stitch Workbench as a Thonny Editor Tab
 
+> **Current handoff (2026-10-21):** M7 has been accepted on the report-based review recorded in `docs/verification/M7_CODEX_REVIEW_2_ACCEPTED_REPORT_BASED.md`. The next authorized task is M8 (CS-020–024), specified in `ANTIGRAVITY_M8_TASK.md`. That file supersedes the historical M7 instructions below. M8 is not started until Antigravity begins.
+
+> <span style="color:green">Read ANTIGRAVITY_M8_TASK.md and implement Milestone 8 (CS-020–024) within its scope. Run the reproducible accuracy/performance evaluation, storage-fault checks, available manual accessibility observation, documentation reconciliation, and clean-package install/lifecycle workflow; keep fixing and rerunning applicable gates until requirements pass or a genuine owner/environment blocker is evidenced. Update PROCESS_TRACKER.md and docs/codestruct_audit.md, write docs/verification/M8.md, commit scoped phases, then send READY FOR REVIEW and stop. Do not mark M8 Accepted, do not implement CS-025, and do not push, publish, deploy, or expose services publicly.</span>
+
 Date: 2026-10-16
 Repository: `D:\REP\Codestruct\Codestruct`
 Owner: Antigravity implements and verifies; Codex maintains this bounded handoff and reviews the resulting report.
