@@ -1,0 +1,765 @@
+{
+  "schema_version": "1.0",
+  "benchmarks": {
+    "small_project": {
+      "description": "Small 2-file project testing basic imports, class inheritance, function calls, and constructors.",
+      "expected_entities": {
+        "modules": [
+          "app",
+          "math_ops"
+        ],
+        "classes": [
+          "app.Calculator",
+          "math_ops.Multiplier"
+        ],
+        "functions": [
+          "app.main",
+          "math_ops.add"
+        ],
+        "methods": [
+          "app.Calculator.compute",
+          "math_ops.Multiplier.multiply"
+        ],
+        "files": [
+          "app.py",
+          "math_ops.py"
+        ]
+      },
+      "expected_relationships": {
+        "imports": [
+          {
+            "source": "app",
+            "target": "math_ops.Multiplier"
+          },
+          {
+            "source": "app",
+            "target": "math_ops.add"
+          }
+        ],
+        "resolved_calls": [
+          {
+            "source": "app.Calculator.compute",
+            "target": "math_ops.Multiplier.multiply"
+          },
+          {
+            "source": "app.Calculator.compute",
+            "target": "math_ops.add"
+          }
+        ],
+        "unresolved_calls": [
+          {
+            "source": "app.main",
+            "target": "calc.compute"
+          }
+        ],
+        "inherits": [
+          {
+            "source": "app.Calculator",
+            "target": "math_ops.Multiplier"
+          }
+        ],
+        "constructs": [
+          {
+            "source": "app.main",
+            "target": "app.Calculator"
+          }
+        ],
+        "defines": [
+          {
+            "source": "app",
+            "target": "app.Calculator"
+          },
+          {
+            "source": "app",
+            "target": "app.main"
+          },
+          {
+            "source": "app.Calculator",
+            "target": "app.Calculator.compute"
+          },
+          {
+            "source": "math_ops",
+            "target": "math_ops.Multiplier"
+          },
+          {
+            "source": "math_ops",
+            "target": "math_ops.add"
+          },
+          {
+            "source": "math_ops.Multiplier",
+            "target": "math_ops.Multiplier.multiply"
+          }
+        ]
+      },
+      "limitations_documented": [
+        "Dynamic method dispatch on untyped local variables produces unresolved symbols in static AST analysis.",
+        "Chained member calls produce syntactic-only edge representations without full procedural dataflow."
+      ]
+    },
+    "nested_project": {
+      "description": "Nested multi-package project testing cross-package imports, inheritance across subpackages, and utility helpers.",
+      "expected_entities": {
+        "modules": [
+          "pkg",
+          "pkg.core",
+          "pkg.core.base",
+          "pkg.domain",
+          "pkg.domain.models",
+          "pkg.main",
+          "pkg.services",
+          "pkg.services.auth",
+          "pkg.utils",
+          "pkg.utils.formatting"
+        ],
+        "classes": [
+          "pkg.core.base.BaseHandler",
+          "pkg.domain.models.User",
+          "pkg.services.auth.AuthService"
+        ],
+        "functions": [
+          "pkg.domain.models.create_user",
+          "pkg.main.run_app",
+          "pkg.utils.formatting.format_name"
+        ],
+        "methods": [
+          "pkg.core.base.BaseHandler.handle",
+          "pkg.domain.models.User.__init__",
+          "pkg.services.auth.AuthService.login"
+        ],
+        "files": [
+          "pkg/__init__.py",
+          "pkg/core/__init__.py",
+          "pkg/core/base.py",
+          "pkg/domain/__init__.py",
+          "pkg/domain/models.py",
+          "pkg/main.py",
+          "pkg/services/__init__.py",
+          "pkg/services/auth.py",
+          "pkg/utils/__init__.py",
+          "pkg/utils/formatting.py"
+        ]
+      },
+      "expected_relationships": {
+        "imports": [
+          {
+            "source": "pkg.main",
+            "target": "pkg.services.auth.AuthService"
+          },
+          {
+            "source": "pkg.main",
+            "target": "pkg.utils.formatting.format_name"
+          },
+          {
+            "source": "pkg.services.auth",
+            "target": "pkg.core.base.BaseHandler"
+          },
+          {
+            "source": "pkg.services.auth",
+            "target": "pkg.domain.models.User"
+          },
+          {
+            "source": "pkg.services.auth",
+            "target": "pkg.domain.models.create_user"
+          }
+        ],
+        "resolved_calls": [
+          {
+            "source": "pkg.main.run_app",
+            "target": "pkg.utils.formatting.format_name"
+          },
+          {
+            "source": "pkg.services.auth.AuthService.login",
+            "target": "pkg.core.base.BaseHandler.handle"
+          },
+          {
+            "source": "pkg.services.auth.AuthService.login",
+            "target": "pkg.domain.models.create_user"
+          }
+        ],
+        "unresolved_calls": [
+          {
+            "source": "pkg.main.run_app",
+            "target": "auth.login"
+          },
+          {
+            "source": "pkg.utils.formatting.format_name",
+            "target": ""
+          },
+          {
+            "source": "pkg.utils.formatting.format_name",
+            "target": "name.strip"
+          }
+        ],
+        "inherits": [
+          {
+            "source": "pkg.services.auth.AuthService",
+            "target": "pkg.core.base.BaseHandler"
+          }
+        ],
+        "constructs": [
+          {
+            "source": "pkg.domain.models.create_user",
+            "target": "pkg.domain.models.User"
+          },
+          {
+            "source": "pkg.main.run_app",
+            "target": "pkg.services.auth.AuthService"
+          }
+        ],
+        "defines": [
+          {
+            "source": "pkg.core.base",
+            "target": "pkg.core.base.BaseHandler"
+          },
+          {
+            "source": "pkg.core.base.BaseHandler",
+            "target": "pkg.core.base.BaseHandler.handle"
+          },
+          {
+            "source": "pkg.domain.models",
+            "target": "pkg.domain.models.User"
+          },
+          {
+            "source": "pkg.domain.models",
+            "target": "pkg.domain.models.create_user"
+          },
+          {
+            "source": "pkg.domain.models.User",
+            "target": "pkg.domain.models.User.__init__"
+          },
+          {
+            "source": "pkg.main",
+            "target": "pkg.main.run_app"
+          },
+          {
+            "source": "pkg.services.auth",
+            "target": "pkg.services.auth.AuthService"
+          },
+          {
+            "source": "pkg.services.auth.AuthService",
+            "target": "pkg.services.auth.AuthService.login"
+          },
+          {
+            "source": "pkg.utils.formatting",
+            "target": "pkg.utils.formatting.format_name"
+          }
+        ]
+      },
+      "limitations_documented": [
+        "Dynamic method dispatch on untyped local variables produces unresolved symbols in static AST analysis.",
+        "Chained member calls produce syntactic-only edge representations without full procedural dataflow."
+      ]
+    },
+    "typed_project": {
+      "description": "Type-annotated project with PEP 484/561 .pyi type stubs, abstract base class inheritance, and canvas rendering.",
+      "expected_entities": {
+        "modules": [
+          "geometry",
+          "geometry.canvas",
+          "geometry.pipeline",
+          "geometry.shapes",
+          "geometry.stubs"
+        ],
+        "classes": [
+          "geometry.canvas.Canvas",
+          "geometry.shapes.Circle",
+          "geometry.shapes.Shape",
+          "geometry.stubs.Renderable"
+        ],
+        "functions": [
+          "geometry.pipeline.execute_render"
+        ],
+        "methods": [
+          "geometry.canvas.Canvas.draw",
+          "geometry.shapes.Circle.__init__",
+          "geometry.shapes.Circle.area",
+          "geometry.shapes.Shape.area",
+          "geometry.stubs.Renderable.render"
+        ],
+        "files": [
+          "geometry/__init__.py",
+          "geometry/canvas.py",
+          "geometry/pipeline.py",
+          "geometry/shapes.py",
+          "geometry/stubs.pyi"
+        ]
+      },
+      "expected_relationships": {
+        "imports": [
+          {
+            "source": "geometry.canvas",
+            "target": "geometry.shapes.Shape"
+          },
+          {
+            "source": "geometry.pipeline",
+            "target": "geometry.canvas.Canvas"
+          },
+          {
+            "source": "geometry.pipeline",
+            "target": "geometry.shapes.Circle"
+          },
+          {
+            "source": "geometry.shapes",
+            "target": "geometry.stubs.Renderable"
+          }
+        ],
+        "resolved_calls": [],
+        "unresolved_calls": [
+          {
+            "source": "geometry.canvas.Canvas.draw",
+            "target": "shape.area"
+          },
+          {
+            "source": "geometry.pipeline.execute_render",
+            "target": "canvas.draw"
+          }
+        ],
+        "inherits": [
+          {
+            "source": "geometry.shapes.Circle",
+            "target": "geometry.shapes.Shape"
+          },
+          {
+            "source": "geometry.shapes.Shape",
+            "target": "geometry.stubs.Renderable"
+          }
+        ],
+        "constructs": [
+          {
+            "source": "geometry.pipeline.execute_render",
+            "target": "geometry.canvas.Canvas"
+          },
+          {
+            "source": "geometry.pipeline.execute_render",
+            "target": "geometry.shapes.Circle"
+          }
+        ],
+        "defines": [
+          {
+            "source": "geometry.canvas",
+            "target": "geometry.canvas.Canvas"
+          },
+          {
+            "source": "geometry.canvas.Canvas",
+            "target": "geometry.canvas.Canvas.draw"
+          },
+          {
+            "source": "geometry.pipeline",
+            "target": "geometry.pipeline.execute_render"
+          },
+          {
+            "source": "geometry.shapes",
+            "target": "geometry.shapes.Circle"
+          },
+          {
+            "source": "geometry.shapes",
+            "target": "geometry.shapes.Shape"
+          },
+          {
+            "source": "geometry.shapes.Circle",
+            "target": "geometry.shapes.Circle.__init__"
+          },
+          {
+            "source": "geometry.shapes.Circle",
+            "target": "geometry.shapes.Circle.area"
+          },
+          {
+            "source": "geometry.shapes.Shape",
+            "target": "geometry.shapes.Shape.area"
+          },
+          {
+            "source": "geometry.stubs",
+            "target": "geometry.stubs.Renderable"
+          },
+          {
+            "source": "geometry.stubs.Renderable",
+            "target": "geometry.stubs.Renderable.render"
+          }
+        ]
+      },
+      "limitations_documented": [
+        "Dynamic method dispatch on untyped local variables produces unresolved symbols in static AST analysis.",
+        "Chained member calls produce syntactic-only edge representations without full procedural dataflow."
+      ]
+    },
+    "larger_project": {
+      "description": "Multi-layer ecommerce architecture testing domain models, events, services, repository persistence, API routes, and CLI.",
+      "expected_entities": {
+        "modules": [
+          "ecommerce",
+          "ecommerce.api",
+          "ecommerce.api.routes",
+          "ecommerce.cli",
+          "ecommerce.cli.main_cli",
+          "ecommerce.domain",
+          "ecommerce.domain.entities",
+          "ecommerce.domain.events",
+          "ecommerce.services",
+          "ecommerce.services.notification",
+          "ecommerce.services.order_service",
+          "ecommerce.services.pricing",
+          "ecommerce.storage",
+          "ecommerce.storage.db",
+          "ecommerce.storage.repository",
+          "ecommerce.utils",
+          "ecommerce.utils.config",
+          "ecommerce.utils.logger"
+        ],
+        "classes": [
+          "ecommerce.domain.entities.Customer",
+          "ecommerce.domain.entities.Order",
+          "ecommerce.domain.entities.Product",
+          "ecommerce.domain.events.OrderPlacedEvent",
+          "ecommerce.services.notification.Notifier",
+          "ecommerce.services.order_service.OrderService",
+          "ecommerce.services.pricing.DiscountPolicy",
+          "ecommerce.storage.db.Database",
+          "ecommerce.storage.repository.OrderRepository",
+          "ecommerce.utils.logger.AuditLogger"
+        ],
+        "functions": [
+          "ecommerce.api.routes.checkout",
+          "ecommerce.cli.main_cli.cli_main",
+          "ecommerce.services.pricing.calc_tax",
+          "ecommerce.utils.config.load_config"
+        ],
+        "methods": [
+          "ecommerce.domain.entities.Customer.__init__",
+          "ecommerce.domain.entities.Order.__init__",
+          "ecommerce.domain.entities.Order.total",
+          "ecommerce.domain.entities.Product.__init__",
+          "ecommerce.domain.events.OrderPlacedEvent.__init__",
+          "ecommerce.services.notification.Notifier.notify",
+          "ecommerce.services.order_service.OrderService.__init__",
+          "ecommerce.services.order_service.OrderService.process_order",
+          "ecommerce.services.pricing.DiscountPolicy.apply_discount",
+          "ecommerce.storage.db.Database.query",
+          "ecommerce.storage.repository.OrderRepository.__init__",
+          "ecommerce.storage.repository.OrderRepository.save_order",
+          "ecommerce.utils.logger.AuditLogger.log_event"
+        ],
+        "files": [
+          "ecommerce/__init__.py",
+          "ecommerce/api/__init__.py",
+          "ecommerce/api/routes.py",
+          "ecommerce/cli/__init__.py",
+          "ecommerce/cli/main_cli.py",
+          "ecommerce/domain/__init__.py",
+          "ecommerce/domain/entities.py",
+          "ecommerce/domain/events.py",
+          "ecommerce/services/__init__.py",
+          "ecommerce/services/notification.py",
+          "ecommerce/services/order_service.py",
+          "ecommerce/services/pricing.py",
+          "ecommerce/storage/__init__.py",
+          "ecommerce/storage/db.py",
+          "ecommerce/storage/repository.py",
+          "ecommerce/utils/__init__.py",
+          "ecommerce/utils/config.py",
+          "ecommerce/utils/logger.py"
+        ]
+      },
+      "expected_relationships": {
+        "imports": [
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.domain.entities.Customer"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.domain.entities.Order"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.domain.entities.Product"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.services.notification.Notifier"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.services.order_service.OrderService"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.services.pricing.DiscountPolicy"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.storage.db.Database"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.storage.repository.OrderRepository"
+          },
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.utils.config.load_config"
+          },
+          {
+            "source": "ecommerce.cli.main_cli",
+            "target": "ecommerce.api.routes.checkout"
+          },
+          {
+            "source": "ecommerce.cli.main_cli",
+            "target": "ecommerce.utils.logger.AuditLogger"
+          },
+          {
+            "source": "ecommerce.services.notification",
+            "target": "ecommerce.domain.events.OrderPlacedEvent"
+          },
+          {
+            "source": "ecommerce.services.order_service",
+            "target": "ecommerce.domain.entities.Order"
+          },
+          {
+            "source": "ecommerce.services.order_service",
+            "target": "ecommerce.domain.events.OrderPlacedEvent"
+          },
+          {
+            "source": "ecommerce.services.order_service",
+            "target": "ecommerce.services.notification.Notifier"
+          },
+          {
+            "source": "ecommerce.services.order_service",
+            "target": "ecommerce.services.pricing.DiscountPolicy"
+          },
+          {
+            "source": "ecommerce.services.order_service",
+            "target": "ecommerce.services.pricing.calc_tax"
+          },
+          {
+            "source": "ecommerce.services.pricing",
+            "target": "ecommerce.domain.entities.Order"
+          },
+          {
+            "source": "ecommerce.storage.repository",
+            "target": "ecommerce.domain.entities.Order"
+          },
+          {
+            "source": "ecommerce.storage.repository",
+            "target": "ecommerce.storage.db.Database"
+          }
+        ],
+        "resolved_calls": [
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.utils.config.load_config"
+          },
+          {
+            "source": "ecommerce.cli.main_cli.cli_main",
+            "target": "ecommerce.api.routes.checkout"
+          },
+          {
+            "source": "ecommerce.services.order_service.OrderService.process_order",
+            "target": "ecommerce.services.pricing.calc_tax"
+          }
+        ],
+        "unresolved_calls": [
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "config.get"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "enumerate"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "repo.save_order"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "svc.process_order"
+          },
+          {
+            "source": "ecommerce.cli.main_cli.cli_main",
+            "target": "logger.log_event"
+          },
+          {
+            "source": "ecommerce.domain.entities.Order.total",
+            "target": "sum"
+          },
+          {
+            "source": "ecommerce.services.order_service.OrderService.process_order",
+            "target": ""
+          },
+          {
+            "source": "ecommerce.services.order_service.OrderService.process_order",
+            "target": ""
+          },
+          {
+            "source": "ecommerce.services.pricing.DiscountPolicy.apply_discount",
+            "target": "order.total"
+          },
+          {
+            "source": "ecommerce.storage.repository.OrderRepository.save_order",
+            "target": ""
+          },
+          {
+            "source": "ecommerce.storage.repository.OrderRepository.save_order",
+            "target": "order.total"
+          }
+        ],
+        "inherits": [],
+        "constructs": [
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.domain.entities.Customer"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.domain.entities.Order"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.domain.entities.Product"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.services.notification.Notifier"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.services.order_service.OrderService"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.services.pricing.DiscountPolicy"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.storage.db.Database"
+          },
+          {
+            "source": "ecommerce.api.routes.checkout",
+            "target": "ecommerce.storage.repository.OrderRepository"
+          },
+          {
+            "source": "ecommerce.cli.main_cli.cli_main",
+            "target": "ecommerce.utils.logger.AuditLogger"
+          },
+          {
+            "source": "ecommerce.services.order_service.OrderService.process_order",
+            "target": "ecommerce.domain.events.OrderPlacedEvent"
+          }
+        ],
+        "defines": [
+          {
+            "source": "ecommerce.api.routes",
+            "target": "ecommerce.api.routes.checkout"
+          },
+          {
+            "source": "ecommerce.cli.main_cli",
+            "target": "ecommerce.cli.main_cli.cli_main"
+          },
+          {
+            "source": "ecommerce.domain.entities",
+            "target": "ecommerce.domain.entities.Customer"
+          },
+          {
+            "source": "ecommerce.domain.entities",
+            "target": "ecommerce.domain.entities.Order"
+          },
+          {
+            "source": "ecommerce.domain.entities",
+            "target": "ecommerce.domain.entities.Product"
+          },
+          {
+            "source": "ecommerce.domain.entities.Customer",
+            "target": "ecommerce.domain.entities.Customer.__init__"
+          },
+          {
+            "source": "ecommerce.domain.entities.Order",
+            "target": "ecommerce.domain.entities.Order.__init__"
+          },
+          {
+            "source": "ecommerce.domain.entities.Order",
+            "target": "ecommerce.domain.entities.Order.total"
+          },
+          {
+            "source": "ecommerce.domain.entities.Product",
+            "target": "ecommerce.domain.entities.Product.__init__"
+          },
+          {
+            "source": "ecommerce.domain.events",
+            "target": "ecommerce.domain.events.OrderPlacedEvent"
+          },
+          {
+            "source": "ecommerce.domain.events.OrderPlacedEvent",
+            "target": "ecommerce.domain.events.OrderPlacedEvent.__init__"
+          },
+          {
+            "source": "ecommerce.services.notification",
+            "target": "ecommerce.services.notification.Notifier"
+          },
+          {
+            "source": "ecommerce.services.notification.Notifier",
+            "target": "ecommerce.services.notification.Notifier.notify"
+          },
+          {
+            "source": "ecommerce.services.order_service",
+            "target": "ecommerce.services.order_service.OrderService"
+          },
+          {
+            "source": "ecommerce.services.order_service.OrderService",
+            "target": "ecommerce.services.order_service.OrderService.__init__"
+          },
+          {
+            "source": "ecommerce.services.order_service.OrderService",
+            "target": "ecommerce.services.order_service.OrderService.process_order"
+          },
+          {
+            "source": "ecommerce.services.pricing",
+            "target": "ecommerce.services.pricing.DiscountPolicy"
+          },
+          {
+            "source": "ecommerce.services.pricing",
+            "target": "ecommerce.services.pricing.calc_tax"
+          },
+          {
+            "source": "ecommerce.services.pricing.DiscountPolicy",
+            "target": "ecommerce.services.pricing.DiscountPolicy.apply_discount"
+          },
+          {
+            "source": "ecommerce.storage.db",
+            "target": "ecommerce.storage.db.Database"
+          },
+          {
+            "source": "ecommerce.storage.db.Database",
+            "target": "ecommerce.storage.db.Database.query"
+          },
+          {
+            "source": "ecommerce.storage.repository",
+            "target": "ecommerce.storage.repository.OrderRepository"
+          },
+          {
+            "source": "ecommerce.storage.repository.OrderRepository",
+            "target": "ecommerce.storage.repository.OrderRepository.__init__"
+          },
+          {
+            "source": "ecommerce.storage.repository.OrderRepository",
+            "target": "ecommerce.storage.repository.OrderRepository.save_order"
+          },
+          {
+            "source": "ecommerce.utils.config",
+            "target": "ecommerce.utils.config.load_config"
+          },
+          {
+            "source": "ecommerce.utils.logger",
+            "target": "ecommerce.utils.logger.AuditLogger"
+          },
+          {
+            "source": "ecommerce.utils.logger.AuditLogger",
+            "target": "ecommerce.utils.logger.AuditLogger.log_event"
+          }
+        ]
+      },
+      "limitations_documented": [
+        "Dynamic method dispatch on untyped local variables produces unresolved symbols in static AST analysis.",
+        "Chained member calls produce syntactic-only edge representations without full procedural dataflow."
+      ]
+    }
+  }
+}

@@ -62,7 +62,7 @@ include = ["codestruct*"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers --cov=backend --cov-report=term-missing --cov-fail-under=84"
-pythonpath = ["backend", "backend/src"]
+pythonpath = ["backend", "backend/src", "."]
 testpaths = ["tests"]
 markers = [
     "unit: isolated deterministic tests without external services",
