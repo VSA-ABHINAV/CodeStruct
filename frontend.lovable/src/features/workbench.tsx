@@ -375,9 +375,12 @@ function GraphNodeCard({
 export function buildFlow(
   graph: GraphResult,
   selectedId: string | null,
-  selectedEdgeId: string | null,
-  selectNode: (node: GraphNode) => void
+  arg3?: string | null | ((node: GraphNode) => void),
+  arg4?: (node: GraphNode) => void
 ) {
+  const selectedEdgeId: string | null = typeof arg3 === "string" ? arg3 : null;
+  const selectNode: ((node: GraphNode) => void) | undefined =
+    typeof arg3 === "function" ? arg3 : arg4;
   const levelMap = new Map<number, GraphNode[]>();
   for (const node of graph.nodes) {
     const lvl = getNodeLevel(node, graph.nodes);
@@ -411,7 +414,7 @@ export function buildFlow(
         data: {
           node,
           selected: node.id === selectedId,
-          onSelect: () => selectNode(node),
+          onSelect: () => selectNode?.(node),
         },
         type: "codestruct",
         draggable: true,

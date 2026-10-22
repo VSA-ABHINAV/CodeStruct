@@ -680,6 +680,23 @@ class CodeStructProjectExplorerView(ttk.Frame):
             except Exception:
                 initial_dir = None
         if not initial_dir or not os.path.isdir(initial_dir):
+            if self.wb and hasattr(self.wb, "get_option"):
+                try:
+                    work_dir = self.wb.get_option("run.working_directory")
+                    if work_dir and os.path.isdir(work_dir):
+                        initial_dir = work_dir
+                except Exception:
+                    pass
+        if not initial_dir or not os.path.isdir(initial_dir):
+            mappings = os.environ.get("CODESTRUCT_ROOT_MAPPINGS", "")
+            if mappings:
+                for item in mappings.split(";"):
+                    if "=" in item:
+                        _, mpath = item.split("=", 1)
+                        if os.path.isdir(mpath):
+                            initial_dir = mpath
+                            break
+        if not initial_dir or not os.path.isdir(initial_dir):
             initial_dir = str(Path.cwd())
 
         self.current_project_dir: Path = Path(initial_dir).resolve()
@@ -717,8 +734,33 @@ class CodeStructProjectExplorerView(ttk.Frame):
     def should_open_name_in_thonny(self, name: str) -> bool:
         return True
 
+    def get_selected_path(self) -> Optional[str]:
+        sel = self.tree.selection()
+        if sel and sel[0] in self._tree_items:
+            return self._tree_items[sel[0]].get("path")
+        return str(self.current_project_dir)
+
+    def get_selected_file(self) -> Optional[str]:
+        sel = self.tree.selection()
+        if sel and sel[0] in self._tree_items:
+            item = self._tree_items[sel[0]]
+            if item.get("type") in ("file", "class", "function", "method"):
+                return item.get("path")
+        return None
+
     def select_path_if_visible(self, path: str) -> None:
-        pass
+        if not path:
+            return
+        try:
+            p = Path(path).resolve()
+            for node_id, data in self._tree_items.items():
+                node_path = data.get("path")
+                if node_path and Path(node_path).resolve() == p:
+                    self.tree.selection_set(node_id)
+                    self.tree.see(node_id)
+                    return
+        except Exception:
+            pass
 
     def check_update_focus(self) -> None:
         pass
@@ -849,6 +891,7 @@ class CodeStructProjectExplorerView(ttk.Frame):
         self.tree.bind("<Double-1>", self._on_tree_double_click)
         self.tree.bind("<Return>", self._on_tree_double_click)
         self.tree.bind("<Button-3>", self._on_tree_context_menu)
+        self.tree.bind("<<TreeviewOpen>>", self._on_tree_open)
 
     def _set_search_placeholder(self) -> None:
         if not self.search_var.get():
@@ -958,15 +1001,17 @@ class CodeStructProjectExplorerView(ttk.Frame):
                     parent_node_id,
                     tk.END,
                     text=f"📁 {name}",
-                    open=True,
+                    open=False,
                     values=("",),
                 )
                 self._tree_items[dir_id] = {
                     "type": "dir",
                     "path": str(entry_path),
                     "line": None,
+                    "loaded": False,
                 }
-                self._populate_dir(entry_path, dir_id)
+                # Insert placeholder to display '+' expand button
+                self.tree.insert(dir_id, tk.END, text="")
             else:
                 is_python = name.endswith(".py") or name.endswith(".pyw")
                 if (
@@ -1080,6 +1125,26 @@ class CodeStructProjectExplorerView(ttk.Frame):
                         "name": node.name,
                     }
 
+    def _on_tree_open(self, event: Any = None) -> None:
+        item_id = self.tree.focus()
+        if not item_id:
+            sel = self.tree.selection()
+            if sel:
+                item_id = sel[0]
+        if not item_id:
+            return
+        meta = self._tree_items.get(item_id)
+        if meta and meta.get("type") == "dir" and not meta.get("loaded", True):
+            self._load_dir_children(item_id, Path(meta["path"]))
+
+    def _load_dir_children(self, node_id: str, dir_path: Path) -> None:
+        meta = self._tree_items.get(node_id)
+        if meta:
+            meta["loaded"] = True
+        for child in self.tree.get_children(node_id):
+            self.tree.delete(child)
+        self._populate_dir(dir_path, node_id)
+
     def _on_tree_double_click(self, event: Any = None) -> None:
         selection = self.tree.selection()
         if not selection:
@@ -1091,6 +1156,8 @@ class CodeStructProjectExplorerView(ttk.Frame):
 
         if meta.get("type") == "dir":
             is_open = self.tree.item(item_id, "open")
+            if not is_open and not meta.get("loaded", True):
+                self._load_dir_children(item_id, Path(meta["path"]))
             self.tree.item(item_id, open=not is_open)
             return
 
@@ -1192,6 +1259,22 @@ def _integrate_persistent_explorer(wb: Any) -> None:
                 )
             except Exception:
                 pass
+
+        if hasattr(wb, "set_option"):
+            try:
+                wb.set_option("view.FilesView.visible", True)
+                wb.set_option("view.filesview.visible", True)
+            except Exception:
+                pass
+
+        if hasattr(wb, "get_variable"):
+            for var_name in ("view.FilesView.visible", "view.filesview.visible"):
+                try:
+                    v = wb.get_variable(var_name)
+                    if hasattr(v, "set"):
+                        v.set(True)
+                except Exception:
+                    pass
 
         if hasattr(wb, "show_view"):
             try:
@@ -1297,6 +1380,7 @@ class CodeStructEditorTab(Editor):
         if tkwry is not None:
             try:
                 self._container = tk.Frame(self)
+                self._container.pack(fill="both", expand=True)
                 webview_dir = (
                     Path(tempfile.gettempdir())
                     / f"codestruct_thonny_webview_{os.getpid()}"
@@ -1459,8 +1543,8 @@ def get_file_view_folder(wb: Any) -> Optional[str]:
             if files_view is None:
                 files_view = wb.get_view("FilesView", create=True)
 
+        raw_path: Optional[str] = None
         if files_view is not None:
-            raw_path: Optional[str] = None
             # 1. Primary supported Thonny API: get_active_local_dir()
             if hasattr(files_view, "get_active_local_dir"):
                 try:
@@ -1487,16 +1571,49 @@ def get_file_view_folder(wb: Any) -> Optional[str]:
                     if isinstance(res, str) and res.strip():
                         raw_path = res.strip()
 
-            if raw_path and isinstance(raw_path, str) and raw_path.strip():
-                p = Path(raw_path.strip())
-                try:
-                    # If pointed at a file, determine the containing folder view/root
-                    if p.is_file():
-                        p = p.parent
-                    if p.is_dir():
-                        return str(p.resolve())
-                except OSError:
-                    pass
+        # 4. Fallback: active editor file in Thonny
+        if not raw_path and hasattr(wb, "get_editor_notebook"):
+            try:
+                ed_nb = wb.get_editor_notebook()
+                if ed_nb:
+                    curr_ed = ed_nb.get_current_editor()
+                    if curr_ed and hasattr(curr_ed, "get_filename"):
+                        fn = curr_ed.get_filename()
+                        if fn and isinstance(fn, str) and os.path.isfile(fn):
+                            raw_path = str(Path(fn).parent)
+            except Exception:
+                pass
+
+        # 5. Fallback: environment root mappings
+        if not raw_path:
+            mappings = os.environ.get("CODESTRUCT_ROOT_MAPPINGS", "")
+            if mappings:
+                for item in mappings.split(";"):
+                    if "=" in item:
+                        _, mpath = item.split("=", 1)
+                        if os.path.isdir(mpath):
+                            raw_path = mpath
+                            break
+
+        # 6. Fallback: Thonny's last browser folder option
+        if not raw_path and hasattr(wb, "get_option"):
+            try:
+                opt = wb.get_option("file.last_browser_folder")
+                if opt and isinstance(opt, str) and os.path.isdir(opt):
+                    raw_path = opt
+            except Exception:
+                pass
+
+        if raw_path and isinstance(raw_path, str) and raw_path.strip():
+            p = Path(raw_path.strip())
+            try:
+                # If pointed at a file, determine the containing folder view/root
+                if p.is_file():
+                    p = p.parent
+                if p.is_dir():
+                    return str(p.resolve())
+            except OSError:
+                pass
     except Exception as exc:
         logger.debug("Could not read File view folder: %s", exc)
     return None

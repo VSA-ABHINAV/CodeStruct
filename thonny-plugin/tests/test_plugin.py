@@ -1878,6 +1878,141 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
         cs._bind_editor_notebook_events(wb)
         self.assertEqual(editor_notebook.bind.call_count, 1)
 
+    def test_codestruct_project_explorer_lazy_expansion(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                p_dir = Path(temp_dir)
+                root_file = p_dir / "root_mod.py"
+                root_file.write_text("x = 1\n", encoding="utf-8")
+
+                nested_dir = p_dir / "nested_pkg"
+                nested_dir.mkdir()
+                child_file = nested_dir / "child.py"
+                child_file.write_text("class ChildClass:\n    pass\n", encoding="utf-8")
+
+                explorer = cs.CodeStructProjectExplorerView(root)
+                explorer.switch_project_folder(str(p_dir))
+
+                # Find the directory item (excluding the project root folder)
+                dir_nodes = [
+                    (nid, meta)
+                    for nid, meta in explorer._tree_items.items()
+                    if meta.get("type") == "dir"
+                    and Path(meta.get("path", "")).resolve() != p_dir.resolve()
+                ]
+                self.assertEqual(len(dir_nodes), 1)
+                dir_id, dir_meta = dir_nodes[0]
+                self.assertFalse(dir_meta.get("loaded", True))
+
+                # Initially, ChildClass is NOT loaded in tree items
+                self.assertFalse(
+                    any(m.get("name") == "ChildClass" for m in explorer._tree_items.values())
+                )
+
+                # Trigger expansion
+                explorer._load_dir_children(dir_id, Path(dir_meta["path"]))
+                self.assertTrue(dir_meta.get("loaded", False))
+
+                # After expansion, ChildClass IS loaded
+                self.assertTrue(
+                    any(m.get("name") == "ChildClass" for m in explorer._tree_items.values())
+                )
+        finally:
+            root.destroy()
+
+    def test_codestruct_project_explorer_duck_typing(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                p_dir = Path(temp_dir)
+                test_file = p_dir / "sample_file.py"
+                test_file.write_text("def my_func(): pass\n", encoding="utf-8")
+
+                explorer = cs.CodeStructProjectExplorerView(root)
+                explorer.switch_project_folder(str(p_dir))
+
+                # Test get_selected_path fallback when nothing selected
+                self.assertEqual(explorer.get_selected_path(), str(p_dir))
+                self.assertIsNone(explorer.get_selected_file())
+
+                # Find the file node
+                file_nodes = [
+                    nid
+                    for nid, meta in explorer._tree_items.items()
+                    if meta.get("type") == "file"
+                ]
+                self.assertTrue(len(file_nodes) >= 1)
+                fn_id = file_nodes[0]
+
+                # Select the file node
+                explorer.tree.selection_set(fn_id)
+                self.assertEqual(
+                    Path(explorer.get_selected_path()).resolve(),
+                    test_file.resolve(),
+                )
+                self.assertEqual(
+                    Path(explorer.get_selected_file()).resolve(),
+                    test_file.resolve(),
+                )
+
+                # Test select_path_if_visible
+                explorer.tree.selection_remove(fn_id)
+                self.assertEqual(len(explorer.tree.selection()), 0)
+                explorer.select_path_if_visible(str(test_file))
+                self.assertIn(fn_id, explorer.tree.selection())
+        finally:
+            root.destroy()
+
+    def test_codestruct_editor_tab_container_packing(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            container_frame = tk.Frame(root)
+            mock_tkwry = MagicMock()
+            mock_webview = MagicMock()
+            mock_tkwry.WebView.return_value = mock_webview
+            with patch.object(cs, "tkwry", mock_tkwry):
+                tab = cs.CodeStructEditorTab(
+                    container_frame,
+                    viewer_url="http://127.0.0.1:5173",
+                    project_path=str(Path.cwd()),
+                )
+                self.assertIsNotNone(tab._container)
+                pack_info = tab._container.pack_info()
+                self.assertEqual(pack_info.get("fill"), "both")
+                self.assertEqual(str(pack_info.get("expand")), "1")
+                tab.destroy()
+        finally:
+            root.destroy()
+
+    def test_get_file_view_folder_fallbacks(self):
+        wb = MagicMock()
+        # 1. No view found
+        wb.get_view.return_value = None
+
+        # Fallback to editor notebook
+        ed_nb = MagicMock()
+        curr_ed = MagicMock()
+        with tempfile.TemporaryDirectory() as td:
+            dummy_file = Path(td) / "test.py"
+            dummy_file.write_text("a = 1\n", encoding="utf-8")
+            curr_ed.get_filename.return_value = str(dummy_file)
+            ed_nb.get_current_editor.return_value = curr_ed
+            wb.get_editor_notebook.return_value = ed_nb
+
+            res = cs.get_file_view_folder(wb)
+            self.assertEqual(Path(res).resolve(), Path(td).resolve())
+
+        # Fallback to option last_browser_folder
+        ed_nb.get_current_editor.return_value = None
+        with tempfile.TemporaryDirectory() as td2:
+            wb.get_option.return_value = str(td2)
+            res2 = cs.get_file_view_folder(wb)
+            self.assertEqual(Path(res2).resolve(), Path(td2).resolve())
+
 
 if __name__ == "__main__":
     unittest.main()
