@@ -85,6 +85,43 @@ class AcknowledgeResponse(StrictModel):
     reason: str | None = None
 
 
+class ShellMessageRequest(StrictModel):
+    session_token: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=16384)
+    stream: Literal["stdout", "stderr"] = "stdout"
+
+
+class ShellMessageResponse(StrictModel):
+    api_version: Literal["v1"] = "v1"
+    request_id: str
+    message_id: str
+    status: str = "queued"
+
+
+class ShellMessageItem(StrictModel):
+    message_id: str
+    text: str
+    stream: str = "stdout"
+
+
+class PendingShellMessagesResponse(StrictModel):
+    api_version: Literal["v1"] = "v1"
+    request_id: str
+    has_messages: bool
+    messages: list[ShellMessageItem] = Field(default_factory=list)
+
+
+class AcknowledgeShellMessagesRequest(StrictModel):
+    session_token: str = Field(min_length=1, max_length=128)
+    message_ids: list[str] = Field(default_factory=list)
+
+
+class AcknowledgeShellMessagesResponse(StrictModel):
+    api_version: Literal["v1"] = "v1"
+    request_id: str
+    acknowledged_count: int
+
+
 # ---------------------------------------------------------------------------
 # Loopback / Local & Origin check
 # ---------------------------------------------------------------------------
@@ -266,4 +303,67 @@ def acknowledge_navigate_command(
         acknowledged=acknowledged,
         status=outcome,
         reason=body.reason if outcome == "failed" else None,
+    )
+
+
+@router.post("/shell-message", response_model=ShellMessageResponse)
+def post_shell_message(
+    body: ShellMessageRequest,
+    request: Request,
+    service: AnalysisService = Depends(analysis_service),
+) -> ShellMessageResponse:
+    """Queue a structured shell status or diagnostic notification for Thonny."""
+    _validate_trusted_origin(request)
+    msg_id = service.queue_shell_message(
+        session_token=body.session_token,
+        text=body.text,
+        stream=body.stream,
+    )
+    return ShellMessageResponse(
+        request_id=request.state.request_id,
+        message_id=msg_id,
+        status="queued",
+    )
+
+
+@router.get("/shell-messages/pending", response_model=PendingShellMessagesResponse)
+def get_pending_shell_messages(
+    request: Request,
+    session_token: str = Query(min_length=1, max_length=128),
+    service: AnalysisService = Depends(analysis_service),
+) -> PendingShellMessagesResponse:
+    """Poll for pending shell messages queued for the session."""
+    _validate_trusted_origin(request)
+    msgs = service.get_pending_shell_messages(session_token)
+    return PendingShellMessagesResponse(
+        request_id=request.state.request_id,
+        has_messages=bool(msgs),
+        messages=[
+            ShellMessageItem(
+                message_id=m["message_id"],
+                text=m["text"],
+                stream=m.get("stream", "stdout"),
+            )
+            for m in msgs
+        ],
+    )
+
+
+@router.post(
+    "/shell-messages/acknowledge", response_model=AcknowledgeShellMessagesResponse
+)
+def acknowledge_shell_messages(
+    body: AcknowledgeShellMessagesRequest,
+    request: Request,
+    service: AnalysisService = Depends(analysis_service),
+) -> AcknowledgeShellMessagesResponse:
+    """Mark polled shell messages as delivered."""
+    _validate_trusted_origin(request)
+    count = service.acknowledge_shell_messages(
+        session_token=body.session_token,
+        message_ids=body.message_ids,
+    )
+    return AcknowledgeShellMessagesResponse(
+        request_id=request.state.request_id,
+        acknowledged_count=count,
     )

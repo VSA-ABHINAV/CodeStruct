@@ -320,6 +320,8 @@ function Inspector({
   node,
   edge,
   graph,
+  projectTitle,
+  diagnosticsCount,
   onClose,
   onExplain,
   explanation,
@@ -330,6 +332,8 @@ function Inspector({
   node: GraphNode | null;
   edge: GraphEdge | null;
   graph: GraphResult;
+  projectTitle?: string;
+  diagnosticsCount?: number;
   onClose: () => void;
   onExplain: () => void;
   explanation: NodeExplanation | null;
@@ -651,11 +655,101 @@ function Inspector({
             </div>
           </div>
         ) : (
-          <div className="p-4 text-center text-gray-500">
-            <p className="font-medium text-gray-700">No symbol selected</p>
-            <p className="mt-1 text-[11px]">
-              Select a node in the graph or a symbol in the Project Explorer to inspect details.
-            </p>
+          <div className="space-y-3.5">
+            {/* Architecture Overview Card */}
+            <div className="bg-white border border-gray-200 rounded p-3 shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                <span className="text-[10px] uppercase font-bold text-teal-800 tracking-wider">
+                  Architecture Overview
+                </span>
+                <span className="text-[9px] bg-teal-50 text-teal-800 border border-teal-200 px-1.5 py-0.5 rounded font-mono font-medium">
+                  {graph?.nodes?.length ?? 0} symbols
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-gray-500 uppercase font-medium">Project Root</span>
+                <p className="text-xs font-mono font-semibold text-gray-800 truncate" title={projectTitle}>
+                  {projectTitle || "No project loaded"}
+                </p>
+              </div>
+
+              {/* Symbol Count Matrix */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <span className="text-[10px] text-gray-500 font-medium">Modules</span>
+                  <div className="text-base font-bold text-teal-700 font-mono">
+                    {graph?.nodes?.filter((n) => (n.kind || "").toLowerCase() === "module").length ?? 0}
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <span className="text-[10px] text-gray-500 font-medium">Classes</span>
+                  <div className="text-base font-bold text-green-700 font-mono">
+                    {graph?.nodes?.filter((n) => (n.kind || "").toLowerCase() === "class").length ?? 0}
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <span className="text-[10px] text-gray-500 font-medium">Functions</span>
+                  <div className="text-base font-bold text-amber-600 font-mono">
+                    {graph?.nodes?.filter((n) => (n.kind || "").toLowerCase() === "function").length ?? 0}
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <span className="text-[10px] text-gray-500 font-medium">Methods</span>
+                  <div className="text-base font-bold text-sky-600 font-mono">
+                    {graph?.nodes?.filter((n) => (n.kind || "").toLowerCase() === "method").length ?? 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 space-y-1 text-[11px] text-gray-600">
+                <div className="flex justify-between">
+                  <span>Relationships:</span>
+                  <span className="font-mono font-semibold text-gray-800">{graph?.edges?.length ?? 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Evidence records:</span>
+                  <span className="font-mono font-semibold text-gray-800">{graph?.evidence?.length ?? 0}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Static Non-Execution Guarantee */}
+            <div className="bg-white border border-teal-200 rounded p-3 shadow-xs space-y-1.5">
+              <div className="flex items-center gap-1.5 text-teal-800 text-[11px] font-semibold">
+                <span className="w-2 h-2 rounded-full bg-teal-600 inline-block" />
+                <span>Static Non-Execution Guarantee</span>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-relaxed">
+                Project code is parsed statically into AST structures. Fixture and user code is never executed.
+              </p>
+            </div>
+
+            {/* Native Shell Diagnostics Notice */}
+            <div className="bg-white border border-gray-200 rounded p-3 shadow-xs space-y-1.5">
+              <div className="text-[10px] uppercase font-bold text-gray-600 tracking-wider">
+                Integrated Thonny Shell
+              </div>
+              <p className="text-[11px] text-gray-600 leading-relaxed">
+                Analysis status, diagnostics, and navigation events are routed directly to Thonny's native Shell below.
+              </p>
+              {diagnosticsCount !== undefined && diagnosticsCount > 0 ? (
+                <div className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                  ⚠ {diagnosticsCount} diagnostic message(s) reported in Thonny Shell.
+                </div>
+              ) : (
+                <div className="text-[11px] text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-200 font-medium">
+                  ✓ Clean analysis — no diagnostic errors.
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Navigation Guide */}
+            <div className="p-3 bg-gray-100 rounded border border-gray-200 text-gray-600 space-y-1">
+              <div className="font-semibold text-gray-800 text-[11px]">Symbol Inspection</div>
+              <p className="text-[11px] leading-relaxed">
+                Select any symbol from the Project Explorer tree or click any node in the architecture graph to view source coordinates, request explanations, inspect relationships, or jump directly to the code in Thonny.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -692,9 +786,6 @@ export function CodeStructWorkbench() {
   const [view, setView] = useState<"graph" | "table">("graph");
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
-  const [dockOpen, setDockOpen] = useState(true);
-  const [dockTab, setDockTab] = useState<"shell" | "diagnostics">("shell");
-  const [activeDiag, setActiveDiag] = useState<"all" | "error" | "warning">("all");
 
   activeSelection.current = `${analysisId}:${selectedNode?.id ?? ""}`;
 
@@ -821,10 +912,6 @@ export function CodeStructWorkbench() {
         setError(err instanceof Error ? err.message : "Navigation failed");
     }
   };
-
-  const shownDiagnostics = diagnostics.filter(
-    (item) => activeDiag === "all" || item.severity === activeDiag
-  );
 
   const currentProjectTitle =
     tree?.root_path ||
@@ -1412,6 +1499,8 @@ export function CodeStructWorkbench() {
                 },
               }
             }
+            projectTitle={currentProjectTitle}
+            diagnosticsCount={diagnostics.length}
             onSelectNode={(n) => {
               setSelectedNode(n);
               setSelectedEdge(null);
@@ -1424,191 +1513,6 @@ export function CodeStructWorkbench() {
           />
         ) : null}
       </div>
-
-      {/* BEGIN: Bottom Thonny Docked Panels (Shell & Diagnostics) */}
-      <section
-        className={cn(
-          "border-t-2 border-gray-300 bg-white flex flex-col shrink-0 transition-all duration-150",
-          dockOpen ? "h-36" : "h-7"
-        )}
-        data-purpose="docked-bottom-panels"
-      >
-        {/* Dock Panel Tabs */}
-        <div className="h-6.5 bg-[#f0f0f0] flex items-center justify-between px-2 border-b border-gray-300 text-xs shrink-0 select-none">
-          <div className="flex items-center space-x-1 h-full">
-            <button
-              type="button"
-              onClick={() => {
-                setDockTab("shell");
-                setDockOpen(true);
-              }}
-              className={cn(
-                "px-3 h-full flex items-center gap-1 cursor-pointer font-medium text-xs border-x",
-                dockTab === "shell" && dockOpen
-                  ? "bg-white border-t-2 border-t-teal-700 border-x-gray-300 font-semibold text-gray-800"
-                  : "text-gray-600 hover:text-gray-900 border-transparent"
-              )}
-            >
-              <span>Shell</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDockTab("diagnostics");
-                setDockOpen(true);
-              }}
-              className={cn(
-                "px-3 h-full flex items-center gap-1.5 cursor-pointer font-medium text-xs border-x",
-                dockTab === "diagnostics" && dockOpen
-                  ? "bg-white border-t-2 border-t-teal-700 border-x-gray-300 font-semibold text-gray-800"
-                  : "text-gray-600 hover:text-gray-900 border-transparent"
-              )}
-            >
-              <span>Diagnostics</span>
-              <span className="bg-teal-100 text-teal-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                {diagnostics.length}
-              </span>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            className="text-gray-500 hover:text-gray-800 text-[11px] px-1 cursor-pointer"
-            onClick={() => setDockOpen((v) => !v)}
-            title={dockOpen ? "Minimize Panel" : "Restore Panel"}
-          >
-            {dockOpen ? "▼ Minimize" : "▲ Restore"}
-          </button>
-        </div>
-
-        {/* Panel Content */}
-        {dockOpen ? (
-          dockTab === "shell" ? (
-            <div
-              className="flex-1 p-2 font-mono text-xs overflow-y-auto leading-relaxed bg-white text-gray-900 select-text"
-              data-purpose="thonny-shell-output"
-            >
-              <div className="text-slate-800 font-semibold tracking-tight">
-                [CodeStruct Architecture Workbench • Static Analysis Console]
-              </div>
-              <div className="text-gray-600 pl-3 py-0.5 text-[11px] space-y-0.5">
-                <div>• Static Analysis Engine: AST hierarchy and dependency discovery</div>
-                <div>• Security Policy: Analyzed project source is never executed (zero execution invariant)</div>
-                <div>• Service Status: Connected to local CodeStruct REST adapter</div>
-              </div>
-              {graph ? (
-                <>
-                  <div className="text-teal-700 font-semibold tracking-tight mt-1">
-                    [Static Analysis Complete] Discovered {graph.nodes.length} symbols in {currentProjectTitle}:
-                  </div>
-                  <div className="text-teal-800 font-medium pl-3 text-[11px] space-y-0.5">
-                    <div>
-                      ✓ AST symbols: {graph.nodes.filter((n) => n.kind === "module").length}{" "}
-                      Module(s), {graph.nodes.filter((n) => n.kind === "class").length} Class(es),{" "}
-                      {graph.nodes.filter((n) => n.kind === "function").length} Function(s),{" "}
-                      {graph.nodes.filter((n) => n.kind === "method").length} Method(s).
-                    </div>
-                    <div>
-                      ✓ Top-to-bottom architecture graph synchronized. Project code was strictly parsed, never executed.
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-gray-500 pl-3 py-1 text-[11px] italic">
-                  No project loaded. Click &quot;Open Folder&quot; to inspect project architecture.
-                </div>
-              )}
-              <div className="flex items-center text-gray-500 font-semibold mt-1">
-                <span>&gt;&gt;&gt;&nbsp;</span>
-                <span className="text-gray-400 font-normal italic text-[11px]">
-                  (static architecture console • script execution disabled)
-                </span>
-                <span className="w-2 h-3.5 bg-gray-600 ml-1 inline-block animate-pulse" />
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 p-2 overflow-y-auto text-xs bg-white space-y-2">
-              <div className="flex items-center gap-2 pb-1 border-b border-gray-200">
-                {(["all", "error", "warning"] as const).map((sev) => (
-                  <button
-                    key={sev}
-                    type="button"
-                    onClick={() => setActiveDiag(sev)}
-                    className={cn(
-                      "px-2 py-0.5 rounded text-[11px] cursor-pointer",
-                      activeDiag === sev
-                        ? "bg-teal-600 text-white font-medium"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    )}
-                  >
-                    {sev === "all" ? "All" : sev === "error" ? "Errors" : "Warnings"} (
-                    {sev === "all"
-                      ? diagnostics.length
-                      : diagnostics.filter((d) => d.severity === sev).length}
-                    )
-                  </button>
-                ))}
-              </div>
-              {shownDiagnostics.length > 0 ? (
-                <div className="space-y-1">
-                  {shownDiagnostics.map((d) => (
-                    <div
-                      key={d.id}
-                      className="p-1.5 rounded border border-gray-200 bg-gray-50 flex items-start gap-2"
-                    >
-                      <span
-                        className={cn(
-                          "w-2 h-2 rounded-full mt-1 shrink-0",
-                          d.severity === "error" ? "bg-red-500" : "bg-amber-500"
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <code className="font-bold text-gray-900">{d.code}</code>
-                          <span className="text-[10px] text-gray-500 font-mono">
-                            {d.location ? `${d.location.path}:${d.location.start_line}` : "global"}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 mt-0.5">{d.message}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400 py-2">No diagnostics in this filter.</p>
-              )}
-            </div>
-          )
-        ) : null}
-      </section>
-
-      {/* BEGIN: Status Bar */}
-      <footer
-        className="h-6 bg-[#f0f0f0] border-t border-gray-300 px-3 flex items-center justify-between text-[11px] text-gray-600 select-none shrink-0"
-        data-purpose="system-statusbar"
-      >
-        <div className="flex items-center space-x-4">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-teal-600" />
-            <span>CodeStruct Static Analyzer • Connected to local adapter</span>
-          </span>
-          <span className="text-gray-400">|</span>
-          <span>
-            Encoding: <strong className="text-gray-700">UTF-8</strong>
-          </span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span>
-            {selectedNode?.location?.start_line
-              ? `Line ${selectedNode.location.start_line}, Col ${
-                  selectedNode.location.start_column ?? 1
-                }`
-              : "Line 1, Col 1"}
-          </span>
-          <span className="text-gray-400">|</span>
-          <span className="text-teal-700 font-medium">Static Analysis Only (Non-Execution)</span>
-        </div>
-      </footer>
     </div>
   );
 }

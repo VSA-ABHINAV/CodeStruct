@@ -72,6 +72,7 @@ class AnalysisService:
     ) -> None:
         self.settings = settings
         self._editor_capabilities: dict[str, EditorCapability] = {}
+        self._shell_messages: dict[str, list[dict[str, Any]]] = {}
         self._editor_lock = threading.RLock()
         if repository is not None:
             self.registry: JobRepository = repository
@@ -437,6 +438,43 @@ class AnalysisService:
                 return False, "already_consumed"
 
             return False, "unknown_command"
+
+    def queue_shell_message(
+        self, session_token: str, text: str, stream: str = "stdout"
+    ) -> str:
+        with self._editor_lock:
+            msg_id = "msg_" + secrets.token_urlsafe(9)
+            msgs = self._shell_messages.setdefault(session_token, [])
+            msgs.append(
+                {
+                    "message_id": msg_id,
+                    "text": text,
+                    "stream": stream,
+                    "created_at": time.time(),
+                }
+            )
+            if len(msgs) > 100:
+                msgs.pop(0)
+            return msg_id
+
+    def get_pending_shell_messages(self, session_token: str) -> list[dict[str, Any]]:
+        with self._editor_lock:
+            msgs = self._shell_messages.get(session_token, [])
+            now = time.time()
+            valid = [m for m in msgs if now - m.get("created_at", now) < 120.0]
+            self._shell_messages[session_token] = valid
+            return list(valid)
+
+    def acknowledge_shell_messages(
+        self, session_token: str, message_ids: list[str]
+    ) -> int:
+        with self._editor_lock:
+            msgs = self._shell_messages.get(session_token, [])
+            id_set = set(message_ids)
+            remaining = [m for m in msgs if m.get("message_id") not in id_set]
+            acked = len(msgs) - len(remaining)
+            self._shell_messages[session_token] = remaining
+            return acked
 
     def resolve_project(self, root_id: str, relative_path: str) -> Path:
         if root_id.startswith("cap_"):

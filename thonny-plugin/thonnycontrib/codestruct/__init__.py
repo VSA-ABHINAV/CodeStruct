@@ -13,6 +13,7 @@ import queue
 import stat as _stat_module
 import tempfile
 import threading
+import time
 import tkinter as tk
 import tkinter.filedialog
 import tkinter.messagebox
@@ -25,7 +26,13 @@ from tkinter import ttk
 from typing import Any, Optional, Tuple
 
 try:
-    from thonny import get_workbench
+    from thonny import get_workbench as _thonny_get_workbench
+
+    def get_workbench() -> Any:
+        try:
+            return _thonny_get_workbench()
+        except (AssertionError, Exception):
+            return None
 except ImportError:
     # Allow importing and testing outside of full Thonny runtime
     def get_workbench() -> Any:
@@ -634,6 +641,116 @@ class DummyCodeView:
         return self.text
 
 
+# FilesView visibility state tracking across tab lifecycle
+_user_files_view_was_visible: Optional[bool] = None
+
+
+def is_files_view_visible(wb: Any) -> bool:
+    """Check if Thonny's native FilesView is currently visible in the UI."""
+    if wb is None:
+        return False
+    try:
+        if hasattr(wb, "get_view"):
+            view = wb.get_view("FilesView", create=False)
+            if view is not None:
+                return getattr(view, "containing_notebook", None) is not None
+    except Exception:
+        pass
+    return False
+
+
+def _hide_files_pane(wb: Any) -> None:
+    """Hide Thonny's duplicate native FilesView while CodeStruct tab is active."""
+    global _user_files_view_was_visible
+    if wb is None or not hasattr(wb, "hide_view"):
+        return
+    try:
+        currently_visible = is_files_view_visible(wb)
+        if _user_files_view_was_visible is None:
+            _user_files_view_was_visible = currently_visible
+        if currently_visible:
+            wb.hide_view("FilesView")
+            logger.info("CodeStruct: Hid native FilesView for unified Explorer")
+    except Exception as exc:
+        logger.debug("Failed hiding FilesView: %s", exc)
+
+
+def _restore_files_pane(wb: Any) -> None:
+    """Restore Thonny's native FilesView to the user's prior visibility."""
+    global _user_files_view_was_visible
+    if wb is None:
+        return
+    try:
+        if _user_files_view_was_visible:
+            if hasattr(wb, "show_view") and not is_files_view_visible(wb):
+                wb.show_view("FilesView", set_focus=False)
+                logger.info("CodeStruct: Restored native FilesView")
+            if hasattr(wb, "set_option"):
+                wb.set_option("view.FilesView.visible", True)
+        _user_files_view_was_visible = None
+    except Exception as exc:
+        logger.debug("Failed restoring FilesView: %s", exc)
+        _user_files_view_was_visible = None
+
+
+def _on_editor_tab_changed(wb: Any) -> None:
+    """Hook invoked when Thonny EditorNotebook switches active tab."""
+    if _is_shutting_down or wb is None:
+        return
+    try:
+        editor_notebook = getattr(wb, "get_editor_notebook", lambda: None)()
+        if editor_notebook is None:
+            return
+        current_editor = editor_notebook.get_current_editor()
+        if isinstance(current_editor, CodeStructEditorTab):
+            _hide_files_pane(wb)
+        else:
+            _restore_files_pane(wb)
+    except Exception as exc:
+        logger.debug("Error handling editor tab change: %s", exc)
+
+
+def _bind_editor_notebook_events(wb: Any) -> None:
+    """Attach event listeners to Thonny's EditorNotebook for tab lifecycle management."""
+    if wb is None:
+        return
+    try:
+        editor_notebook = getattr(wb, "get_editor_notebook", lambda: None)()
+        if editor_notebook is not None:
+            if not getattr(editor_notebook, "_codestruct_tab_bound", False):
+                editor_notebook.bind(
+                    "<<NotebookTabChanged>>",
+                    lambda event: _on_editor_tab_changed(wb),
+                    add=True,
+                )
+                editor_notebook._codestruct_tab_bound = True
+    except Exception as exc:
+        logger.debug("Failed binding to editor notebook: %s", exc)
+
+
+def print_to_thonny_shell(wb: Any, text: str, stream: str = "stdout") -> None:
+    """Safely write text to Thonny's native ShellView on the Tk main thread."""
+    if wb is None:
+        return
+    try:
+        shell = wb.get_view("ShellView", create=False)
+        if shell is None:
+            shell = wb.get_view("ShellView", create=True)
+        if shell is not None and hasattr(shell, "text"):
+            st = shell.text
+            if not text.endswith("\n"):
+                text += "\n"
+            tags = ("io", stream)
+            if hasattr(st, "_insert_text_directly"):
+                st._insert_text_directly(text, tags)
+            elif hasattr(st, "insert"):
+                st.insert("end", text, tags)
+            if hasattr(st, "see"):
+                st.see("end")
+    except Exception as exc:
+        logger.debug("Failed printing to Thonny shell: %s", exc)
+
+
 class CodeStructEditorTab(Editor):
     """Real Thonny editor tab hosting the CodeStruct Stitch architecture workbench via WebView2."""
 
@@ -763,6 +880,8 @@ class CodeStructEditorTab(Editor):
             )
 
     def close(self) -> None:
+        wb = get_workbench()
+        _restore_files_pane(wb)
         if self._webview is not None:
             try:
                 self._webview.destroy()
@@ -781,6 +900,8 @@ class CodeStructEditorTab(Editor):
             pass
 
     def destroy(self) -> None:
+        wb = get_workbench()
+        _restore_files_pane(wb)
         if self._webview is not None:
             try:
                 self._webview.destroy()
@@ -851,6 +972,128 @@ def get_file_view_folder(wb: Any) -> Optional[str]:
     except Exception as exc:
         logger.debug("Could not read File view folder: %s", exc)
     return None
+
+
+def _report_analysis_to_shell(
+    wb: Any, backend_url: str, analysis_id: str, folder_name: str
+) -> None:
+    """Stream background analysis status and structured diagnostics into Thonny's native ShellView."""
+    print_to_thonny_shell(
+        wb,
+        f"\n[CodeStruct] Architecture Workbench: {folder_name}\n"
+        f"• Analysis ID: {analysis_id}\n"
+        f"• Status: Analyzing project structure (zero execution AST parsing)...\n",
+        stream="stdout",
+    )
+
+    def _worker() -> None:
+        start_time = time.time()
+        completed_data = None
+        while time.time() - start_time < 30.0 and not _is_shutting_down:
+            try:
+                status_url = f"{backend_url.rstrip('/')}/api/v1/analyses/{urllib.parse.quote(analysis_id)}"
+                req = urllib.request.Request(
+                    status_url, headers={"Accept": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                if data.get("terminal"):
+                    completed_data = data
+                    break
+            except Exception:
+                pass
+            time.sleep(0.4)
+
+        if _is_shutting_down or completed_data is None:
+            return
+
+        state = completed_data.get("state")
+        if state == "completed":
+            nodes_by_kind: dict[str, int] = {}
+            total_symbols = 0
+            try:
+                graph_url = f"{backend_url.rstrip('/')}/api/v1/analyses/{urllib.parse.quote(analysis_id)}/graph"
+                req = urllib.request.Request(
+                    graph_url, headers={"Accept": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    gdata = json.loads(resp.read().decode("utf-8"))
+                nodes = gdata.get("nodes", [])
+                total_symbols = len(nodes)
+                for n in nodes:
+                    k = (n.get("kind") or "").lower()
+                    nodes_by_kind[k] = nodes_by_kind.get(k, 0) + 1
+            except Exception:
+                pass
+
+            diags: list[dict[str, Any]] = []
+            try:
+                diag_url = f"{backend_url.rstrip('/')}/api/v1/analyses/{urllib.parse.quote(analysis_id)}/diagnostics"
+                req = urllib.request.Request(
+                    diag_url, headers={"Accept": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    resp_obj = json.loads(resp.read().decode("utf-8"))
+                    if isinstance(resp_obj, dict):
+                        diags = resp_obj.get("items", [])
+                    elif isinstance(resp_obj, list):
+                        diags = resp_obj
+            except Exception:
+                pass
+
+            lines = [
+                f"[CodeStruct] Static Analysis Complete: {folder_name}",
+                f"• Discovered {total_symbols} AST symbols: "
+                f"{nodes_by_kind.get('module', 0)} Module(s), "
+                f"{nodes_by_kind.get('class', 0)} Class(es), "
+                f"{nodes_by_kind.get('function', 0)} Function(s), "
+                f"{nodes_by_kind.get('method', 0)} Method(s).",
+                "• Top-to-bottom architecture graph synchronized. Zero execution invariant: project code was parsed, never executed.",
+            ]
+            if diags:
+                lines.append(f"[CodeStruct] Diagnostics ({len(diags)}):")
+                for d in diags[:20]:
+                    loc = d.get("location") or {}
+                    file_path = loc.get("path") or "project"
+                    line_num = loc.get("start_line") or 1
+                    col_num = loc.get("start_column") or 1
+                    sev = (d.get("severity") or "info").upper()
+                    code = d.get("code") or "DIAG"
+                    msg = d.get("message") or ""
+                    lines.append(
+                        f'  File "{file_path}", line {line_num}, col {col_num}: [{sev}] {code} - {msg}'
+                    )
+                if len(diags) > 20:
+                    lines.append(f"  ... and {len(diags) - 20} more diagnostic items.")
+            else:
+                lines.append(
+                    "[CodeStruct] Diagnostics: Clean analysis (0 issues detected)."
+                )
+
+            report_text = "\n".join(lines) + "\n"
+            try:
+                wb.after(
+                    0, lambda: print_to_thonny_shell(wb, report_text, stream="stdout")
+                )
+            except Exception:
+                pass
+        elif state == "failed":
+            err_code = completed_data.get("error_code") or "ANALYSIS_FAILED"
+            err_msg = completed_data.get("error_message") or "Unknown error"
+            report_text = (
+                f"[CodeStruct] Static Analysis Failed: [{err_code}] {err_msg}\n"
+            )
+            try:
+                wb.after(
+                    0, lambda: print_to_thonny_shell(wb, report_text, stream="stderr")
+                )
+            except Exception:
+                pass
+
+    t = threading.Thread(
+        target=_worker, daemon=True, name="codestruct-analysis-reporter"
+    )
+    t.start()
 
 
 def open_codestruct_workbench(event: Any = None) -> None:
@@ -984,9 +1227,14 @@ def open_codestruct_workbench(event: Any = None) -> None:
         )
         return
 
+    _bind_editor_notebook_events(wb)
+
     canonical_folder_str = str(resolved_folder)
 
-    # 5. Open or update CodeStructEditorTab in editor_notebook
+    # 5. Hide native FilesView to keep CodeStruct Explorer as the sole left explorer
+    _hide_files_pane(wb)
+
+    # 6. Open or update CodeStructEditorTab in editor_notebook
     existing_tab: Optional[CodeStructEditorTab] = None
     for child in editor_notebook.winfo_children():
         if isinstance(child, CodeStructEditorTab):
@@ -1011,7 +1259,7 @@ def open_codestruct_workbench(event: Any = None) -> None:
         editor_notebook.select(new_tab)
         new_tab.focus_set()
 
-    # 6. Bind navigation session to the registered root and start navigation polling
+    # 7. Bind navigation session to the registered root and start navigation polling
     global \
         _nav_session_token, \
         _nav_registered_root, \
@@ -1027,6 +1275,9 @@ def open_codestruct_workbench(event: Any = None) -> None:
     _set_status_message(
         wb, f"CodeStruct: Workbench loaded for '{resolved_folder.name}'."
     )
+
+    # 8. Report analysis status and diagnostics directly to Thonny's native Shell
+    _report_analysis_to_shell(wb, backend_url, analysis_id, resolved_folder.name)
 
 
 def analyze_current_project(event: Any = None) -> None:
@@ -1304,6 +1555,8 @@ def on_workbench_shutdown(event: Any = None) -> None:
             _active_worker = None
         _active_operation = None
 
+    _restore_files_pane(wb)
+
 
 def _flush_nav_queue() -> None:
     """Discard all pending messages in _nav_queue.
@@ -1467,6 +1720,54 @@ def _poll_navigate(
                                 ),
                             )
                         )
+
+                # Poll pending shell messages routed from CodeStruct workbench
+                try:
+                    shell_poll_url = f"{backend_url}/api/v1/editor/shell-messages/pending?session_token={encoded_token}"
+                    shell_req = urllib.request.Request(
+                        shell_poll_url,
+                        headers={"Accept": "application/json"},
+                        method="GET",
+                    )
+                    with urllib.request.urlopen(shell_req, timeout=5.0) as shell_resp:
+                        shell_data = json.loads(shell_resp.read().decode("utf-8"))
+                    messages = shell_data.get("messages", [])
+                    if messages:
+                        ack_ids = []
+                        for msg in messages:
+                            m_id = msg.get("id")
+                            t_text = msg.get("text", "")
+                            s_stream = msg.get("stream", "stdout")
+                            if m_id:
+                                ack_ids.append(m_id)
+                            if t_text:
+                                wb.after(
+                                    0,
+                                    lambda t=t_text, s=s_stream: print_to_thonny_shell(
+                                        wb, t, s
+                                    ),
+                                )
+                        if ack_ids:
+                            ack_url = f"{backend_url}/api/v1/editor/shell-messages/acknowledge"
+                            ack_payload = json.dumps(
+                                {
+                                    "session_token": session_token,
+                                    "message_ids": ack_ids,
+                                }
+                            ).encode("utf-8")
+                            ack_req = urllib.request.Request(
+                                ack_url,
+                                data=ack_payload,
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "Accept": "application/json",
+                                },
+                                method="POST",
+                            )
+                            with urllib.request.urlopen(ack_req, timeout=5.0):
+                                pass
+                except Exception as shell_poll_err:
+                    logger.debug("Shell messages poll error: %s", shell_poll_err)
             except urllib.error.HTTPError as http_err:
                 if http_err.code in (401, 403, 404, 410):
                     logger.info(
@@ -1742,6 +2043,11 @@ def _execute_navigate(
 
         if cursor_placed:
             _set_status_message(wb, f"CodeStruct: Navigated to {resolved.name}:{line}")
+            print_to_thonny_shell(
+                wb,
+                f'[CodeStruct] Navigated to File "{resolved}", line {line}, col {col_offset + 1}\n',
+                stream="stdout",
+            )
             _acknowledge_navigate(
                 backend_url, session_token, command_id, status="delivered"
             )
@@ -1749,6 +2055,11 @@ def _execute_navigate(
             _set_status_message(
                 wb,
                 f"CodeStruct: Opened {resolved.name} (cursor positioning unavailable)",
+            )
+            print_to_thonny_shell(
+                wb,
+                f'[CodeStruct] Opened File "{resolved}" (cursor positioning unavailable)\n',
+                stream="stdout",
             )
             _acknowledge_navigate(
                 backend_url,
@@ -1761,6 +2072,11 @@ def _execute_navigate(
         logger.warning("Navigation failed: %s", nav_exc)
         _set_status_message(
             wb, f"CodeStruct: Navigation failed ({type(nav_exc).__name__})"
+        )
+        print_to_thonny_shell(
+            wb,
+            f"[CodeStruct] Navigation failed for '{clean_rel}': {type(nav_exc).__name__}\n",
+            stream="stderr",
         )
         _acknowledge_navigate(
             backend_url,
@@ -1850,6 +2166,14 @@ def load_plugin() -> None:
         caption="CodeStruct Architecture Workbench",
     )
 
+    try:
+        _bind_editor_notebook_events(wb)
+    except Exception:
+        pass
+    try:
+        wb.bind("WorkbenchOpen", lambda event: _bind_editor_notebook_events(wb), True)
+    except Exception:
+        pass
     try:
         wb.bind("WorkbenchClose", on_workbench_shutdown, True)
     except Exception:

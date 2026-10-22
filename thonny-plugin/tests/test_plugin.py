@@ -1756,6 +1756,79 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             self.assertIn("codestruct", cmd_ids)
             self.assertNotIn("codestruct_analyze", cmd_ids)
 
+    def test_files_view_visibility_and_hide_restore_lifecycle(self):
+        wb = MagicMock()
+        files_view = MagicMock()
+        files_view.containing_notebook = MagicMock()
+        wb.get_view.return_value = files_view
+
+        # Currently visible
+        self.assertTrue(cs.is_files_view_visible(wb))
+
+        # Hide pane
+        cs._hide_files_pane(wb)
+        wb.hide_view.assert_called_once_with("FilesView")
+
+        # Now simulate hidden (containing_notebook is None)
+        files_view.containing_notebook = None
+        self.assertFalse(cs.is_files_view_visible(wb))
+
+        # Restore pane
+        cs._restore_files_pane(wb)
+        wb.show_view.assert_called_once_with("FilesView", set_focus=False)
+
+    def test_on_editor_tab_changed_toggles_files_view(self):
+        wb = MagicMock()
+        editor_notebook = MagicMock()
+        wb.get_editor_notebook.return_value = editor_notebook
+        files_view = MagicMock()
+        files_view.containing_notebook = MagicMock()
+        wb.get_view.return_value = files_view
+
+        # CodeStruct tab active -> hide FilesView
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cs_tab = cs.CodeStructEditorTab(
+                editor_notebook, "http://127.0.0.1:5173/?embed=thonny", temp_dir
+            )
+            editor_notebook.get_current_editor.return_value = cs_tab
+            cs._on_editor_tab_changed(wb)
+            wb.hide_view.assert_called_with("FilesView")
+
+            # Normal editor active -> restore FilesView
+            normal_editor = MagicMock(spec=cs.Editor)
+            editor_notebook.get_current_editor.return_value = normal_editor
+            files_view.containing_notebook = None
+            cs._on_editor_tab_changed(wb)
+            wb.show_view.assert_called_with("FilesView", set_focus=False)
+
+    def test_print_to_thonny_shell(self):
+        wb = MagicMock()
+        shell = MagicMock()
+        st = MagicMock()
+        shell.text = st
+        wb.get_view.return_value = shell
+
+        cs.print_to_thonny_shell(
+            wb, "[CodeStruct] Diagnostics: Clean analysis", stream="stdout"
+        )
+        st._insert_text_directly.assert_called_once_with(
+            "[CodeStruct] Diagnostics: Clean analysis\n", ("io", "stdout")
+        )
+        st.see.assert_called_once_with("end")
+
+    def test_bind_editor_notebook_events_idempotent(self):
+        wb = MagicMock()
+        editor_notebook = MagicMock()
+        del editor_notebook._codestruct_tab_bound  # ensure clean mock
+        wb.get_editor_notebook.return_value = editor_notebook
+
+        cs._bind_editor_notebook_events(wb)
+        self.assertEqual(editor_notebook.bind.call_count, 1)
+
+        # Calling again does not re-bind
+        cs._bind_editor_notebook_events(wb)
+        self.assertEqual(editor_notebook.bind.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
