@@ -372,14 +372,29 @@ class RuleBasedExplainer:
         else:
             loc_str = ""
 
-        if context.docstring:
+        # Friendly kind formatting
+        if kind == "unresolved_symbol":
+            friendly_kind = "unresolved reference"
+        elif kind == "external_module":
+            friendly_kind = "external module"
+        else:
+            friendly_kind = kind.replace("_", " ")
+
+        kind_article = "an" if friendly_kind[0] in "aeiou" else "a"
+        role_article = "an" if role[0].lower() in "aeiou" else "a"
+
+        if kind == "unresolved_symbol":
             summary = (
-                f"`{context.name}` is a {kind}{loc_str}. "
+                f"`{context.name}` is an unresolved reference{loc_str} with no local AST definition."
+            )
+        elif context.docstring:
+            summary = (
+                f"`{context.name}` is {kind_article} {friendly_kind}{loc_str}. "
                 f'Documented purpose: "{context.docstring.strip()}"'
             )
         else:
             summary = (
-                f"`{context.name}` is a {kind}{loc_str} serving as a {role.lower()} "
+                f"`{context.name}` is {kind_article} {friendly_kind}{loc_str} serving as {role_article} {role.lower()} "
                 f"within the codebase."
             )
 
@@ -449,7 +464,7 @@ class RuleBasedExplainer:
         else:
             metric_parts = [
                 f"Observed connections: {len(context.callers) + len(context.importers)} incoming, "
-                f"{len(context.callees) + len(context.imports)} outgoing (graph metrics not computed)."
+                f"{len(context.callees) + len(context.imports)} outgoing."
             ]
 
         if context.runtime_stats:

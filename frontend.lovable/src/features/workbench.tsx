@@ -52,6 +52,108 @@ import type {
 
 const transport = getTransport();
 
+export function formatNodeKind(kind?: string): string {
+  if (!kind) return "Symbol";
+  const k = kind.toLowerCase();
+  if (k === "unresolved_symbol") return "Unresolved Reference";
+  if (k === "external_module") return "External Reference";
+  if (k === "async_function") return "Async Function";
+  if (k === "async_method") return "Async Method";
+  if (k === "module") return "Module";
+  if (k === "class") return "Class";
+  if (k === "function") return "Function";
+  if (k === "method") return "Method";
+  if (k === "package") return "Package";
+  if (k === "project") return "Project";
+  if (k === "file") return "File";
+  if (k === "directory") return "Directory";
+  return kind.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function formatRelationshipKind(kind?: string): string {
+  if (!kind) return "References";
+  const k = kind.toLowerCase();
+  if (k === "calls") return "calls";
+  if (k === "defines") return "defines";
+  if (k === "contains") return "contains";
+  if (k === "inherits") return "inherits";
+  if (k === "imports") return "imports";
+  if (k === "constructs") return "constructs";
+  if (k === "references") return "references";
+  return kind.replace(/_/g, " ").toLowerCase();
+}
+
+export function formatResolutionStatus(status?: string): string {
+  if (!status) return "Resolved";
+  const s = status.toLowerCase();
+  if (s === "unresolved" || s === "unresolved_symbol") return "Unresolved Reference";
+  if (s === "ambiguous") return "Ambiguous Match";
+  if (s === "syntactic_only") return "Syntactic Reference";
+  if (s === "resolved") return "Resolved";
+  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function formatTwoLineExplanation(
+  node: GraphNode,
+  explanation: NodeExplanation | null,
+  connectedEdges: GraphEdge[],
+  allNodes: GraphNode[]
+): [string, string] {
+  const isUnresolved = (node.kind || "").toLowerCase() === "unresolved_symbol";
+  const incoming = connectedEdges.filter((e) => e.target_id === node.id);
+  const outgoing = connectedEdges.filter((e) => e.source_id === node.id);
+
+  let line1 = "";
+  let line2 = "";
+
+  if (explanation) {
+    const cleanRole = explanation.role
+      .replace(/unresolved_symbol/gi, "unresolved reference")
+      .trim();
+    let cleanSummary = explanation.summary
+      .replace(/a unresolved_symbol/gi, "an unresolved reference")
+      .replace(/unresolved_symbol/gi, "unresolved reference")
+      .replace(/serving as a isolated/gi, "serving as an isolated")
+      .trim();
+
+    if (isUnresolved) {
+      line1 = "External or unresolved reference with no local AST definition.";
+    } else {
+      line1 = `${cleanRole}: ${cleanSummary}`;
+      if (line1.length > 135) {
+        line1 = `${cleanRole} defined in project architecture.`;
+      }
+    }
+
+    if (explanation.dependencies_summary) {
+      line2 = explanation.dependencies_summary
+        .replace(/\(graph metrics not computed\)\.?/gi, "")
+        .replace(/unresolved_symbol/gi, "unresolved reference")
+        .trim();
+    } else {
+      line2 = `Observed ${incoming.length} incoming reference(s), ${outgoing.length} outgoing call(s).`;
+    }
+  } else {
+    if (isUnresolved) {
+      line1 = "External or unresolved reference with no local AST definition.";
+      line2 =
+        incoming.length > 0
+          ? `Observed ${incoming.length} incoming reference(s) in current project scope.`
+          : "No recorded internal callers or references within project scope.";
+    } else {
+      const kindLabel = formatNodeKind(node.kind).toLowerCase();
+      const path = node.location?.path ? ` in ${node.location.path}` : "";
+      line1 = `Defined ${kindLabel}${path} within project architecture.`;
+      line2 =
+        incoming.length > 0
+          ? `Observed ${incoming.length} incoming reference(s), ${outgoing.length} outgoing call(s).`
+          : `No recorded internal callers; delegates to ${outgoing.length} outgoing reference(s).`;
+    }
+  }
+
+  return [line1, line2];
+}
+
 export function getNodeLevel(node: GraphNode, allNodes: GraphNode[]): number {
   const kind = (node.kind || "").toLowerCase();
   if (kind === "project" || kind === "root" || kind === "directory" || kind === "folder") return 0;
@@ -210,6 +312,36 @@ function GraphNodeCard({
     );
   }
 
+  if (kind === "unresolved_symbol" || kind === "external_module") {
+    const isUnresolved = kind === "unresolved_symbol";
+    return (
+      <div
+        onClick={onSelect}
+        className={cn(
+          "w-52 bg-slate-50 border-2 border-dashed border-slate-400 rounded-md shadow-xs p-2.5 text-left select-none transition-all cursor-pointer hover:border-slate-600",
+          selected && "ring-2 ring-slate-400/60 shadow-md bg-slate-100"
+        )}
+      >
+        <Handle type="target" position={Position.Top} className="opacity-0" />
+        <Handle type="source" position={Position.Bottom} className="opacity-0" />
+        <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block" />
+            <span className="text-[10px] uppercase font-bold text-slate-700 tracking-wider">
+              {isUnresolved ? "Unresolved Ref" : "External Ref"}
+            </span>
+          </div>
+        </div>
+        <div className="font-bold text-xs text-slate-900 truncate font-mono">
+          {node.name}
+        </div>
+        <div className="text-[10px] text-slate-500 mt-0.5 truncate font-mono">
+          {node.qualified_name}
+        </div>
+      </div>
+    );
+  }
+
   // Default: module / file
   return (
     <div
@@ -243,6 +375,7 @@ function GraphNodeCard({
 export function buildFlow(
   graph: GraphResult,
   selectedId: string | null,
+  selectedEdgeId: string | null,
   selectNode: (node: GraphNode) => void
 ) {
   const levelMap = new Map<number, GraphNode[]>();
@@ -281,6 +414,7 @@ export function buildFlow(
           onSelect: () => selectNode(node),
         },
         type: "codestruct",
+        draggable: true,
       });
     });
   });
@@ -289,27 +423,74 @@ export function buildFlow(
   const edges: Edge[] = graph.edges
     .filter((edge) => edge.target_id && ids.has(edge.source_id) && ids.has(edge.target_id))
     .map((edge) => {
-      const isDefines = edge.kind === "defines";
+      const kind = (edge.kind || "").toLowerCase();
+      let stroke = "#0f172a"; // slate-900 high-contrast default
+      let strokeWidth = 2.5;
+      let strokeDasharray: string | undefined = undefined;
+      let markerColor = "#0f172a";
+
+      if (kind === "calls") {
+        stroke = "#1e3a8a"; // dark blue
+        strokeWidth = 2.5;
+        markerColor = "#1e3a8a";
+      } else if (kind === "inherits") {
+        stroke = "#581c87"; // dark purple
+        strokeWidth = 2.5;
+        markerColor = "#581c87";
+      } else if (kind === "defines" || kind === "contains") {
+        stroke = "#065f46"; // dark emerald
+        strokeWidth = 2.2;
+        strokeDasharray = "6 3";
+        markerColor = "#065f46";
+      } else if (kind === "imports") {
+        stroke = "#1e293b"; // slate-800
+        strokeWidth = 2.0;
+        strokeDasharray = "4 4";
+        markerColor = "#1e293b";
+      } else if (kind === "constructs") {
+        stroke = "#9a3412"; // dark amber
+        strokeWidth = 2.5;
+        markerColor = "#9a3412";
+      }
+
+      const isSelected = edge.id === selectedEdgeId;
+      if (isSelected) {
+        stroke = "#2563eb";
+        strokeWidth = 3.5;
+        markerColor = "#2563eb";
+      }
+
       return {
         id: edge.id,
         source: edge.source_id,
         target: edge.target_id!,
-        label: edge.kind,
+        label: formatRelationshipKind(edge.kind),
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+          color: markerColor,
+        },
         style: {
-          stroke: isDefines ? "#0d9488" : "#64748b",
-          strokeWidth: isDefines ? 1.8 : 1.5,
-          strokeDasharray:
-            isDefines && edge.resolution_status === "resolved" ? undefined : "4 4",
+          stroke,
+          strokeWidth,
+          strokeDasharray,
         },
         labelStyle: {
-          fill: isDefines ? "#0d9488" : "#64748b",
+          fill: stroke,
           fontSize: 10,
-          fontWeight: 600,
+          fontWeight: 700,
           fontFamily: "Consolas, monospace",
         },
-        labelBgStyle: { fill: "#ffffff", fillOpacity: 0.9 },
+        labelBgStyle: {
+          fill: "#ffffff",
+          fillOpacity: 0.95,
+          stroke: "#cbd5e1",
+          strokeWidth: 1,
+        },
+        labelBgPadding: [4, 2] as [number, number],
+        labelBgBorderRadius: 3,
       };
     });
 
@@ -386,6 +567,11 @@ function Inspector({
     return [];
   }, [node, edge, graph.evidence]);
 
+  const explanationLines = useMemo(() => {
+    if (!node) return ["", ""];
+    return formatTwoLineExplanation(node, explanation, connectedEdges, graph.nodes);
+  }, [node, explanation, connectedEdges, graph.nodes]);
+
   return (
     <aside
       className="w-72 border-l border-gray-300 flex flex-col bg-gray-50 shrink-0 h-full"
@@ -430,11 +616,24 @@ function Inspector({
           <>
             {/* Target Symbol Header Card */}
             <div className="bg-white border border-gray-200 rounded p-3 shadow-xs">
-              <div className="flex items-center gap-1.5 text-green-700 text-[11px] font-semibold uppercase">
-                <span className="px-1 py-0.2 bg-green-600 text-white rounded font-mono text-[9px]">
-                  {node.kind}
+              <div className="flex items-center gap-1.5 text-gray-700 text-[11px] font-semibold uppercase">
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 text-white rounded font-sans text-[10px] font-semibold tracking-normal normal-case",
+                    node.kind === "class"
+                      ? "bg-green-600"
+                      : node.kind === "function"
+                      ? "bg-amber-600"
+                      : node.kind === "method"
+                      ? "bg-sky-600"
+                      : node.kind === "unresolved_symbol"
+                      ? "bg-slate-600"
+                      : "bg-teal-600"
+                  )}
+                >
+                  {formatNodeKind(node.kind)}
                 </span>
-                <span>Node Detail</span>
+                <span className="text-gray-600 font-bold tracking-wider text-[10px]">Node Detail</span>
               </div>
               <h3 className="text-sm font-bold text-gray-900 mt-1 font-mono break-all">
                 {node.name}
@@ -479,33 +678,25 @@ function Inspector({
               </button>
             </div>
 
-            {/* Architectural Explanation Card */}
-            {explanation ? (
-              <div className="bg-white p-3 rounded border border-gray-200 shadow-xs space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">
-                    Architectural Explanation
-                  </span>
-                  <span className="text-[9px] bg-teal-50 text-teal-800 border border-teal-200 px-1 rounded font-mono">
-                    {explanation.provider}
-                  </span>
-                </div>
-                <p className="font-semibold text-gray-900 text-xs">{explanation.role}</p>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  {explanation.summary}
-                </p>
-                {explanation.dependencies_summary ? (
-                  <p className="text-[11px] text-gray-500 font-mono bg-gray-50 p-1.5 rounded border border-gray-100">
-                    {explanation.dependencies_summary}
-                  </p>
-                ) : null}
-                {explanation.metrics_summary ? (
-                  <p className="text-[10px] text-gray-400 font-mono">
-                    {explanation.metrics_summary}
-                  </p>
-                ) : null}
+            {/* Architectural Explanation Card: EXACTLY 2 CONCISE LINES */}
+            <div className="bg-white p-3 rounded border border-gray-200 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">
+                  Architectural Explanation
+                </span>
+                <span className="text-[9px] bg-teal-50 text-teal-800 border border-teal-200 px-1 rounded font-mono font-medium">
+                  {explanation?.provider || "rule-based"}
+                </span>
               </div>
-            ) : null}
+              <div className="space-y-1.5 text-xs">
+                <p className="text-gray-900 font-medium leading-relaxed">
+                  {explanationLines[0]}
+                </p>
+                <p className="text-gray-600 text-[11px] leading-relaxed bg-gray-50 p-2 rounded border border-gray-200 font-sans">
+                  {explanationLines[1]}
+                </p>
+              </div>
+            </div>
 
             {/* Defined Members / Sub-elements */}
             {definedMembers.length > 0 ? (
@@ -579,7 +770,7 @@ function Inspector({
                     >
                       <div className="text-gray-500 text-[10px] flex items-center justify-between">
                         <span>{isSource ? "Calls / References:" : "Referenced By:"}</span>
-                        <span className="font-mono text-[9px] text-teal-700">{e.kind}</span>
+                        <span className="font-mono text-[9px] text-teal-700 font-semibold">{formatRelationshipKind(e.kind)}</span>
                       </div>
                       <div className="font-medium text-gray-900 flex items-center gap-1.5 mt-0.5">
                         <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
@@ -649,9 +840,9 @@ function Inspector({
             <div className="text-[10px] uppercase font-bold text-teal-800 tracking-wider">
               Relationship Details
             </div>
-            <div className="font-mono text-xs text-gray-900">{edge.kind}</div>
+            <div className="font-mono text-xs text-gray-900 font-semibold">{formatRelationshipKind(edge.kind)}</div>
             <div className="text-[11px] text-gray-600">
-              Status: <span className="font-mono font-medium">{edge.resolution_status}</span>
+              Status: <span className="font-mono font-medium">{formatResolutionStatus(edge.resolution_status)}</span>
             </div>
           </div>
         ) : (
@@ -784,7 +975,12 @@ export function CodeStructWorkbench() {
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<string>("all");
   const [view, setView] = useState<"graph" | "table">("graph");
-  const [leftOpen, setLeftOpen] = useState(true);
+  const isThonnyEmbedded =
+    typeof window !== "undefined" &&
+    (window.location.search.includes("embed=thonny") ||
+      window.location.search.includes("session_token=") ||
+      Boolean((window as any).chrome?.webview));
+  const [leftOpen, setLeftOpen] = useState(!isThonnyEmbedded);
   const [rightOpen, setRightOpen] = useState(true);
 
   activeSelection.current = `${analysisId}:${selectedNode?.id ?? ""}`;
@@ -817,11 +1013,16 @@ export function CodeStructWorkbench() {
 
   const flow = useMemo(() => {
     if (!graph) return { nodes: [], edges: [] };
-    const full = buildFlow(graph, selectedNode?.id ?? null, (node) => {
-      setSelectedNode(node);
-      setSelectedEdge(null);
-      setRightOpen(true);
-    });
+    const full = buildFlow(
+      graph,
+      selectedNode?.id ?? null,
+      selectedEdge?.id ?? null,
+      (node) => {
+        setSelectedNode(node);
+        setSelectedEdge(null);
+        setRightOpen(true);
+      }
+    );
     const visible = new Set(filteredNodes.map((n) => n.id));
     return {
       nodes: full.nodes.filter((n) => visible.has(n.id)),
@@ -829,7 +1030,7 @@ export function CodeStructWorkbench() {
         (e) => visible.has(e.source) && visible.has(e.target)
       ),
     };
-  }, [graph, filteredNodes, selectedNode?.id]);
+  }, [graph, filteredNodes, selectedNode?.id, selectedEdge?.id]);
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(flow.nodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(flow.edges);
@@ -1275,12 +1476,12 @@ export function CodeStructWorkbench() {
           {/* Canvas Viewport */}
           {view === "graph" ? (
             <div
-              className="flex-1 graph-grid-bg relative overflow-hidden flex items-center justify-center"
+              className="flex-1 graph-grid-bg relative overflow-hidden w-full h-full"
               data-purpose="graph-viewport"
             >
               {!graph ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
-                  <div className="p-3 bg-white border border-gray-300 rounded-lg shadow-xs max-w-sm">
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
+                  <div className="p-3 bg-white border border-gray-300 rounded-lg shadow-xs max-w-sm pointer-events-auto">
                     <FolderOpen className="w-8 h-8 text-teal-600 mx-auto mb-2" />
                     <p className="font-semibold text-gray-800 text-sm">No Architecture Loaded</p>
                     <p className="text-xs text-gray-500 mt-1">
@@ -1317,12 +1518,21 @@ export function CodeStructWorkbench() {
                   nodeTypes={{ codestruct: GraphNodeCard }}
                   fitView
                   fitViewOptions={{ padding: 0.2 }}
-                  minZoom={0.25}
-                  maxZoom={1.5}
+                  minZoom={0.15}
+                  maxZoom={2.5}
+                  panOnDrag={true}
+                  zoomOnScroll={true}
+                  zoomOnPinch={true}
+                  panOnScroll={false}
+                  elementsSelectable={true}
+                  nodesDraggable={true}
+                  nodesConnectable={false}
+                  preventScrolling={true}
                   proOptions={{ hideAttribution: true }}
+                  className="w-full h-full"
                 >
-                  <Background color="#d1d5db" gap={20} size={1} />
-                  <Controls showInteractive={false} />
+                  <Background color="#cbd5e1" gap={20} size={1} />
+                  <Controls showInteractive={false} showZoom={true} showFitView={true} position="bottom-left" />
                   <MiniMap
                     nodeColor={(node) => {
                       const k = (
@@ -1331,9 +1541,11 @@ export function CodeStructWorkbench() {
                       if (k === "class") return "#16a34a";
                       if (k === "function") return "#d97706";
                       if (k === "method") return "#0284c7";
+                      if (k === "unresolved_symbol") return "#94a3b8";
                       return "#0d9488";
                     }}
                     maskColor="rgba(240, 240, 240, 0.7)"
+                    position="bottom-right"
                   />
                 </ReactFlow>
               </ReactFlowProvider>

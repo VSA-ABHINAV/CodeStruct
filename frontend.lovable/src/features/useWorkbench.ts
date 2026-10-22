@@ -5,9 +5,9 @@ import type { AnalysisJob, Diagnostic, GraphResult, Project, Transport, TreeResu
 export function captureHandoff() {
   const query = new URLSearchParams(window.location.search);
   return {
-    analysisId: query.get('analysis_id'),
-    token: query.get('session_token'),
-    projectId: query.get('project_id'),
+    analysisId: query.get('analysis_id') || query.get('analysisId'),
+    token: query.get('session_token') || query.get('sessionToken'),
+    projectId: query.get('project_id') || query.get('projectId'),
     embed: query.get('embed'),
   };
 }

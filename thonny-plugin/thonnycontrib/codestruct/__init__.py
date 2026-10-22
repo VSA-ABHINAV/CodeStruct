@@ -5,6 +5,7 @@ Enables analyzing Python projects directly from Thonny and viewing results in Co
 
 from __future__ import annotations
 
+import ast
 import ipaddress
 import json
 import logging
@@ -641,12 +642,575 @@ class DummyCodeView:
         return self.text
 
 
+class CodeStructProjectExplorerView(ttk.Frame):
+    """Unified Project & Symbol Explorer for Thonny.
+
+    Serves as the sole, persistent file and symbol explorer in Thonny across all
+    editor tabs, when CodeStruct is closed, and across Thonny restarts. Displays
+    the full folder/file tree with nested Python module, class, method, and function
+    symbols and line numbers.
+    """
+
+    IGNORED_DIRS = {
+        "__pycache__",
+        ".git",
+        ".venv",
+        "venv",
+        "env",
+        "node_modules",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        "dist",
+        "build",
+        ".egg-info",
+    }
+
+    def __init__(self, master: Any = None) -> None:
+        super().__init__(master)
+        self.containing_notebook: Any = None
+        self.view_id: str = "FilesView"
+        self.wb = get_workbench()
+
+        initial_dir: Optional[str] = None
+        if self.wb and hasattr(self.wb, "get_option"):
+            try:
+                initial_dir = self.wb.get_option("file.last_browser_folder")
+            except Exception:
+                initial_dir = None
+        if not initial_dir or not os.path.isdir(initial_dir):
+            initial_dir = str(Path.cwd())
+
+        self.current_project_dir: Path = Path(initial_dir).resolve()
+        self.search_filter: str = ""
+        self.kind_filter: str = "all"
+        self._tree_items: dict[str, dict[str, Any]] = {}
+        self.filter_buttons: dict[str, Any] = {}
+
+        self._build_ui()
+        self.populate_tree()
+
+    @property
+    def local_files(self) -> Any:
+        return self
+
+    @property
+    def current_focus(self) -> str:
+        return str(self.current_project_dir)
+
+    def get_tab_text(self) -> str:
+        return "Project Explorer"
+
+    def get_active_local_dir(self) -> str:
+        return str(self.current_project_dir)
+
+    def get_active_directory(self) -> str:
+        return str(self.current_project_dir)
+
+    def get_active_remote_dir(self) -> None:
+        return None
+
+    def is_active_browser(self) -> bool:
+        return True
+
+    def should_open_name_in_thonny(self, name: str) -> bool:
+        return True
+
+    def select_path_if_visible(self, path: str) -> None:
+        pass
+
+    def check_update_focus(self) -> None:
+        pass
+
+    def on_show(self) -> None:
+        self.populate_tree()
+
+    def on_workbench_close(self) -> None:
+        pass
+
+    def on_backend_restart(self) -> None:
+        pass
+
+    def on_backend_terminate(self) -> None:
+        pass
+
+    def restore_split(self) -> None:
+        pass
+
+    def save_split(self) -> None:
+        pass
+
+    def refresh_tree(self) -> None:
+        self.populate_tree()
+
+    def _build_ui(self) -> None:
+        self.header_frame = ttk.Frame(self)
+        self.header_frame.pack(fill=tk.X, padx=4, pady=(4, 2))
+
+        # Row 1: Folder display and buttons
+        row1 = ttk.Frame(self.header_frame)
+        row1.pack(fill=tk.X, pady=(0, 2))
+
+        folder_name = self.current_project_dir.name or str(self.current_project_dir)
+        self.folder_label = ttk.Label(
+            row1,
+            text=f"📁 {folder_name}",
+            font=("Segoe UI", 9, "bold"),
+            anchor=tk.W,
+        )
+        self.folder_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.btn_switch = ttk.Button(
+            row1,
+            text="Open...",
+            width=8,
+            command=self.switch_project_folder,
+        )
+        self.btn_switch.pack(side=tk.RIGHT, padx=(2, 0))
+
+        self.btn_refresh = ttk.Button(
+            row1,
+            text="🔄",
+            width=3,
+            command=self.populate_tree,
+        )
+        self.btn_refresh.pack(side=tk.RIGHT)
+
+        # Row 2: Search Entry
+        row2 = ttk.Frame(self.header_frame)
+        row2.pack(fill=tk.X, pady=(2, 2))
+
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self._on_search_changed)
+        self.search_entry = ttk.Entry(row2, textvariable=self.search_var)
+        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._set_search_placeholder()
+
+        self.search_entry.bind("<FocusIn>", self._on_search_focus_in)
+        self.search_entry.bind("<FocusOut>", self._on_search_focus_out)
+
+        # Row 3: Filter Buttons
+        row3 = ttk.Frame(self.header_frame)
+        row3.pack(fill=tk.X, pady=(2, 4))
+
+        def _make_filter_handler(k: str) -> Any:
+            return lambda: self._set_kind_filter(k)
+
+        self.filter_buttons = {}
+        for k_id, k_label in [
+            ("all", "All"),
+            ("files", "Files"),
+            ("class", "Classes"),
+            ("function", "Functions"),
+            ("method", "Methods"),
+        ]:
+            btn = tk.Button(
+                row3,
+                text=k_label,
+                font=("Segoe UI", 7),
+                relief=tk.FLAT,
+                padx=3,
+                pady=1,
+                bg="#0d9488" if k_id == "all" else "#f1f5f9",
+                fg="#ffffff" if k_id == "all" else "#334155",
+                command=_make_filter_handler(k_id),
+            )
+            btn.pack(side=tk.LEFT, padx=1)
+            self.filter_buttons[k_id] = btn
+
+        # Treeview with scrollbars
+        tree_container = ttk.Frame(self)
+        tree_container.pack(fill=tk.BOTH, expand=True)
+
+        self.tree = ttk.Treeview(
+            tree_container,
+            columns=("line",),
+            selectmode="browse",
+            show="tree headings",
+        )
+        self.tree.heading("#0", text="Project Symbols", anchor=tk.W)
+        self.tree.heading("line", text="Line", anchor=tk.E)
+        self.tree.column("#0", stretch=True, width=180)
+        self.tree.column("line", width=45, anchor=tk.E)
+
+        vsb = ttk.Scrollbar(tree_container, orient=tk.VERTICAL, command=self.tree.yview)
+        hsb = ttk.Scrollbar(
+            tree_container, orient=tk.HORIZONTAL, command=self.tree.xview
+        )
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        tree_container.grid_rowconfigure(0, weight=1)
+        tree_container.grid_columnconfigure(0, weight=1)
+
+        self.tree.bind("<Double-1>", self._on_tree_double_click)
+        self.tree.bind("<Return>", self._on_tree_double_click)
+        self.tree.bind("<Button-3>", self._on_tree_context_menu)
+
+    def _set_search_placeholder(self) -> None:
+        if not self.search_var.get():
+            self.search_entry.insert(0, "Filter files & symbols...")
+            self.search_entry.configure(foreground="#94a3b8")
+
+    def _on_search_focus_in(self, event: Any = None) -> None:
+        if self.search_entry.get() == "Filter files & symbols...":
+            self.search_entry.delete(0, tk.END)
+            self.search_entry.configure(foreground="#0f172a")
+
+    def _on_search_focus_out(self, event: Any = None) -> None:
+        if not self.search_entry.get():
+            self._set_search_placeholder()
+
+    def _on_search_changed(self, *args: Any) -> None:
+        if not hasattr(self, "tree"):
+            return
+        val = self.search_var.get()
+        if val == "Filter files & symbols...":
+            self.search_filter = ""
+        else:
+            self.search_filter = val.strip().lower()
+        self.populate_tree()
+
+    def _set_kind_filter(self, kid: str) -> None:
+        self.kind_filter = kid
+        for k, btn in self.filter_buttons.items():
+            if k == kid:
+                btn.configure(bg="#0d9488", fg="#ffffff")
+            else:
+                btn.configure(bg="#f1f5f9", fg="#334155")
+        self.populate_tree()
+
+    def switch_project_folder(self, new_dir: Optional[str] = None) -> None:
+        wb = self.wb or get_workbench()
+        if new_dir is None:
+            new_dir = tkinter.filedialog.askdirectory(
+                initialdir=str(self.current_project_dir),
+                title="Select Project Folder",
+                parent=wb,
+            )
+        if new_dir and os.path.isdir(new_dir):
+            self.current_project_dir = Path(new_dir).resolve()
+            if wb and hasattr(wb, "set_option"):
+                try:
+                    wb.set_option("file.last_browser_folder", str(self.current_project_dir))
+                except Exception:
+                    pass
+            folder_name = (
+                self.current_project_dir.name or str(self.current_project_dir)
+            )
+            self.folder_label.configure(text=f"📁 {folder_name}")
+            self.populate_tree()
+
+            if wb:
+                editor_nb = getattr(wb, "get_editor_notebook", lambda: None)()
+                if editor_nb:
+                    for child in editor_nb.winfo_children():
+                        if isinstance(child, CodeStructEditorTab):
+                            wb.after(50, open_codestruct_workbench)
+                            break
+
+    def populate_tree(self) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self._tree_items.clear()
+
+        if (
+            not self.current_project_dir.exists()
+            or not self.current_project_dir.is_dir()
+        ):
+            return
+
+        root_id = self.tree.insert(
+            "",
+            tk.END,
+            text=f"📁 {self.current_project_dir.name}",
+            open=True,
+            values=("",),
+        )
+        self._tree_items[root_id] = {
+            "type": "dir",
+            "path": str(self.current_project_dir),
+            "line": None,
+        }
+
+        self._populate_dir(self.current_project_dir, root_id)
+
+    def _populate_dir(self, dir_path: Path, parent_node_id: str) -> None:
+        try:
+            entries = sorted(
+                os.scandir(dir_path),
+                key=lambda e: (not e.is_dir(), e.name.lower()),
+            )
+        except OSError:
+            return
+
+        for entry in entries:
+            name = entry.name
+            if name.startswith(".") or name in self.IGNORED_DIRS:
+                continue
+
+            entry_path = Path(entry.path)
+            if entry.is_dir():
+                dir_id = self.tree.insert(
+                    parent_node_id,
+                    tk.END,
+                    text=f"📁 {name}",
+                    open=True,
+                    values=("",),
+                )
+                self._tree_items[dir_id] = {
+                    "type": "dir",
+                    "path": str(entry_path),
+                    "line": None,
+                }
+                self._populate_dir(entry_path, dir_id)
+            else:
+                is_python = name.endswith(".py") or name.endswith(".pyw")
+                if (
+                    self.kind_filter != "all"
+                    and self.kind_filter != "files"
+                    and not is_python
+                ):
+                    continue
+
+                if self.search_filter and self.search_filter not in name.lower():
+                    if not is_python:
+                        continue
+
+                file_icon = "🐍" if is_python else "📄"
+                file_id = self.tree.insert(
+                    parent_node_id,
+                    tk.END,
+                    text=f"{file_icon} {name}",
+                    open=True,
+                    values=("",),
+                )
+                self._tree_items[file_id] = {
+                    "type": "file",
+                    "path": str(entry_path),
+                    "line": 1,
+                }
+
+                if is_python and self.kind_filter != "files":
+                    self._populate_python_symbols(entry_path, file_id)
+
+    def _populate_python_symbols(self, file_path: Path, parent_file_id: str) -> None:
+        try:
+            if file_path.stat().st_size > 1_000_000:
+                return
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+            tree = ast.parse(content, filename=str(file_path))
+        except Exception:
+            return
+
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                if self.kind_filter in ("all", "class", "method"):
+                    if (
+                        self.search_filter
+                        and self.search_filter not in node.name.lower()
+                    ):
+                        method_matches = any(
+                            isinstance(
+                                m, (ast.FunctionDef, ast.AsyncFunctionDef)
+                            )
+                            and self.search_filter in m.name.lower()
+                            for m in node.body
+                        )
+                        if not method_matches:
+                            continue
+
+                    class_id = self.tree.insert(
+                        parent_file_id,
+                        tk.END,
+                        text=f"[C] {node.name}",
+                        open=True,
+                        values=(f"L{node.lineno}",),
+                    )
+                    self._tree_items[class_id] = {
+                        "type": "class",
+                        "path": str(file_path),
+                        "line": node.lineno,
+                        "name": node.name,
+                    }
+
+                    for item in node.body:
+                        if isinstance(
+                            item, (ast.FunctionDef, ast.AsyncFunctionDef)
+                        ):
+                            if self.kind_filter in ("all", "method"):
+                                if (
+                                    self.search_filter
+                                    and self.search_filter
+                                    not in item.name.lower()
+                                ):
+                                    continue
+                                meth_id = self.tree.insert(
+                                    class_id,
+                                    tk.END,
+                                    text=f"[m] {item.name}()",
+                                    values=(f"L{item.lineno}",),
+                                )
+                                self._tree_items[meth_id] = {
+                                    "type": "method",
+                                    "path": str(file_path),
+                                    "line": item.lineno,
+                                    "name": item.name,
+                                }
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if self.kind_filter in ("all", "function"):
+                    if (
+                        self.search_filter
+                        and self.search_filter not in node.name.lower()
+                    ):
+                        continue
+                    func_id = self.tree.insert(
+                        parent_file_id,
+                        tk.END,
+                        text=f"[f] {node.name}()",
+                        values=(f"L{node.lineno}",),
+                    )
+                    self._tree_items[func_id] = {
+                        "type": "function",
+                        "path": str(file_path),
+                        "line": node.lineno,
+                        "name": node.name,
+                    }
+
+    def _on_tree_double_click(self, event: Any = None) -> None:
+        selection = self.tree.selection()
+        if not selection:
+            return
+        item_id = selection[0]
+        meta = self._tree_items.get(item_id)
+        if not meta:
+            return
+
+        if meta.get("type") == "dir":
+            is_open = self.tree.item(item_id, "open")
+            self.tree.item(item_id, open=not is_open)
+            return
+
+        path = meta.get("path")
+        line = meta.get("line")
+        wb = self.wb or get_workbench()
+        if wb and path:
+            editor_nb = getattr(wb, "get_editor_notebook", lambda: None)()
+            if editor_nb:
+                try:
+                    if line and hasattr(editor_nb, "show_file_at_line"):
+                        editor_nb.show_file_at_line(path, int(line))
+                    elif hasattr(editor_nb, "show_file"):
+                        editor_nb.show_file(path)
+                except Exception as exc:
+                    logger.debug("Failed opening file from explorer: %s", exc)
+
+    def _on_tree_context_menu(self, event: Any) -> None:
+        item_id = self.tree.identify_row(event.y)
+        if item_id:
+            self.tree.selection_set(item_id)
+            meta = self._tree_items.get(item_id, {})
+            menu = tk.Menu(self, tearoff=0)
+            if meta.get("type") in ("file", "class", "function", "method"):
+                menu.add_command(
+                    label="Open in Editor",
+                    command=self._on_tree_double_click,
+                )
+                if meta.get("line"):
+                    menu.add_command(
+                        label=f"Jump to Line {meta['line']}",
+                        command=self._on_tree_double_click,
+                    )
+            menu.add_command(
+                label="Switch Project Folder...",
+                command=self.switch_project_folder,
+            )
+            menu.add_command(
+                label="Refresh Tree",
+                command=self.populate_tree,
+            )
+            menu.tk_popup(event.x_root, event.y_root)
+
+
+def _integrate_persistent_explorer(wb: Any) -> None:
+    """Register CodeStructProjectExplorerView as Thonny's sole, persistent file & symbol explorer."""
+    if wb is None:
+        return
+    try:
+        view_records = getattr(wb, "_view_records", None)
+        if isinstance(view_records, dict) and "FilesView" in view_records:
+            view_records["FilesView"]["class"] = CodeStructProjectExplorerView
+            view_records["FilesView"]["label"] = "Project Explorer"
+
+            if "instance" in view_records["FilesView"]:
+                old_view = view_records["FilesView"]["instance"]
+                if not isinstance(old_view, CodeStructProjectExplorerView):
+                    containing_nb = getattr(old_view, "containing_notebook", None)
+                    new_view = CodeStructProjectExplorerView(
+                        getattr(wb, "_main_pw", wb)
+                    )
+                    new_view.containing_notebook = containing_nb
+                    new_view.view_id = "FilesView"
+                    view_records["FilesView"]["instance"] = new_view
+
+                    if containing_nb is not None:
+                        try:
+                            tabs = containing_nb.tabs()
+                            idx = -1
+                            for i, tab in enumerate(tabs):
+                                if containing_nb.nametowidget(tab) == old_view:
+                                    idx = i
+                                    break
+                            containing_nb.forget(old_view)
+                            if idx >= 0:
+                                containing_nb.insert(
+                                    idx, new_view, text="Project Explorer"
+                                )
+                            else:
+                                containing_nb.add(new_view, text="Project Explorer")
+                            containing_nb.select(new_view)
+                        except Exception as nb_exc:
+                            logger.debug(
+                                "Could not swap explorer tab in notebook: %s",
+                                nb_exc,
+                            )
+
+                    try:
+                        old_view.destroy()
+                    except Exception:
+                        pass
+        elif hasattr(wb, "add_view"):
+            try:
+                wb.add_view(
+                    CodeStructProjectExplorerView,
+                    "Project Explorer",
+                    "nw",
+                    visible_by_default=True,
+                )
+            except Exception:
+                pass
+
+        if hasattr(wb, "show_view"):
+            try:
+                wb.show_view("FilesView", set_focus=False)
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.warning(
+            "Could not integrate persistent CodeStruct Project Explorer: %s",
+            exc,
+        )
+
+
 # FilesView visibility state tracking across tab lifecycle
 _user_files_view_was_visible: Optional[bool] = None
 
 
 def is_files_view_visible(wb: Any) -> bool:
-    """Check if Thonny's native FilesView is currently visible in the UI."""
+    """Check if Thonny's persistent Project Explorer is currently visible in the UI."""
     if wb is None:
         return False
     try:
@@ -660,54 +1224,18 @@ def is_files_view_visible(wb: Any) -> bool:
 
 
 def _hide_files_pane(wb: Any) -> None:
-    """Hide Thonny's duplicate native FilesView while CodeStruct tab is active."""
-    global _user_files_view_was_visible
-    if wb is None or not hasattr(wb, "hide_view"):
-        return
-    try:
-        currently_visible = is_files_view_visible(wb)
-        if _user_files_view_was_visible is None:
-            _user_files_view_was_visible = currently_visible
-        if currently_visible:
-            wb.hide_view("FilesView")
-            logger.info("CodeStruct: Hid native FilesView for unified Explorer")
-    except Exception as exc:
-        logger.debug("Failed hiding FilesView: %s", exc)
+    """No-op: CodeStructProjectExplorerView is persistent across all tabs and editor states."""
+    pass
 
 
 def _restore_files_pane(wb: Any) -> None:
-    """Restore Thonny's native FilesView to the user's prior visibility."""
-    global _user_files_view_was_visible
-    if wb is None:
-        return
-    try:
-        if _user_files_view_was_visible:
-            if hasattr(wb, "show_view") and not is_files_view_visible(wb):
-                wb.show_view("FilesView", set_focus=False)
-                logger.info("CodeStruct: Restored native FilesView")
-            if hasattr(wb, "set_option"):
-                wb.set_option("view.FilesView.visible", True)
-        _user_files_view_was_visible = None
-    except Exception as exc:
-        logger.debug("Failed restoring FilesView: %s", exc)
-        _user_files_view_was_visible = None
+    """No-op: CodeStructProjectExplorerView is persistent across all tabs and editor states."""
+    pass
 
 
 def _on_editor_tab_changed(wb: Any) -> None:
     """Hook invoked when Thonny EditorNotebook switches active tab."""
-    if _is_shutting_down or wb is None:
-        return
-    try:
-        editor_notebook = getattr(wb, "get_editor_notebook", lambda: None)()
-        if editor_notebook is None:
-            return
-        current_editor = editor_notebook.get_current_editor()
-        if isinstance(current_editor, CodeStructEditorTab):
-            _hide_files_pane(wb)
-        else:
-            _restore_files_pane(wb)
-    except Exception as exc:
-        logger.debug("Error handling editor tab change: %s", exc)
+    pass
 
 
 def _bind_editor_notebook_events(wb: Any) -> None:
@@ -1231,8 +1759,8 @@ def open_codestruct_workbench(event: Any = None) -> None:
 
     canonical_folder_str = str(resolved_folder)
 
-    # 5. Hide native FilesView to keep CodeStruct Explorer as the sole left explorer
-    _hide_files_pane(wb)
+    # 5. Ensure unified CodeStruct Project Explorer is active
+    _integrate_persistent_explorer(wb)
 
     # 6. Open or update CodeStructEditorTab in editor_notebook
     existing_tab: Optional[CodeStructEditorTab] = None
@@ -2166,12 +2694,15 @@ def load_plugin() -> None:
         caption="CodeStruct Architecture Workbench",
     )
 
+    # Integrate the single persistent unified Project & Symbol Explorer
+    _integrate_persistent_explorer(wb)
+
     try:
         _bind_editor_notebook_events(wb)
     except Exception:
         pass
     try:
-        wb.bind("WorkbenchOpen", lambda event: _bind_editor_notebook_events(wb), True)
+        wb.bind("WorkbenchOpen", lambda event: _integrate_persistent_explorer(wb), True)
     except Exception:
         pass
     try:

@@ -12,6 +12,7 @@ import shutil
 import sys
 import tempfile
 import time
+import tkinter as tk
 import unittest
 import urllib.error
 import urllib.parse
@@ -1745,61 +1746,109 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             resolved = cs.get_file_view_folder(wb)
             self.assertEqual(resolved, str(Path(temp_dir).resolve()))
 
-    def test_load_plugin_registers_only_codestruct_workbench_command(self):
+    def test_load_plugin_registers_codestruct_workbench_and_persistent_explorer(self):
         wb = MagicMock()
+        wb._view_records = {
+            "FilesView": {
+                "class": MagicMock(),
+                "label": "Files",
+            }
+        }
         with patch("thonnycontrib.codestruct.get_workbench", return_value=wb):
             cs.load_plugin()
-            # Verify only command_id="codestruct" was added
+            # Verify command_id="codestruct" was added
             cmd_ids = [
                 call.kwargs.get("command_id") for call in wb.add_command.call_args_list
             ]
             self.assertIn("codestruct", cmd_ids)
-            self.assertNotIn("codestruct_analyze", cmd_ids)
+            # Verify FilesView was replaced by CodeStructProjectExplorerView
+            self.assertEqual(
+                wb._view_records["FilesView"]["class"],
+                cs.CodeStructProjectExplorerView,
+            )
+            self.assertEqual(
+                wb._view_records["FilesView"]["label"],
+                "Project Explorer",
+            )
 
-    def test_files_view_visibility_and_hide_restore_lifecycle(self):
+    def test_persistent_explorer_lifecycle_across_tabs(self):
         wb = MagicMock()
-        files_view = MagicMock()
+        editor_notebook = MagicMock()
+        wb.get_editor_notebook.return_value = editor_notebook
+        files_view = MagicMock(spec=cs.CodeStructProjectExplorerView)
         files_view.containing_notebook = MagicMock()
         wb.get_view.return_value = files_view
 
         # Currently visible
         self.assertTrue(cs.is_files_view_visible(wb))
 
-        # Hide pane
-        cs._hide_files_pane(wb)
-        wb.hide_view.assert_called_once_with("FilesView")
-
-        # Now simulate hidden (containing_notebook is None)
-        files_view.containing_notebook = None
-        self.assertFalse(cs.is_files_view_visible(wb))
-
-        # Restore pane
-        cs._restore_files_pane(wb)
-        wb.show_view.assert_called_once_with("FilesView", set_focus=False)
-
-    def test_on_editor_tab_changed_toggles_files_view(self):
-        wb = MagicMock()
-        editor_notebook = MagicMock()
-        wb.get_editor_notebook.return_value = editor_notebook
-        files_view = MagicMock()
-        files_view.containing_notebook = MagicMock()
-        wb.get_view.return_value = files_view
-
-        # CodeStruct tab active -> hide FilesView
+        # CodeStruct tab active -> Explorer remains persistent (NEVER hidden)
         with tempfile.TemporaryDirectory() as temp_dir:
             cs_tab = cs.CodeStructEditorTab(
                 editor_notebook, "http://127.0.0.1:5173/?embed=thonny", temp_dir
             )
             editor_notebook.get_current_editor.return_value = cs_tab
             cs._on_editor_tab_changed(wb)
-            wb.hide_view.assert_called_with("FilesView")
+            wb.hide_view.assert_not_called()
 
-            # Normal editor active -> restore FilesView
+            # Normal editor active -> Explorer still persistent (not hidden or toggled)
             normal_editor = MagicMock(spec=cs.Editor)
             editor_notebook.get_current_editor.return_value = normal_editor
-            files_view.containing_notebook = None
             cs._on_editor_tab_changed(wb)
-            wb.show_view.assert_called_with("FilesView", set_focus=False)
+            wb.hide_view.assert_not_called()
+
+    def test_codestruct_project_explorer_view_tree_population(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                p_dir = Path(temp_dir)
+                py_file = p_dir / "sample.py"
+                py_file.write_text(
+                    "class Alpha:\n"
+                    "    def compute(self):\n"
+                    "        return 42\n\n"
+                    "def helper_func():\n"
+                    "    return 1\n",
+                    encoding="utf-8",
+                )
+                sub_dir = p_dir / "subpkg"
+                sub_dir.mkdir()
+                (sub_dir / "mod.py").write_text("class Beta:\n    pass\n", encoding="utf-8")
+
+                explorer = cs.CodeStructProjectExplorerView(root)
+                explorer.switch_project_folder(str(p_dir))
+
+                self.assertEqual(explorer.get_active_local_dir(), str(p_dir.resolve()))
+                self.assertEqual(explorer.get_active_directory(), str(p_dir.resolve()))
+                self.assertEqual(explorer.get_tab_text(), "Project Explorer")
+                self.assertEqual(explorer.local_files, explorer)
+
+                # Check symbols extracted into tree items
+                types = {item.get("type") for item in explorer._tree_items.values()}
+                self.assertIn("dir", types)
+                self.assertIn("file", types)
+                self.assertIn("class", types)
+                self.assertIn("method", types)
+                self.assertIn("function", types)
+
+                # Verify kind filtering
+                explorer._set_kind_filter("class")
+                self.assertEqual(explorer.kind_filter, "class")
+                class_items = [
+                    v for v in explorer._tree_items.values() if v.get("type") == "class"
+                ]
+                self.assertTrue(len(class_items) >= 1)
+
+                # Verify search filtering
+                explorer._set_kind_filter("all")
+                explorer.search_var.set("compute")
+                comp_items = [
+                    v for v in explorer._tree_items.values() if v.get("type") == "method"
+                ]
+                self.assertTrue(any(c.get("name") == "compute" for c in comp_items))
+        finally:
+            root.destroy()
 
     def test_print_to_thonny_shell(self):
         wb = MagicMock()
