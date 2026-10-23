@@ -2013,6 +2013,102 @@ class TestThonnyStitchEditorTab(unittest.TestCase):
             res2 = cs.get_file_view_folder(wb)
             self.assertEqual(Path(res2).resolve(), Path(td2).resolve())
 
+    def test_open_codestruct_workbench_user_home_rejected(self):
+        wb = MagicMock()
+        files_view = MagicMock()
+        files_view.local_files.current_focus = str(Path.home())
+        wb.get_view.return_value = files_view
+        wb.get_editor_notebook.return_value = None
+
+        with (
+            patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+            patch("tkinter.messagebox.showwarning") as mock_warn,
+            patch("thonnycontrib.codestruct._set_status_message") as mock_status,
+        ):
+            cs.open_codestruct_workbench(sync=True)
+            mock_warn.assert_called_once()
+            args, _ = mock_warn.call_args
+            self.assertEqual(args[0], "User Home Folder Not Supported")
+            mock_status.assert_called_with(
+                wb, "CodeStruct: Please select a specific project folder."
+            )
+
+    def test_open_codestruct_workbench_backend_offline_shows_actionable_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            files_view.local_files.current_focus = temp_dir
+            wb.get_view.return_value = files_view
+
+            import urllib.error
+            url_err = urllib.error.URLError("Connection refused")
+
+            with (
+                patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+                patch("urllib.request.urlopen", side_effect=url_err),
+                patch("tkinter.messagebox.showerror") as mock_err,
+                patch("thonnycontrib.codestruct._set_status_message") as mock_status,
+            ):
+                cs.open_codestruct_workbench(sync=True)
+                mock_err.assert_called_once()
+                args, _ = mock_err.call_args
+                self.assertEqual(args[0], "Backend Connection Error")
+                self.assertIn("Connection refused", args[1])
+                mock_status.assert_called_with(wb, "CodeStruct: Backend unavailable.")
+
+    def test_open_codestruct_workbench_timeout_handling_and_status_recovery(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wb = MagicMock()
+            files_view = MagicMock()
+            files_view.local_files.current_focus = temp_dir
+            wb.get_view.return_value = files_view
+
+            # Health check succeeds, but registration times out
+            h_mock = MagicMock()
+            h_mock.status = 200
+            h_mock.__enter__.return_value = h_mock
+
+            def _urlopen_side_effect(req, *args, **kwargs):
+                url = req.full_url if hasattr(req, "full_url") else str(req)
+                if "/health/ready" in url:
+                    return h_mock
+                raise TimeoutError("timed out")
+
+            with (
+                patch("thonnycontrib.codestruct.get_workbench", return_value=wb),
+                patch("urllib.request.urlopen", side_effect=_urlopen_side_effect),
+                patch("tkinter.messagebox.showerror") as mock_err,
+                patch("thonnycontrib.codestruct._set_status_message") as mock_status,
+            ):
+                cs.open_codestruct_workbench(sync=True)
+                mock_err.assert_called_once()
+                args, _ = mock_err.call_args
+                self.assertEqual(args[0], "Backend Connection Error")
+                self.assertIn("timed out", args[1].lower())
+                # Status must be reset and not left stuck at "Registering..."
+                status_calls = [c[0][1] for c in mock_status.call_args_list]
+                self.assertIn("CodeStruct: Backend registration failed.", status_calls)
+                self.assertNotEqual(status_calls[-1], f"CodeStruct: Registering project folder '{Path(temp_dir).name}'...")
+
+    def test_get_file_view_folder_user_home_prioritizes_active_editor(self):
+        wb = MagicMock()
+        files_view = MagicMock()
+        files_view.get_active_local_dir.return_value = str(Path.home())
+        wb.get_view.return_value = files_view
+
+        with tempfile.TemporaryDirectory() as proj_dir:
+            sample_file = Path(proj_dir) / "sample_project.py"
+            sample_file.write_text("x = 10\n", encoding="utf-8")
+
+            ed_nb = MagicMock()
+            curr_ed = MagicMock()
+            curr_ed.get_filename.return_value = str(sample_file)
+            ed_nb.get_current_editor.return_value = curr_ed
+            wb.get_editor_notebook.return_value = ed_nb
+
+            resolved = cs.get_file_view_folder(wb)
+            self.assertEqual(Path(resolved).resolve(), Path(proj_dir).resolve())
+
 
 if __name__ == "__main__":
     unittest.main()

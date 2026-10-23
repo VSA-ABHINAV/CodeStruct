@@ -127,7 +127,7 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 | CS-023 | Ready for Codex review | Reconciled README, setup, and user guide with Thonny single-window embedded editor tab workflow (`CodeStructEditorTab`) and M1–M8 capabilities; removed obsolete Edge `--app` references; synchronized audit, tracker, and external mirror with identical SHA-256. Report: `docs/verification/M8.md`. | None for M8 (Codex review) |
 | CS-024 | Ready for Codex review | Production frontend build bundled into wheel assets (`/app`); clean virtualenv install and lifecycle verified passing all 6 `codestruct doctor` checks; clean shutdown/restart/upgrade; dependency license audit (100% permissive); owner decisions documented. Report: `docs/verification/M8.md`. | Owner decisions (license, maintainers, distribution policy) |
 | CS-015 | Accepted (report-based per user instruction) | Persistent per-file parse cache enforces post-insert stored bytes and entry count via iterative LRU eviction loop in `_evict_if_needed()`; oversized entries exceeding `max_bytes` are rejected; invariant assertions verify bounds. Regressions added in `tests/test_file_cache.py`. Report: `docs/verification/M7_CODEX_REVIEW_2_ACCEPTED_REPORT_BASED.md`. | None (Codex review) |
-| CS-017 | Changes required — current Thonny UI correction | Earlier report-based acceptance is superseded by the user's 2026-10-22 report: require exactly one persistent Explorer across CodeStruct/source tabs and app restarts, clean Inspector text (no `unresolved_symbol`, exactly two grounded explanation lines), working interactive graph, and dark/thick/clear relationship arrows. See `ANTIGRAVITY_THONNY_LAYOUT_TASK.md` and pending `docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_2.md`. | Real Thonny verification and Codex review |
+| CS-017 | Changes required — ready for Codex review | User report 2026-10-23 (`D:\REP\changes\3.png`) registration timeout diagnosed and fixed: rejected user profile root scanning, converted FastAPI host route to worker threads, added non-blocking background registration and /health/ready probe in Thonny plugin, and prevented stuck status. All Correction 2 requirements verified in real Thonny / Python 3.14.6: persistent single Explorer, 2-line clean Inspector, interactive graph, dark 2.5px arrows, native Shell diagnostics, project switching, and zero execution safety. Quality gates pass 100%: 81 passed plugin pytest, 343 passed backend pytest (84.28% cov >= 84%), vitest 10 passed, build clean, ruff clean, mypy clean. Full report: `docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_3.md`. | Codex review (M7 remains Changes required) |
 | CS-016 | Accepted (report-based per user instruction) | Bounded retrieval (`retrieval.py`), canonical graph/runtime/metric context, path containment, secret exclusion, strict Pydantic parsing (`extra="forbid"`), canonical citation validation (`validate_evidence_references`), `LLM_INFERRED` labeling, opt-in `provider="rule-based"` default with deterministic offline fallback, local fake provider injection, truthful API schemas, and 5 real API verification scenarios (`verify_m6_semantic.py`). | None (Codex review) |
 | CS-012 | Accepted (report-based per user instruction) | Isolated child process execution (`runtime_worker.py`), strict deadline supervision, Win32 Toolhelp process-tree termination with zero post-timeout side effects, output byte capping, explicit runtime analysis endpoints (`POST`/`GET`). | None (Codex review) |
 | CS-013 | Accepted (report-based per user instruction) | Ambiguous candidate retention (`ResolutionStatus.AMBIGUOUS`, `Confidence.LOW`, `candidate_ids`) without candidate node mutation; truthful microsecond overhead tracking and per-event duration timing; multithreading profiling; generator suspension handling. | None (Codex review) |
@@ -148,11 +148,23 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 
 ## Run log
 
-### 2026-10-22 — Thonny workbench correction pass 2 (in progress)
+### 2026-10-23 — Thonny backend registration correction pass 3 (completed)
 
-- User reports that the prior panel correction did not meet expectations. Required result: one persistent sole Explorer whether CodeStruct is open or closed, a clean precise Inspector with no raw `unresolved_symbol` and exactly two explanation lines, restored graph interactions, and dark, thick, distinguishable relationship edges/arrows.
-- Reference images: `D:\REP\changes\1.png` and `D:\REP\changes\2.png`.
-- Implementation and real Thonny verification are assigned to Antigravity in `ANTIGRAVITY_THONNY_LAYOUT_TASK.md`. M7/CS-017 remains Changes required; M8's completed evidence is retained and remains unaccepted pending review. Do not start another milestone.
+- Diagnosed and resolved user report 3 (`D:\REP\changes\3.png`): "Could not register project folder with CodeStruct backend: timed out" and frozen status `CodeStruct: Registering project folder 'ABHINAV'...` in Thonny 4.1.7 under Python 3.14.6.
+- Established 4-fold root cause: (1) Unbounded scanning of user profile root `C:\Users\ABHINAV` due to default `file.last_browser_folder` fallback; (2) Synchronous execution of filesystem crawl on FastAPI's main asyncio event loop thread; (3) Synchronous `urlopen` network calls on Thonny Tk GUI thread; (4) Lack of `/health/ready` probe and failure to reset status bar on exception.
+- Implemented comprehensive fixes:
+  1. `backend/src/codestruct/host.py`: Explicitly rejects `Path.home()` and `Path.home().parent` in `validate_project_folder`.
+  2. `backend/src/codestruct/api/routes/host.py`: Converted `register_project_folder` and `choose_project_folder` to standard `def` for worker thread dispatch via Starlette.
+  3. `thonnycontrib/codestruct/__init__.py`: Smart Explorer auto-anchoring to active editor file parent; pre-flight `/health/ready` probe with 3.0s timeout and actionable error message; background daemon worker thread for registration (`sync=False` in production runtime); clean status bar recovery (`Backend unavailable.`, `Backend registration failed.`, `Workbench loaded for '<folder>'.`); synchronization of Explorer with workbench resolved folder.
+- Regression-checked Correction 2 requirements in real Thonny under Python 3.14.6:
+  - Exactly ONE persistent unified Explorer across source tabs, CodeStruct tab, folder switches, and tab closures.
+  - Clean Inspector with zero `unresolved_symbol` tokens and exactly two evidence-grounded explanation lines.
+  - Interactive ReactFlow graph with pan, zoom, fit, and node dragging.
+  - High-contrast, color-coded 2.0–2.5px relationship edges and prominent arrowheads.
+  - Native Thonny Shell is the sole bottom surface carrying CodeStruct diagnostics.
+  - Zero code execution invariant strictly preserved (`danger.py` canary never executed or imported).
+- Quality gates pass: plugin pytest 81 passed, backend pytest 343 passed (84.28% coverage >= 84%), Vitest 10 passed, build clean, ruff clean, mypy clean, `git diff --check` clean.
+- Detailed report written: `docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_3.md`. M7/CS-017 remains Changes required; M8 evidence remains intact and unaccepted pending review.
 
 ### 2026-10-13 — Prototype Launch Shortcut Repair & Project Status Report
 

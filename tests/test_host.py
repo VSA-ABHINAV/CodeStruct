@@ -45,6 +45,15 @@ def test_validate_project_folder_root_drive():
         validate_project_folder(root)
 
 
+def test_validate_project_folder_user_home():
+    home = Path.home()
+    with pytest.raises(FolderValidationError, match="user profile directory"):
+        validate_project_folder(home)
+    if home.parent.exists() and home.parent != home:
+        with pytest.raises(FolderValidationError, match="user profile directory"):
+            validate_project_folder(home.parent)
+
+
 def test_validate_project_folder_forbidden_system_dir():
     # Test checking forbidden system folders
     fake_win = Path("C:/Windows")

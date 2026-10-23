@@ -127,6 +127,18 @@ def validate_project_folder(folder_path: str | Path) -> Path:
             "Please select a specific project directory."
         )
 
+    # Rejection of user profile directory (e.g., C:\Users\<user> or /home/<user>)
+    try:
+        home = Path.home().resolve()
+        if path == home or path == home.parent:
+            raise FolderValidationError(
+                f"The user profile directory '{path}' cannot be registered as a project folder. "
+                "Please select a specific project directory."
+            )
+    except Exception as home_err:
+        if isinstance(home_err, FolderValidationError):
+            raise
+
     # Rejection of Windows system directories
     parts_lower = [p.lower() for p in path.parts]
     for forbidden in FORBIDDEN_WINDOWS_DIR_NAMES:

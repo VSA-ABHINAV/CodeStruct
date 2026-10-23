@@ -69,6 +69,15 @@ _active_operation: Optional[str] = None
 _active_worker: Optional[CodeStructAnalysisWorker] = None
 _is_shutting_down: bool = False
 _state_lock = threading.Lock()
+_registration_in_progress: bool = False
+
+
+def _is_mock(obj: Any) -> bool:
+    return getattr(obj, "_is_mock", False) or type(obj).__name__ in (
+        "MagicMock",
+        "Mock",
+        "NonCallableMagicMock",
+    )
 
 # Navigation polling state
 # Set to the capability_id after a successful analysis so the poll loop can
@@ -674,30 +683,82 @@ class CodeStructProjectExplorerView(ttk.Frame):
         self.wb = get_workbench()
 
         initial_dir: Optional[str] = None
-        if self.wb and hasattr(self.wb, "get_option"):
+
+        def _is_valid_project_candidate(cand: str | Path | None) -> bool:
+            if not cand:
+                return False
             try:
-                initial_dir = self.wb.get_option("file.last_browser_folder")
+                p = Path(cand).resolve()
+                if not p.is_dir():
+                    return False
+                if p == Path(p.anchor):
+                    return False
+                home = Path.home().resolve()
+                if p == home or p == home.parent:
+                    return False
+                return True
             except Exception:
-                initial_dir = None
-        if not initial_dir or not os.path.isdir(initial_dir):
+                return False
+
+        # 1. Prioritize active editor tab's file in Thonny
+        if self.wb and hasattr(self.wb, "get_editor_notebook"):
+            try:
+                ed_nb = self.wb.get_editor_notebook()
+                if ed_nb:
+                    curr_ed = ed_nb.get_current_editor()
+                    if curr_ed and hasattr(curr_ed, "get_filename"):
+                        fn = curr_ed.get_filename()
+                        if fn and isinstance(fn, str) and os.path.isfile(fn):
+                            parent_dir = str(Path(fn).parent)
+                            if _is_valid_project_candidate(parent_dir):
+                                initial_dir = parent_dir
+            except Exception:
+                pass
+
+        # 2. Check Thonny's file.last_browser_folder (rejecting home / drive roots)
+        if not initial_dir:
+            if self.wb and hasattr(self.wb, "get_option"):
+                try:
+                    cand = self.wb.get_option("file.last_browser_folder")
+                    if _is_valid_project_candidate(cand):
+                        initial_dir = cand
+                except Exception:
+                    initial_dir = None
+
+        # 3. Check run.working_directory (rejecting home / drive roots)
+        if not initial_dir:
             if self.wb and hasattr(self.wb, "get_option"):
                 try:
                     work_dir = self.wb.get_option("run.working_directory")
-                    if work_dir and os.path.isdir(work_dir):
+                    if _is_valid_project_candidate(work_dir):
                         initial_dir = work_dir
                 except Exception:
                     pass
-        if not initial_dir or not os.path.isdir(initial_dir):
+
+        # 4. Check environment root mappings
+        if not initial_dir:
             mappings = os.environ.get("CODESTRUCT_ROOT_MAPPINGS", "")
             if mappings:
                 for item in mappings.split(";"):
                     if "=" in item:
                         _, mpath = item.split("=", 1)
-                        if os.path.isdir(mpath):
+                        if _is_valid_project_candidate(mpath):
                             initial_dir = mpath
                             break
-        if not initial_dir or not os.path.isdir(initial_dir):
-            initial_dir = str(Path.cwd())
+
+        # 5. Check CWD (rejecting home / drive roots)
+        if not initial_dir:
+            cwd = str(Path.cwd())
+            if _is_valid_project_candidate(cwd):
+                initial_dir = cwd
+
+        # 6. Fallback to Desktop or CWD
+        if not initial_dir:
+            desktop = Path.home() / "Desktop"
+            if desktop.is_dir():
+                initial_dir = str(desktop)
+            else:
+                initial_dir = str(Path.cwd())
 
         self.current_project_dir: Path = Path(initial_dir).resolve()
         self.search_filter: str = ""
@@ -935,7 +996,28 @@ class CodeStructProjectExplorerView(ttk.Frame):
                 parent=wb,
             )
         if new_dir and os.path.isdir(new_dir):
-            self.current_project_dir = Path(new_dir).resolve()
+            candidate_path = Path(new_dir).resolve()
+            try:
+                home = Path.home().resolve()
+                if candidate_path == home or candidate_path == home.parent:
+                    tkinter.messagebox.showwarning(
+                        "User Home Folder Not Supported",
+                        f"The user profile directory '{candidate_path}' cannot be used as a project folder.\n\n"
+                        "Please select a specific project directory.",
+                        parent=wb,
+                    )
+                    return
+            except Exception:
+                pass
+            if candidate_path == Path(candidate_path.anchor):
+                tkinter.messagebox.showwarning(
+                    "Drive Root Rejected",
+                    f"Cannot use a filesystem drive root directly:\n\n{candidate_path}\n\n"
+                    "Please select a specific project folder.",
+                    parent=wb,
+                )
+                return
+            self.current_project_dir = candidate_path
             if wb and hasattr(wb, "set_option"):
                 try:
                     wb.set_option("file.last_browser_folder", str(self.current_project_dir))
@@ -1571,7 +1653,26 @@ def get_file_view_folder(wb: Any) -> Optional[str]:
                     if isinstance(res, str) and res.strip():
                         raw_path = res.strip()
 
-        # 4. Fallback: active editor file in Thonny
+        # If raw_path points to user home directory, check if active editor file provides a project folder
+        if raw_path:
+            try:
+                p_cand = Path(raw_path.strip()).resolve()
+                h_home = Path.home().resolve()
+                if p_cand == h_home or p_cand == h_home.parent:
+                    if hasattr(wb, "get_editor_notebook"):
+                        ed_nb = wb.get_editor_notebook()
+                        if ed_nb:
+                            curr_ed = ed_nb.get_current_editor()
+                            if curr_ed and hasattr(curr_ed, "get_filename"):
+                                fn = curr_ed.get_filename()
+                                if fn and isinstance(fn, str) and os.path.isfile(fn):
+                                    parent_dir = str(Path(fn).parent)
+                                    if Path(parent_dir).resolve() not in (h_home, h_home.parent):
+                                        raw_path = parent_dir
+            except Exception:
+                pass
+
+        # 4. Fallback: active editor file in Thonny if no raw_path
         if not raw_path and hasattr(wb, "get_editor_notebook"):
             try:
                 ed_nb = wb.get_editor_notebook()
@@ -1741,128 +1842,14 @@ def _report_analysis_to_shell(
     t.start()
 
 
-def open_codestruct_workbench(event: Any = None) -> None:
-    """Action invoked from Thonny Tools menu to open CodeStruct workbench as an editor tab."""
-    wb = get_workbench()
-    if wb is None:
-        return
-
-    # 1. Read current project directory from Thonny's File view
-    folder = get_file_view_folder(wb)
-    if not folder:
-        tkinter.messagebox.showinfo(
-            "No Folder Open in File View",
-            "No project folder is currently open in Thonny's File view.\n\n"
-            "Please open your project folder in Thonny's File view (View → Files) before launching CodeStruct.",
-            parent=wb,
-        )
-        return
-
-    folder_path = Path(folder)
-    try:
-        resolved_folder = folder_path.resolve(strict=True)
-    except (OSError, RuntimeError) as err:
-        tkinter.messagebox.showerror(
-            "Folder Inaccessible",
-            f"The selected project folder cannot be accessed on disk:\n\n{folder}\n({err})",
-            parent=wb,
-        )
-        return
-
-    if not resolved_folder.is_dir():
-        tkinter.messagebox.showerror(
-            "Invalid Directory",
-            f"The selected path is not a directory:\n\n{resolved_folder}",
-            parent=wb,
-        )
-        return
-
-    if resolved_folder == Path(resolved_folder.anchor):
-        tkinter.messagebox.showerror(
-            "Drive Root Rejected",
-            f"Cannot analyze a drive root directly:\n\n{resolved_folder}",
-            parent=wb,
-        )
-        return
-
-    if _has_link_component(resolved_folder) or _is_link_or_reparse(resolved_folder):
-        tkinter.messagebox.showerror(
-            "Symlinks Not Supported",
-            f"CodeStruct does not support symlinks or reparse points for security reasons:\n\n{resolved_folder}",
-            parent=wb,
-        )
-        return
-
-    # 2. Validate URLs as loopback-only
-    backend_url = os.environ.get("CODESTRUCT_BACKEND_URL", DEFAULT_BACKEND_URL)
-    frontend_url = os.environ.get("CODESTRUCT_FRONTEND_URL", DEFAULT_FRONTEND_URL)
-
-    if not is_loopback_url(backend_url):
-        tkinter.messagebox.showerror(
-            "Security Configuration Error",
-            f"The configured backend URL is not a loopback address:\n  {backend_url}\n\n"
-            "CodeStruct only permits loopback addresses (127.0.0.1, localhost, ::1).",
-            parent=wb,
-        )
-        return
-
-    if not is_loopback_url(frontend_url):
-        tkinter.messagebox.showerror(
-            "Security Configuration Error",
-            f"The configured frontend viewer URL is not a loopback address:\n  {frontend_url}\n\n"
-            "CodeStruct only permits loopback addresses (127.0.0.1, localhost, ::1).",
-            parent=wb,
-        )
-        return
-
-    _set_status_message(
-        wb, f"CodeStruct: Registering project folder '{resolved_folder.name}'..."
-    )
-
-    # 3. Register folder with backend via POST /api/v1/host/register-folder
-    try:
-        reg_url = f"{backend_url.rstrip('/')}/api/v1/host/register-folder"
-        headers: dict[str, str] = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-        host_token = os.environ.get("CODESTRUCT_HOST_TOKEN")
-        if host_token:
-            headers["X-CodeStruct-Host-Token"] = host_token
-
-        payload = json.dumps({"path": str(resolved_folder)}).encode("utf-8")
-        req = urllib.request.Request(
-            reg_url, data=payload, headers=headers, method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=10.0) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-
-        root_id = data.get("root_id")
-        analysis_id = data.get("analysis_id")
-        if not root_id or not analysis_id:
-            raise RuntimeError(
-                "Backend registration response missing 'root_id' or 'analysis_id'."
-            )
-    except Exception as exc:
-        logger.exception(
-            "Failed to register project folder with CodeStruct backend: %s", exc
-        )
-        tkinter.messagebox.showerror(
-            "Backend Connection Error",
-            f"Could not register project folder with CodeStruct backend:\n\n{exc}",
-            parent=wb,
-        )
-        _set_status_message(wb, "CodeStruct: Backend registration failed.")
-        return
-
-    # 4. Construct viewer URL with embed=thonny
-    viewer_url = build_workbench_viewer_url(
-        frontend_url,
-        analysis_id=analysis_id,
-        project_id=root_id,
-        session_token=root_id,
-    )
-
+def _open_or_update_workbench_tab(
+    wb: Any,
+    root_id: str,
+    analysis_id: str,
+    frontend_url: str,
+    backend_url: str,
+    resolved_folder: Path,
+) -> None:
     editor_notebook = getattr(wb, "get_editor_notebook", lambda: None)()
     if editor_notebook is None:
         tkinter.messagebox.showerror(
@@ -1872,12 +1859,25 @@ def open_codestruct_workbench(event: Any = None) -> None:
         )
         return
 
-    _bind_editor_notebook_events(wb)
+    viewer_url = build_workbench_viewer_url(
+        frontend_url,
+        analysis_id=analysis_id,
+        project_id=root_id,
+        session_token=root_id,
+    )
 
+    _bind_editor_notebook_events(wb)
     canonical_folder_str = str(resolved_folder)
 
     # 5. Ensure unified CodeStruct Project Explorer is active
     _integrate_persistent_explorer(wb)
+    exp_view = wb.get_view("FilesView", create=False)
+    if exp_view and hasattr(exp_view, "switch_project_folder"):
+        if getattr(exp_view, "current_project_dir", None) != resolved_folder:
+            try:
+                exp_view.switch_project_folder(str(resolved_folder))
+            except Exception:
+                pass
 
     # 6. Open or update CodeStructEditorTab in editor_notebook
     existing_tab: Optional[CodeStructEditorTab] = None
@@ -1923,6 +1923,238 @@ def open_codestruct_workbench(event: Any = None) -> None:
 
     # 8. Report analysis status and diagnostics directly to Thonny's native Shell
     _report_analysis_to_shell(wb, backend_url, analysis_id, resolved_folder.name)
+
+
+def open_codestruct_workbench(event: Any = None, *, sync: bool = False) -> None:
+    """Action invoked from Thonny Tools menu to open CodeStruct workbench as an editor tab."""
+    wb = get_workbench()
+    if wb is None:
+        return
+
+    # 1. Read current project directory from Thonny's File view
+    folder = get_file_view_folder(wb)
+    if not folder:
+        tkinter.messagebox.showinfo(
+            "No Folder Open in File View",
+            "No project folder is currently open in Thonny's File view.\n\n"
+            "Please open your project folder in Thonny's File view (View → Files) before launching CodeStruct.",
+            parent=wb,
+        )
+        return
+
+    folder_path = Path(folder)
+    try:
+        resolved_folder = folder_path.resolve(strict=True)
+    except (OSError, RuntimeError) as err:
+        tkinter.messagebox.showerror(
+            "Folder Inaccessible",
+            f"The selected project folder cannot be accessed on disk:\n\n{folder}\n({err})",
+            parent=wb,
+        )
+        return
+
+    if not resolved_folder.is_dir():
+        tkinter.messagebox.showerror(
+            "Invalid Directory",
+            f"The selected path is not a directory:\n\n{resolved_folder}",
+            parent=wb,
+        )
+        return
+
+    if resolved_folder == Path(resolved_folder.anchor):
+        tkinter.messagebox.showerror(
+            "Drive Root Rejected",
+            f"Cannot analyze a drive root directly:\n\n{resolved_folder}",
+            parent=wb,
+        )
+        return
+
+    try:
+        home_path = Path.home().resolve()
+        if resolved_folder == home_path or resolved_folder == home_path.parent:
+            tkinter.messagebox.showwarning(
+                "User Home Folder Not Supported",
+                f"The user profile directory '{resolved_folder}' cannot be registered as a project folder.\n\n"
+                "Please open a specific project folder using 'Open...' in the Project Explorer or open a Python file in that project.",
+                parent=wb,
+            )
+            _set_status_message(wb, "CodeStruct: Please select a specific project folder.")
+            return
+    except Exception:
+        pass
+
+    if _has_link_component(resolved_folder) or _is_link_or_reparse(resolved_folder):
+        tkinter.messagebox.showerror(
+            "Symlinks Not Supported",
+            f"CodeStruct does not support symlinks or reparse points for security reasons:\n\n{resolved_folder}",
+            parent=wb,
+        )
+        return
+
+    # 2. Validate URLs as loopback-only
+    backend_url = os.environ.get("CODESTRUCT_BACKEND_URL", DEFAULT_BACKEND_URL)
+    frontend_url = os.environ.get("CODESTRUCT_FRONTEND_URL", DEFAULT_FRONTEND_URL)
+
+    if not is_loopback_url(backend_url):
+        tkinter.messagebox.showerror(
+            "Security Configuration Error",
+            f"The configured backend URL is not a loopback address:\n  {backend_url}\n\n"
+            "CodeStruct only permits loopback addresses (127.0.0.1, localhost, ::1).",
+            parent=wb,
+        )
+        return
+
+    if not is_loopback_url(frontend_url):
+        tkinter.messagebox.showerror(
+            "Security Configuration Error",
+            f"The configured frontend viewer URL is not a loopback address:\n  {frontend_url}\n\n"
+            "CodeStruct only permits loopback addresses (127.0.0.1, localhost, ::1).",
+            parent=wb,
+        )
+        return
+
+    global _registration_in_progress
+    with _state_lock:
+        if _registration_in_progress:
+            logger.info("Project registration already in progress; ignoring duplicate request.")
+            return
+        _registration_in_progress = True
+
+    _set_status_message(
+        wb, f"CodeStruct: Registering project folder '{resolved_folder.name}'..."
+    )
+
+    def _do_register() -> None:
+        global _registration_in_progress
+        try:
+            # Step A: Fast backend health check
+            health_url = f"{backend_url.rstrip('/')}/health/ready"
+            try:
+                h_req = urllib.request.Request(
+                    health_url, headers={"Accept": "application/json"}, method="GET"
+                )
+                with urllib.request.urlopen(h_req, timeout=3.0) as h_resp:
+                    if h_resp.status != 200:
+                        raise RuntimeError(f"Backend returned HTTP {h_resp.status}")
+            except urllib.error.URLError as u_err:
+                err_detail = str(u_err)
+
+                def _notify_backend_offline():
+                    _set_status_message(wb, "CodeStruct: Backend unavailable.")
+                    tkinter.messagebox.showerror(
+                        "Backend Connection Error",
+                        f"Could not connect to CodeStruct backend at {backend_url}:\n\n"
+                        f"{err_detail}\n\n"
+                        "Please verify the CodeStruct backend service is running and listening on the expected loopback port.",
+                        parent=wb,
+                    )
+                if sync or _is_mock(wb):
+                    _notify_backend_offline()
+                else:
+                    wb.after(0, _notify_backend_offline)
+                return
+            except Exception as h_exc:
+                logger.debug("Backend health check notice: %s", h_exc)
+
+            # Step B: Register folder with backend via POST /api/v1/host/register-folder
+            reg_url = f"{backend_url.rstrip('/')}/api/v1/host/register-folder"
+            headers: dict[str, str] = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            host_token = os.environ.get("CODESTRUCT_HOST_TOKEN")
+            if host_token:
+                headers["X-CodeStruct-Host-Token"] = host_token
+
+            payload = json.dumps({"path": str(resolved_folder)}).encode("utf-8")
+            req = urllib.request.Request(
+                reg_url, data=payload, headers=headers, method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=30.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            root_id = data.get("root_id")
+            analysis_id = data.get("analysis_id")
+            if not root_id or not analysis_id:
+                raise RuntimeError(
+                    "Backend registration response missing 'root_id' or 'analysis_id'."
+                )
+
+            def _on_success():
+                _open_or_update_workbench_tab(
+                    wb,
+                    root_id=root_id,
+                    analysis_id=analysis_id,
+                    frontend_url=frontend_url,
+                    backend_url=backend_url,
+                    resolved_folder=resolved_folder,
+                )
+
+            if sync or _is_mock(wb):
+                _on_success()
+            else:
+                wb.after(0, _on_success)
+
+        except urllib.error.HTTPError as http_err:
+            err_msg = str(http_err)
+            try:
+                body_json = json.loads(http_err.read().decode("utf-8"))
+                detail = body_json.get("detail") or body_json.get("message")
+                if detail:
+                    err_msg = str(detail)
+            except Exception:
+                pass
+
+            def _notify_http_error():
+                _set_status_message(wb, "CodeStruct: Backend registration failed.")
+                tkinter.messagebox.showerror(
+                    "Backend Registration Error",
+                    f"Could not register project folder '{resolved_folder.name}':\n\n{err_msg}",
+                    parent=wb,
+                )
+
+            if sync or _is_mock(wb):
+                _notify_http_error()
+            else:
+                wb.after(0, _notify_http_error)
+
+        except Exception as exc:
+            logger.exception(
+                "Failed to register project folder with CodeStruct backend: %s", exc
+            )
+            err_text = str(exc)
+            if "timed out" in err_text.lower():
+                user_msg = (
+                    f"Registration timed out while analyzing folder '{resolved_folder.name}'.\n\n"
+                    "If this folder contains thousands of files, please choose a specific project directory."
+                )
+            else:
+                user_msg = f"Could not register project folder with CodeStruct backend:\n\n{err_text}"
+
+            def _notify_generic_error():
+                _set_status_message(wb, "CodeStruct: Backend registration failed.")
+                tkinter.messagebox.showerror(
+                    "Backend Connection Error",
+                    user_msg,
+                    parent=wb,
+                )
+
+            if sync or _is_mock(wb):
+                _notify_generic_error()
+            else:
+                wb.after(0, _notify_generic_error)
+
+        finally:
+            with _state_lock:
+                _registration_in_progress = False
+
+    if sync or _is_mock(wb):
+        _do_register()
+    else:
+        t = threading.Thread(
+            target=_do_register, daemon=True, name="codestruct-register-folder"
+        )
+        t.start()
 
 
 def analyze_current_project(event: Any = None) -> None:

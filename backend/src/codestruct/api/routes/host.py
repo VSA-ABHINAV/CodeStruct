@@ -37,7 +37,7 @@ def _verify_host_token(
 
 
 @router.post("/choose-folder")
-async def choose_project_folder(
+def choose_project_folder(
     request: Request,
     service: AnalysisService = Depends(analysis_service),
     _auth: None = Depends(_verify_host_token),
@@ -93,7 +93,7 @@ class RegisterFolderRequest(BaseModel):
 
 
 @router.post("/register-folder")
-async def register_project_folder(
+def register_project_folder(
     body: RegisterFolderRequest,
     request: Request,
     service: AnalysisService = Depends(analysis_service),
