@@ -71,3 +71,17 @@ The user reports that CodeStruct is not responding during Thonny use and supplie
 4. Regression-check the Correction 2 requirements in the same real Thonny install: one persistent Explorer while CodeStruct/source tabs are selected or closed; usable folder switching; clear Inspector text with no raw internal token and two concise evidence-grounded explanation lines; working graph selection/pan/zoom/fit; dark clear relationship arrows; one native Thonny Shell; integrated single-window behavior and security/path boundaries. Capture screenshots including the timeout reproduction and successful recovery.
 5. Write a new `docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_3.md` containing exact reproduction steps, cause, fix, affected Python/Thonny versions, failure and recovery evidence, screenshots, exact tests/gates with exit codes, untested cases/limitations, commits and push result. Preserve Correction 2 report history; update `PROCESS_TRACKER.md` and `docs/codestruct_audit.md` with the new user-reported registration failure. M7 remains **Changes required**; M8 evidence/status remains intact and unaccepted.
 6. Commit only scoped changes and push to existing `origin/main` without force, as previously authorized. Do not change remote visibility/URL or publish packages/releases. Continue fixing and testing until the timeout and all regressions are resolved or a genuine blocker is evidenced. At that point stop implementation, make no further changes or start another task, send `READY FOR REVIEW`, and wait for Codex review.
+
+## Current correction follow-up — report-evidence closeout (2026-10-24)
+
+Antigravity's `docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_3.md` reports the implementation and tests as passing, but its closeout currently omits mandatory delivery evidence. This is a report-only follow-up unless verification reveals an actual implementation or verification gap. Do not restart or redo completed code work based on assumption.
+
+Verify and add to the report:
+
+- Exact tested implementation commit hash(es), and which commit(s) contain the report, tracker, and audit updates.
+- Whether the scoped commits were pushed to the already authorized `origin/main`; record local and remote commit hashes/ref parity. If not yet pushed, push only the scoped authorized commits without force. If remote has diverged, stop and document that blocker.
+- Final `git status --short` and `git diff --check` results.
+- External audit mirror exact path and SHA-256 parity, or a concrete access/synchronization blocker.
+- Reconcile `PROCESS_TRACKER.md` and `docs/codestruct_audit.md` to those verified facts while keeping M7 Changes required and M8 unaccepted.
+
+Do not rerun full quality suites if no code changed and the report already contains exact commands/results. If any code changes or required gate/evidence is missing, run the narrowly required checks and update results. Once the report is complete, accurate, and committed/pushed as authorized, stop all work, make no further changes, send `READY FOR REVIEW`, and wait for Codex review.
