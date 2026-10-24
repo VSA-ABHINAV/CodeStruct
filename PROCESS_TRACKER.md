@@ -11,8 +11,8 @@ Only Codex assigns Accepted after review. Antigravity records implementation and
 | M4 | CS-006-CS-007, integration CS-021-CS-022 | Antigravity | Accepted | `docs/verification/M4_CODEX_REVIEW_13_ACCEPTED.md` | Independent backend/plugin/frontend/static gates and live browser/backend/Thonny workflow pass; live cursor 4.4. Manual screen-reader observation remains pending under CS-022. |
 | M5 | CS-012-CS-014 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | docs/verification/M5_REPORT_ACCEPTED.md, docs/verification/M5.md | Report records full gates and cleanup; code e72a909; reports a8f3d38, 7ea0999, fc21580 |
 | M6 | CS-016 | Antigravity | Complete (per user-authorized report reliance; no direct code review) | `docs/verification/M6_REPORT_ACCEPTED.md`, `docs/verification/M6.md` | Report records tested code `649625b`, report `e0232f2`, 5 real API scenarios, and full gates (84.75% coverage) |
-| M7 | CS-015, CS-017 | Antigravity | Changes required — persistent Explorer, Inspector, and graph usability | docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_2.md | The user reports on 2026-10-22 that Explorer must be the sole persistent file explorer across all tabs and restarts (superseding hide/restore), Inspector must have no raw `unresolved_symbol` and exactly 2 evidence-grounded lines, graph selection/pan/zoom must work interactively, and relationship lines/arrows must be dark, thick, and distinguishable. Reference images: D:\REP\changes\1.png, D:\REP\changes\2.png. Implement and verify in real Thonny; M7 acceptance is reopened for this UI correction. M8 report/push evidence is preserved; M8 is not Accepted. |
-| M8 | CS-020–024 | Antigravity + user | Ready for Codex review — owner defaults applied; Git synced | docs/verification/M8.md, ANTIGRAVITY_M8_FINALIZATION_TASK.md | Report records evaluation, storage fault handling, accessibility automation, documentation reconciliation, clean package lifecycle, and authorized Git sync. User authorized MIT, maintainer handle without personal email, Git-only distribution, and push to existing remote. Scoped commits (fc21580..5ebe039) pushed without force to origin/main. Human Narrator observation remains explicitly pending; M8 not accepted. |
+| M7 | CS-015, CS-017 | Antigravity | Changes required — ready for Codex review | docs/verification/THONNY_WORKBENCH_LAYOUT_CORRECTION_3.md | User report 3 backend registration timeout diagnosed and fixed: rejected user profile root scanning, converted route to worker threads, added non-blocking background registration and /health/ready probe in Thonny plugin. All Correction 2 requirements verified in real Thonny / Python 3.14.6: persistent single Explorer, 2-line clean Inspector, interactive graph, dark 2.5px arrows, native Shell diagnostics, project switching, and zero execution safety. Tested implementation commit 255e8f3 and closeout 343076b pushed to origin/main. M7 remains Changes required pending Codex review. |
+| M8 | CS-020–024 | Antigravity + user | Ready for Codex review — owner defaults applied; Git synced; Narrator pending | docs/verification/M8.md, ANTIGRAVITY_M8_FINALIZATION_TASK.md | Report records evaluation (100% precision/recall/F1), storage faults (10 passed), accessibility automation, documentation reconciliation, clean package lifecycle, owner decisions (MIT, maintainer handle, Git-only), and authorized Git sync. Windows Narrator audio observation explicitly pending human observation due to agent execution environment blocker (lack of audio capture/perception hardware; absence of text transcript logs in Narrator). Automated ARIA tests do not claim accessibility acceptance. M8 not accepted. |
 | Future | CS-025 | User decides | Deferred | — | Not in core scope |
 
 ## Current milestone issue tracker
@@ -123,7 +123,7 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 |---|---|---|---|
 | CS-020 | Ready for Codex review | 4 ground-truth benchmark fixtures, manifest, evaluation script, 100% precision/recall/F1 across all entity and relationship categories, scale budgets verified (<250–1000ms, <50MiB), dynamic tracing overhead characterized. Report: `docs/verification/M8.md`. | None for M8 (Codex review) |
 | CS-021 | Ready for Codex review | Storage fault matrix verified (10 passed in `tests/test_storage_faults.py`): unwritable DB (HTTP 503 `STORAGE_UNAVAILABLE`), transaction rollback, corrupt cache invalidation and recovery, corrupt disk cache eviction, unsupported future schema rejection, and restart recovery. Report: `docs/verification/M8.md`. | None for M8 (Codex review) |
-| CS-022 | Ready for Codex review | Automated keyboard/focus/ARIA/table/reduced-motion checks verified (10 passed in Vitest); Windows Narrator presence verified; exact audio observation protocol documented for owner. Report: `docs/verification/M8.md`. | Manual owner audio observation pending |
+| CS-022 | Ready for Codex review | Automated keyboard/focus/ARIA/table/reduced-motion checks verified (10 passed in Vitest); Windows Narrator presence verified; live audio observation cannot be completed by automated agent (lacks audio capture/perception hardware; Narrator lacks text transcript log); observation remains explicitly pending human observation for owner with documented checklist. Automated ARIA tests do not claim accessibility acceptance. Report: `docs/verification/M8.md`. | Manual owner audio observation pending |
 | CS-023 | Ready for Codex review | Reconciled README, setup, and user guide with Thonny single-window embedded editor tab workflow (`CodeStructEditorTab`) and M1–M8 capabilities; removed obsolete Edge `--app` references; synchronized audit, tracker, and external mirror with identical SHA-256. Report: `docs/verification/M8.md`. | None for M8 (Codex review) |
 | CS-024 | Ready for Codex review | Production frontend build bundled into wheel assets (`/app`); clean virtualenv install and lifecycle verified passing all 6 `codestruct doctor` checks; clean shutdown/restart/upgrade; dependency license audit (100% permissive); owner decisions documented. Report: `docs/verification/M8.md`. | Owner decisions (license, maintainers, distribution policy) |
 | CS-015 | Accepted (report-based per user instruction) | Persistent per-file parse cache enforces post-insert stored bytes and entry count via iterative LRU eviction loop in `_evict_if_needed()`; oversized entries exceeding `max_bytes` are rejected; invariant assertions verify bounds. Regressions added in `tests/test_file_cache.py`. Report: `docs/verification/M7_CODEX_REVIEW_2_ACCEPTED_REPORT_BASED.md`. | None (Codex review) |
@@ -147,6 +147,34 @@ Milestone 4 Codex Review 11 Corrections Pass (2026-10-09): **Pass 12 baseline**.
 | CS-026 | Accepted (M1 contract portion) | Lovable brief and frontend contract reviewed against backend; renderer/design decision remains M3. | M3 design work remains |
 
 ## Run log
+
+### 2026-10-24 — Milestone 8 closeout reconciliation (Narrator blocker, owner defaults, and gates)
+
+- **Scope & Continuity:** Continued only the existing M8 closeout per `ANTIGRAVITY_M8_TASK.md`, `ANTIGRAVITY_M8_FINALIZATION_TASK.md`, and `docs/verification/M8.md`. Preserved M7/CS-017 as "Changes required — ready for Codex review"; zero modifications to M7 and zero new features begun.
+- **Windows Narrator Audio Observation Attempt & Technical Blocker:**
+  - Verified `Narrator.exe` (internal name `SR.exe`, Microsoft Screen Reader version 10.0.26100.9711) is present at `C:\Windows\System32\Narrator.exe`.
+  - Recorded exact technical blocker: Antigravity is an automated AI agent operating non-interactively in a terminal subshell without physical auditory perception (ears) or audio capture hardware (loopback device / speech-to-text bridge). Windows Narrator streams synthesizer speech directly to Windows physical audio hardware and does not expose a plaintext speech transcript stream. True acoustic evaluation of voice synthesis, pronunciation, earcons, and cadence requires human auditory perception.
+  - Policy enforcement: Automated ARIA tests in Vitest verify semantic DOM structures and event handlers, but **do not constitute accessibility acceptance**. The manual observation remains explicitly **Pending Human Observation** for the owner with the documented 5-step checklist.
+- **Reconciliation of Owner Decisions:**
+  - Project License: Standard MIT `LICENSE` (Copyright 2026 `VSA-ABHINAV`), verified packaged in wheel and sdist.
+  - Maintainer Metadata: `maintainers = [{ name = "VSA-ABHINAV" }]` and URL `https://github.com/VSA-ABHINAV/CodeStruct` without personal email.
+  - Distribution: Git-only repository (`https://github.com/VSA-ABHINAV/CodeStruct.git`); no PyPI publishing, no public tags/releases.
+- **Reconciliation of Packaging & Lifecycle Evidence:**
+  - Bundled production frontend compiled with `/app/` base into `backend/src/codestruct/web/`.
+  - Built distribution packages (`codestruct-0.1.0.dev0-py3-none-any.whl` and `.tar.gz`).
+  - Isolated clean-environment verification in `scratch/clean_m8_env` passing all 6 `codestruct doctor` checks, full server lifecycle at `/app`, `/api/v1/projects` contract, clean shutdown/restart, and upgrade/reinstall.
+  - Dependency license audit confirms 100% permissive licenses with zero copyleft risk.
+- **Verification Gates Executed & Passing:**
+  - CS-020 Evaluation: `scripts/evaluate_accuracy_performance.py` -> 100% precision, recall, F1 across 4 benchmarks (`small_project`, `nested_project`, `typed_project`, `larger_project`); static analysis 16.0–96.8 ms (<250–1000 ms budget), peak memory 2.14–2.20 MiB (<50 MiB budget); dynamic tracing characterized (exit code 0).
+  - CS-021 Storage Faults: `tests/test_storage_faults.py` -> 10 passed in 1.51s (exit code 0).
+  - CS-022 Frontend Accessibility: `npm --prefix frontend.lovable test -- --run` -> 10 passed, 1 skipped in 22.85s (exit code 0).
+  - Backend pytest & coverage: 343 passed, 2 skipped, 84.28% coverage (>= 84.0%) in 39.30s (exit code 0).
+  - Thonny plugin pytest: 81 passed, 1 skipped in 9.20s (exit code 0).
+  - Ruff check: All checks passed (exit code 0).
+  - Mypy: Success: no issues found in 57 source files (exit code 0).
+  - Frontend typecheck, build, and ESLint: clean (exit code 0).
+  - Git diff check: clean (exit code 0).
+- **Handoff & Status:** Milestone 8 is marked **Ready for Codex review** (not Accepted). M7 remains preserved as **Changes required — ready for Codex review**. Working tree clean, remote 1:1 parity with `origin/main`.
 
 ### 2026-10-23 — Thonny backend registration correction pass 3 (completed)
 
