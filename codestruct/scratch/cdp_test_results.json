@@ -1,0 +1,67 @@
+{
+  "fonts": {
+    "Inter": true,
+    "JetBrainsMono": true
+  },
+  "impact_groups": [
+    {
+      "depth": "Depth 1",
+      "items": [
+        {
+          "id": "sample_project.Dog",
+          "name": "Dog",
+          "edge": "inherits"
+        },
+        {
+          "id": "sample_project.Cat",
+          "name": "Cat",
+          "edge": "inherits"
+        }
+      ]
+    },
+    {
+      "depth": "Depth 2",
+      "items": [
+        {
+          "id": "sample_project.build_zoo",
+          "name": "build_zoo",
+          "edge": "constructs"
+        }
+      ]
+    },
+    {
+      "depth": "Depth 3",
+      "items": [
+        {
+          "id": "sample_project.main",
+          "name": "main",
+          "edge": "calls"
+        }
+      ]
+    }
+  ],
+  "selection_sync": {
+    "selectedSymbolId": "sample_project.build_zoo",
+    "inspectorName": "build_zoo",
+    "treeSelected": "sample_project.build_zoo"
+  },
+  "dock_toggles": {
+    "collapse_ok": true,
+    "expand_ok": true,
+    "filter_preserved": true,
+    "chat_preserved": true
+  },
+  "toolbar_scroll": {
+    "scrollLeft": 50,
+    "scrollWidth": 713,
+    "clientWidth": 546,
+    "fadeLeftVisible": true,
+    "fadeRightVisible": true
+  },
+  "responsive_1024": {
+    "screenshot": "D:\\CodeStruct\\codestruct\\docs\\screenshots\\desktop_1024x768_collapsed.png",
+    "width": 1024,
+    "height": 768
+  },
+  "status": "PASSED"
+}

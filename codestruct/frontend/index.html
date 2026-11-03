@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeStruct</title>
+    <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- 1. Top Toolbar -->
+        <header id="top-toolbar">
+            <div class="toolbar-brand" id="toolbar-pinned-left">
+                <span class="brand-icon">⚡</span>
+                <span id="app-title" class="brand-title">CodeStruct</span>
+            </div>
+
+            <!-- Scrollable View-Tab Group (Phase 17) -->
+            <div class="toolbar-scroll-wrapper" id="toolbar-scroll-wrapper">
+                <div class="toolbar-fade toolbar-fade-left" id="toolbar-fade-left"></div>
+                <div class="toolbar-scroll-container" id="toolbar-scroll-container">
+                    <div class="toolbar-tab-group">
+                        <button id="toolbar-tab-graph" class="toolbar-tab-btn active" type="button" title="View AST relationship graph">
+                            <span class="tab-icon">🕸️</span> Graph
+                        </button>
+                        <button id="toolbar-tab-table" class="toolbar-tab-btn" type="button" title="View symbols table">
+                            <span class="tab-icon">📋</span> Table
+                        </button>
+                        <button id="toolbar-tab-patterns" class="toolbar-tab-btn" type="button" title="View detected design patterns">
+                            <span class="tab-icon">🧩</span> Patterns
+                        </button>
+                        <button id="toolbar-tab-code" class="toolbar-tab-btn" type="button" title="View syntax-highlighted source code">
+                            <span class="tab-icon">📄</span> Code
+                        </button>
+                    </div>
+                    <div class="toolbar-context-group">
+                        <span id="toolbar-file-context" class="toolbar-context-pill">No file open</span>
+                        <span id="toolbar-line-context" class="toolbar-context-pill">Lines -</span>
+                        <button id="toolbar-btn-open-editor" class="toolbar-context-btn" type="button" title="Open file in external editor">Open in Editor</button>
+                        <span class="toolbar-readonly-pill">🔒 READ-ONLY</span>
+                    </div>
+                </div>
+                <div class="toolbar-fade toolbar-fade-right" id="toolbar-fade-right"></div>
+            </div>
+
+            <div class="toolbar-actions" id="toolbar-pinned-right">
+                <div class="toolbar-project-group">
+                    <input id="input-project-path" class="project-path-input" type="text" placeholder="Enter project path (e.g., sample_project or C:\my_project)" autocomplete="off">
+                    <button id="btn-analyze" class="toolbar-btn primary-btn" type="button">Analyze</button>
+                </div>
+                <button id="btn-open-project" class="toolbar-btn" type="button">Open Project</button>
+            </div>
+        </header>
+
+        <!-- Main Middle Region (Left Dock, Center Graph, Right Stacked Docks) -->
+        <main id="main-workspace">
+            <!-- 2. Left Dock: Explorer -->
+            <aside id="left-dock" class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Explorer</span>
+                    <button id="btn-toggle-explorer" class="dock-toggle-btn" title="Toggle Explorer dock" type="button" aria-label="Toggle Explorer">
+                        <span class="toggle-icon">◀</span>
+                    </button>
+                </div>
+                <div class="dock-rail" id="rail-explorer" title="Click to expand Explorer">
+                    <span class="dock-rail-label">EXPLORER</span>
+                </div>
+                <!-- Filter Bar -->
+                <div class="explorer-filter-container">
+                    <input id="explorer-filter" type="text" placeholder="Filter symbols..." autocomplete="off">
+                </div>
+                <div id="explorer-content" class="panel-body explorer-body">
+                    <div id="explorer-placeholder" class="empty-placeholder">
+                        <div class="placeholder-icon">📁</div>
+                        <p class="placeholder-text">No project opened</p>
+                        <span class="placeholder-subtext">Click Analyze to load symbol tree.</span>
+                    </div>
+                    <!-- Symbol Tree Root Container -->
+                    <div id="tree-root" class="tree-root" style="display: none;"></div>
+                </div>
+            </aside>
+
+            <!-- 3. Center Area: Graph View & Code Viewer (Phase 7) -->
+            <section id="center-area" class="panel">
+                <div class="panel-header center-header" id="center-sub-toolbar">
+                    <!-- Graph specific controls (visible when Graph View is active) -->
+                    <div id="graph-header-controls" class="center-controls-group">
+                        <!-- Kind Filters -->
+                        <div id="kind-filters" class="kind-filters">
+                            <label class="filter-item">
+                                <input type="checkbox" id="filter-module" checked data-kind="module">
+                                <span class="filter-dot dot-module"></span> Module
+                            </label>
+                            <label class="filter-item">
+                                <input type="checkbox" id="filter-class" checked data-kind="class">
+                                <span class="filter-dot dot-class"></span> Class
+                            </label>
+                            <label class="filter-item">
+                                <input type="checkbox" id="filter-function" checked data-kind="function">
+                                <span class="filter-dot dot-function"></span> Function
+                            </label>
+                            <label class="filter-item">
+                                <input type="checkbox" id="filter-method" checked data-kind="method">
+                                <span class="filter-dot dot-method"></span> Method
+                            </label>
+                        </div>
+                        <!-- Pan / Zoom / Fit Controls -->
+                        <div class="graph-controls">
+                            <button id="btn-zoom-in" class="control-btn" title="Zoom in" type="button">+</button>
+                            <button id="btn-zoom-out" class="control-btn" title="Zoom out" type="button">-</button>
+                            <button id="btn-fit" class="control-btn" title="Fit to screen" type="button">Fit</button>
+                            <button id="btn-reset-layout" class="control-btn" title="Re-run layout" type="button">Layout</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. Graph Viewport -->
+                <div id="graph-viewport" class="panel-body graph-viewport">
+                    <!-- Placeholder visible before analysis -->
+                    <div id="graph-placeholder" class="empty-placeholder graph-box">
+                        <div class="placeholder-icon">🕸️</div>
+                        <p class="placeholder-heading">Graph View</p>
+                        <p class="placeholder-subtext">Click "Analyze" to render interactive AST relationships.</p>
+                    </div>
+                    <!-- Cytoscape Canvas Container -->
+                    <div id="cy"></div>
+                </div>
+
+                <!-- 2. Code Viewport (Phase 7) -->
+                <div id="code-viewport" class="panel-body code-viewport" style="display: none;">
+                    <!-- Placeholder visible before any symbol source is loaded -->
+                    <div id="code-placeholder" class="empty-placeholder code-box">
+                        <div class="placeholder-icon">📄</div>
+                        <p class="placeholder-heading">Code Viewer</p>
+                        <p class="placeholder-subtext">Select any symbol and click "Jump to Source" to inspect highlighted source code.</p>
+                    </div>
+                    <!-- Rendered Code Container -->
+                    <div id="code-container" class="code-container" style="display: none;">
+                        <div id="code-content" class="code-content"></div>
+                    </div>
+                </div>
+
+                <!-- 3. Table Viewport (Phase 12) -->
+                <div id="table-viewport" class="panel-body table-viewport" style="display: none;">
+                    <!-- Placeholder visible before analysis -->
+                    <div id="table-placeholder" class="empty-placeholder table-box">
+                        <div class="placeholder-icon">📋</div>
+                        <p class="placeholder-heading">Table View</p>
+                        <p class="placeholder-subtext">Click "Analyze" to populate the symbols table.</p>
+                    </div>
+                    <!-- Rendered Table Container -->
+                    <div id="table-container" class="table-container" style="display: none;">
+                        <table id="symbols-table" class="symbols-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-col="name">Name <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-col="kind">Kind <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-col="module">Module <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-col="file_path">File <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-col="lineno">Start Line <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-col="end_lineno">End Line <span class="sort-indicator"></span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="symbols-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. Patterns Viewport (Phase 13) -->
+                <div id="patterns-viewport" class="panel-body patterns-viewport" style="display: none;">
+                    <!-- Placeholder visible before analysis -->
+                    <div id="patterns-placeholder" class="empty-placeholder patterns-box">
+                        <div class="placeholder-icon">🧩</div>
+                        <p class="placeholder-heading">Design Patterns</p>
+                        <p class="placeholder-subtext">Click "Analyze" to detect structural design patterns (Singleton, Factory, Observer).</p>
+                    </div>
+
+                    <!-- Rendered Patterns Container -->
+                    <div id="patterns-container" class="patterns-container" style="display: none;">
+                        <!-- Disclaimer Banner per specification -->
+                        <div class="patterns-disclaimer-banner">
+                            <span class="disclaimer-icon">ℹ️</span>
+                            <span class="disclaimer-text"><strong>Heuristic Detection:</strong> Patterns are identified via AST structural heuristics and indicate potential design patterns, not verified design intent.</span>
+                        </div>
+
+                        <!-- Empty state when 0 patterns are detected (e.g. sample_project) -->
+                        <div id="patterns-empty" class="empty-placeholder" style="display: none;">
+                            <div class="placeholder-icon">🔍</div>
+                            <p class="placeholder-heading">No Design Patterns Detected</p>
+                            <p class="placeholder-subtext">No Singleton, Factory, or Observer structures were identified in the analyzed project.</p>
+                        </div>
+
+                        <!-- List of detected patterns -->
+                        <div id="patterns-list" class="patterns-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. Right Dock: Stacked Inspector + Qwen Assistant -->
+            <aside id="right-dock">
+                <!-- Inspector Panel (Top) -->
+                <section id="inspector-panel" class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Inspector</span>
+                        <button id="btn-toggle-inspector" class="dock-toggle-btn" title="Toggle Inspector dock" type="button" aria-label="Toggle Inspector">
+                            <span class="toggle-icon">▶</span>
+                        </button>
+                    </div>
+                    <div class="dock-rail" id="rail-inspector" title="Click to expand Inspector">
+                        <span class="dock-rail-label">INSPECTOR</span>
+                    </div>
+                    <div id="inspector-content" class="panel-body inspector-body">
+                        <!-- Placeholder when nothing is selected -->
+                        <div id="inspector-placeholder" class="empty-placeholder">
+                            <div class="placeholder-icon">🔍</div>
+                            <p class="placeholder-text">No symbol selected</p>
+                            <span class="placeholder-subtext">Click any node or symbol to inspect details, relationships, and metrics.</span>
+                        </div>
+                        <!-- Live Inspector Details (Phase 6) -->
+                        <div id="inspector-details" class="inspector-details" style="display: none;">
+                            <div class="inspector-top-bar">
+                                <div class="inspector-title-group">
+                                    <span id="inspector-kind" class="inspector-kind-badge">class</span>
+                                    <h3 id="inspector-name" class="inspector-name">Symbol Name</h3>
+                                </div>
+                                <div class="inspector-action-buttons">
+                                    <button id="btn-open-editor-inspector" class="toolbar-btn jump-btn" type="button" title="Open file in external editor">Open in Editor</button>
+                                    <button id="btn-jump-source" class="toolbar-btn jump-btn" type="button" title="Jump to Source">Jump to Source</button>
+                                </div>
+                            </div>
+
+                            <!-- Metadata info -->
+                            <div class="inspector-meta">
+                                <div class="meta-row">
+                                    <span class="meta-label">File:</span>
+                                    <span id="inspector-file" class="meta-value">-</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Lines:</span>
+                                    <span id="inspector-lines" class="meta-value">-</span>
+                                </div>
+                            </div>
+
+                            <!-- Metrics: Fan-in / Fan-out / Instability -->
+                            <div class="inspector-metrics">
+                                <div class="metric-card">
+                                    <span id="inspector-fan-in" class="metric-num">0</span>
+                                    <span class="metric-label">Fan-In</span>
+                                </div>
+                                <div class="metric-card">
+                                    <span id="inspector-fan-out" class="metric-num">0</span>
+                                    <span class="metric-label">Fan-Out</span>
+                                </div>
+                                <div class="metric-card" title="Instability: Fan-Out / (Fan-In + Fan-Out)">
+                                    <span id="inspector-instability" class="metric-num">0.00</span>
+                                    <span class="metric-label">Instability</span>
+                                </div>
+                            </div>
+
+                            <!-- Docstring -->
+                            <div id="inspector-docstring-container" class="inspector-section">
+                                <div class="section-title">Docstring</div>
+                                <div id="inspector-docstring" class="docstring-content"></div>
+                            </div>
+
+                            <!-- Relationships: Incoming & Outgoing -->
+                            <div class="inspector-relationships">
+                                <div class="relationship-col">
+                                    <div class="section-title">Incoming (<span id="count-incoming">0</span>)</div>
+                                    <ul id="inspector-incoming-list" class="relationship-list"></ul>
+                                </div>
+                                <div class="relationship-col">
+                                    <div class="section-title">Outgoing (<span id="count-outgoing">0</span>)</div>
+                                    <ul id="inspector-outgoing-list" class="relationship-list"></ul>
+                                </div>
+                            </div>
+
+                            <!-- Change Impact Analysis (Phase 15) -->
+                            <div id="inspector-impact-container" class="inspector-section">
+                                <div class="section-title impact-title">
+                                    <span>Change Impact (<span id="count-impact">0</span>)</span>
+                                    <span class="impact-caption" title="Transitive backward dependencies">Blast Radius</span>
+                                </div>
+                                <div id="inspector-impact-empty" class="meta-value impact-empty" style="display: none;">No downstream dependencies.</div>
+                                <div id="inspector-impact-results" class="impact-groups"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Qwen Assistant Panel (Bottom) -->
+                <section id="qwen-panel" class="panel">
+                    <div class="panel-header">
+                        <span class="panel-title">Qwen Assistant</span>
+                        <div class="panel-controls chat-header-controls">
+                            <span id="chat-status-badge" class="chat-status-badge status-idle" title="Ollama connection state">
+                                <span class="chat-status-dot"></span>
+                                <span id="chat-status-text">Ready</span>
+                            </span>
+                            <span class="model-badge">qwen2.5-coder:3b</span>
+                            <button id="btn-toggle-qwen" class="dock-toggle-btn" title="Toggle Qwen dock" type="button" aria-label="Toggle Qwen">
+                                <span class="toggle-icon">▶</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="dock-rail" id="rail-qwen" title="Click to expand Qwen">
+                        <span class="dock-rail-label">QWEN</span>
+                    </div>
+                    <div id="chat-messages" class="panel-body chat-history">
+                        <div id="chat-placeholder" class="empty-placeholder">
+                            <div class="placeholder-icon">🤖</div>
+                            <p class="placeholder-text">Local AI Assistant</p>
+                            <span class="placeholder-subtext">Ask questions about selected code and relationships.</span>
+                        </div>
+                    </div>
+                    <div id="chat-input-bar">
+                        <input id="chat-input" type="text" placeholder="Ask Qwen about selected code..." autocomplete="off">
+                        <button id="btn-chat-send" class="toolbar-btn primary-btn" type="button">Send</button>
+                    </div>
+                </section>
+            </aside>
+        </main>
+
+        <!-- 5. Bottom Region: Log Strip + Status Bar -->
+        <footer id="bottom-region">
+            <!-- Status / Log Text Area -->
+            <section id="log-strip" class="panel">
+                <div class="panel-header compact-header">
+                    <span class="panel-title">Status &amp; Logs</span>
+                    <button id="btn-toggle-logs" class="dock-toggle-btn" title="Toggle Status & Logs dock" type="button" aria-label="Toggle Status & Logs">
+                        <span class="toggle-icon">▼</span>
+                    </button>
+                </div>
+                <div class="dock-strip" id="strip-logs" title="Click to expand Status & Logs">
+                    <span class="strip-log-label">LOGS:</span>
+                    <span id="strip-log-latest" class="strip-log-text">[System] CodeStruct initialized. Ready.</span>
+                </div>
+                <div id="log-body" class="panel-body">
+                    <div id="log-output" class="log-text">[System] CodeStruct initialized. Ready.</div>
+                </div>
+            </section>
+
+            <!-- Bottom Status Bar -->
+            <div id="status-bar">
+                <div class="status-left">
+                    <span class="status-indicator ready-dot"></span>
+                    <span id="status-message">Ready</span>
+                </div>
+                <div class="status-right">
+                    <span id="status-stats">0 nodes / 0 edges</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Local vendored Cytoscape for offline operation -->
+    <script src="/static/vendor/cytoscape.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

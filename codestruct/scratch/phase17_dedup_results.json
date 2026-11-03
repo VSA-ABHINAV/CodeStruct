@@ -1,0 +1,54 @@
+{
+  "graph_view": {
+    "subToolbarDisplay": "flex",
+    "subToolbarHeight": 34,
+    "graphControlsDisplay": "flex",
+    "oldCenterTabsPresent": false,
+    "oldCodeHeaderPresent": false,
+    "filterCheckboxesCount": 4,
+    "zoomControlsCount": 4,
+    "topTabsCount": 4,
+    "duplicateOldTabsCount": 0
+  },
+  "filter_zoom_test": {
+    "initialChecked": true,
+    "afterClickChecked": false,
+    "restoredChecked": true,
+    "initialZoom": 0.7143421236993379,
+    "zoomed": 0.9286447608091393,
+    "fittedZoom": 0.7143421236993379
+  },
+  "table_view": {
+    "subToolbarDisplay": "none",
+    "subToolbarHeight": 0,
+    "tableViewportDisplay": "flex",
+    "symbolRowsCount": 16,
+    "oldCenterTabsPresent": false,
+    "oldCodeHeaderPresent": false
+  },
+  "patterns_view": {
+    "subToolbarDisplay": "none",
+    "subToolbarHeight": 0,
+    "patternsViewportDisplay": "flex",
+    "oldCenterTabsPresent": false,
+    "oldCodeHeaderPresent": false
+  },
+  "code_view": {
+    "subToolbarDisplay": "none",
+    "subToolbarHeight": 0,
+    "codeViewportDisplay": "flex",
+    "oldCenterTabsPresent": false,
+    "oldCodeHeaderPresent": false,
+    "topFileContextText": "sample_project.py : Animal",
+    "topLineContextText": "Lines 4\u201315",
+    "topOpenEditorVisible": true,
+    "topReadOnlyVisible": true
+  },
+  "dock_reflow": {
+    "initialWidth": 250,
+    "collapsedWidth": 40,
+    "isCollapsed": false,
+    "restoredWidth": 250,
+    "isRestored": true
+  }
+}

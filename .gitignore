@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# CodeStruct Runtime Cache (Phase 14 generated cache)
+.codestruct_cache/
+**/.codestruct_cache/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution & Packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Ephemeral browser profiles from test automation
+**/chrome_user_data*/
+**/temp_chrome/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini

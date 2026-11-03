@@ -1,0 +1,54 @@
+{
+  "inspector_collapsed": {
+    "isCollapsed": true,
+    "railDisplay": "flex",
+    "railWidth": 40,
+    "railHeight": 609,
+    "label": "INSPECTOR",
+    "inspWidth": 40,
+    "bodyVisible": false
+  },
+  "inspector_expanded": {
+    "isCollapsed": false,
+    "inspWidth": 340,
+    "inspHeight": 321.5,
+    "bodyVisible": true,
+    "selectedName": "Animal"
+  },
+  "qwen_collapsed": {
+    "isCollapsed": true,
+    "railDisplay": "flex",
+    "railWidth": 40,
+    "railHeight": 609,
+    "label": "QWEN",
+    "qwenWidth": 40,
+    "historyVisible": false,
+    "inputBarVisible": false
+  },
+  "qwen_expanded": {
+    "isCollapsed": false,
+    "qwenWidth": 340,
+    "historyVisible": true,
+    "draftInput": "Why does Animal have subclasses?"
+  },
+  "all_four_collapsed": {
+    "leftWidth": 40,
+    "logsHeight": 32,
+    "rightWidth": 80,
+    "inspWidth": 40,
+    "qwenWidth": 40,
+    "railExplorerDisplay": "flex",
+    "railInspDisplay": "flex",
+    "railQwenDisplay": "flex",
+    "stripLogsDisplay": "flex",
+    "allCollapsed": true
+  },
+  "all_restored": {
+    "leftWidth": 250,
+    "logsHeight": 85,
+    "rightWidth": 340,
+    "selectedName": "Animal",
+    "draftInput": "Why does Animal have subclasses?",
+    "anyCollapsed": false
+  }
+}

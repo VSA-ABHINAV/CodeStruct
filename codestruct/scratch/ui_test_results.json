@@ -1,0 +1,45 @@
+{
+  "fonts": {
+    "Inter": true,
+    "JetBrainsMono": true
+  },
+  "impact_groups": [
+    {
+      "depth": "Depth 1",
+      "items": [
+        {
+          "id": "sample_project.Dog",
+          "name": "Dog",
+          "edge": "inherits"
+        },
+        {
+          "id": "sample_project.Cat",
+          "name": "Cat",
+          "edge": "inherits"
+        }
+      ]
+    },
+    {
+      "depth": "Depth 2",
+      "items": [
+        {
+          "id": "sample_project.build_zoo",
+          "name": "build_zoo",
+          "edge": "constructs"
+        }
+      ]
+    },
+    {
+      "depth": "Depth 3",
+      "items": [
+        {
+          "id": "sample_project.main",
+          "name": "main",
+          "edge": "calls"
+        }
+      ]
+    }
+  ],
+  "error": "screen grab failed",
+  "status": "FAILED"
+}

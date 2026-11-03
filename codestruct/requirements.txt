@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pywebview
+pygments
+requests
+pytest
+
