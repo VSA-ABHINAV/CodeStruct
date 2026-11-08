@@ -32,6 +32,9 @@
                         <button id="toolbar-tab-code" class="toolbar-tab-btn" type="button" title="View syntax-highlighted source code">
                             <span class="tab-icon">📄</span> Code
                         </button>
+                        <button id="toolbar-tab-architecture" class="toolbar-tab-btn" type="button" title="View LLM component clustering & architecture narrative">
+                            <span class="tab-icon">🏛️</span> Architecture
+                        </button>
                     </div>
                     <div class="toolbar-context-group">
                         <span id="toolbar-file-context" class="toolbar-context-pill">No file open</span>
@@ -192,6 +195,69 @@
 
                         <!-- List of detected patterns -->
                         <div id="patterns-list" class="patterns-list"></div>
+                    </div>
+                </div>
+
+                <!-- 5. Advanced Architecture Viewport (Phase 19) -->
+                <div id="architecture-viewport" class="panel-body architecture-viewport" style="display: none;">
+                    <!-- Placeholder visible before analysis -->
+                    <div id="architecture-placeholder" class="empty-placeholder architecture-box">
+                        <div class="placeholder-icon">🏛️</div>
+                        <p class="placeholder-heading">Advanced Architecture</p>
+                        <p class="placeholder-subtext">Click "Analyze" to extract project AST symbols, then generate component clustering & narrative.</p>
+                    </div>
+
+                    <!-- Loading State with 30s timeout feedback -->
+                    <div id="architecture-loading" class="empty-placeholder architecture-loading-box" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <p class="placeholder-heading" id="architecture-loading-title">Synthesizing Architecture...</p>
+                        <p class="placeholder-subtext" id="architecture-loading-status">Clustering symbols and extracting component narrative via Ollama...</p>
+                    </div>
+
+                    <!-- Error State with Retry Button -->
+                    <div id="architecture-error" class="empty-placeholder architecture-error-box" style="display: none;">
+                        <div class="placeholder-icon">⚠️</div>
+                        <p class="placeholder-heading">Architecture Clustering Failed</p>
+                        <p class="placeholder-subtext" id="architecture-error-message">Error message details will appear here.</p>
+                        <button id="btn-architecture-retry" class="toolbar-btn primary-btn" type="button" style="margin-top: 12px;">Retry Architecture Synthesis</button>
+                    </div>
+
+                    <!-- Rendered Architecture Container -->
+                    <div id="architecture-container" class="architecture-container" style="display: none;">
+                        <!-- Header Bar with refresh & stats -->
+                        <div class="architecture-header-bar">
+                            <div class="architecture-header-left">
+                                <span class="architecture-badge">🤖 AST + LLM Clustering</span>
+                                <span id="architecture-cluster-count" class="architecture-stat-pill">0 Components</span>
+                                <span id="architecture-unclustered-count" class="architecture-stat-pill">0 Unclustered</span>
+                            </div>
+                            <button id="btn-architecture-refresh" class="toolbar-btn" type="button" title="Re-cluster architecture bypassing cache">🔄 Re-cluster</button>
+                        </div>
+
+                        <!-- Architectural Narrative Card -->
+                        <div class="architecture-narrative-card">
+                            <div class="narrative-card-header">
+                                <span class="narrative-icon">📖</span>
+                                <span class="narrative-title">System Architecture Narrative</span>
+                            </div>
+                            <div id="architecture-narrative-text" class="narrative-text"></div>
+                        </div>
+
+                        <!-- Coarser Architectural Components Section -->
+                        <div class="architecture-section-title">
+                            <span>Architectural Components</span>
+                            <span class="architecture-section-hint">Click a component to highlight its member symbols in the Graph View</span>
+                        </div>
+                        <div id="architecture-components-grid" class="architecture-components-grid"></div>
+
+                        <!-- Unclustered Symbols Section (if any) -->
+                        <div id="architecture-unclustered-section" class="architecture-unclustered-section" style="display: none;">
+                            <div class="architecture-section-title">
+                                <span>Unclustered Symbols</span>
+                                <span class="architecture-section-hint">Symbols not grouped into major components</span>
+                            </div>
+                            <div id="architecture-unclustered-list" class="architecture-unclustered-tags"></div>
+                        </div>
                     </div>
                 </div>
             </section>

@@ -160,3 +160,28 @@ class PatternsResponse(BaseModel):
     """Response body for GET /api/patterns (Phase 13)."""
     patterns: List[PatternMatch] = Field(default_factory=list, description="List of detected design pattern matches")
 
+
+# ---------------------------------------------------------------------------
+# Section 4.4: Advanced Architecture Models (Phase 19)
+# ---------------------------------------------------------------------------
+
+class ComponentCluster(BaseModel):
+    """An architectural component cluster containing related symbols (Phase 19)."""
+    component_id: str = Field(..., description="Unique component identifier, e.g. 'comp_1'")
+    name: str = Field(..., description="Short architectural component name")
+    member_symbol_ids: List[str] = Field(default_factory=list, description="Validated member symbol IDs")
+    role: str = Field(..., description="Architectural role label, e.g. 'Domain Entity'")
+    rationale: str = Field(..., description="Natural language justification for grouping these symbols")
+
+
+class AdvancedArchitectureResponse(BaseModel):
+    """Response body for POST /api/architecture/advanced (Phase 19)."""
+    components: List[ComponentCluster] = Field(default_factory=list, description="List of architectural component clusters")
+    unclustered_symbol_ids: List[str] = Field(default_factory=list, description="Real symbol IDs not assigned to any component")
+    narrative: str = Field(..., description="Project-level architecture summary narrative")
+
+
+class AdvancedArchitectureRequest(BaseModel):
+    """Request body for POST /api/architecture/advanced (Phase 19)."""
+    force_refresh: bool = Field(False, description="Whether to bypass the architecture cache")
+

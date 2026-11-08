@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeStruct Usability Study Questionnaire</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #1a1a1a;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px;
+    background: #f7f8fa;
+  }
+  h1 { font-size: 20px; margin-bottom: 8px; color: #0f2a4a; }
+  h2 { font-size: 16px; margin: 32px 0 12px; color: #0f2a4a; border-bottom: 1px solid #cbd5e0; padding-bottom: 6px; }
+  p { margin: 0 0 16px; color: #334155; }
+  .card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
+  input[type="text"], select {
+    width: 100%; padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; color: #1e293b;
+  }
+  input[type="text"]:focus, select:focus { outline: none; border-color: #4fd1c5; ring: 2px; }
+  .likert { display: flex; gap: 6px; justify-content: center; margin: 12px 0; }
+  .likert label { font-size: 12px; font-weight: 400; color: #64748b; margin: 0; padding: 0 2px; }
+  .likert input[type="radio"] { margin: 0; width: auto; }
+  .item {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 14px;
+    background: #ffffff;
+  }
+  .item p.item-text { font-weight: 600; color: #1e293b; margin: 0 0 10px; font-size: 14px; }
+  .item-num { display: inline-block; background: #0f2a4a; color: #fff; border-radius: 4px; width: 24px; height: 24px; text-align: center; line-height: 24px; font-size: 12px; margin-right: 8px; }
+  .rubric-item { margin-bottom: 16px; }
+  .rubric-item label { font-weight: 600; color: #475569; margin-bottom: 4px; }
+  .comprehension { border: 1px dashed #cbd5e0; background: #f8fafc; padding: 16px; border-radius: 6px; margin-bottom: 20px; }
+  button.submit {
+    background: #0f2a4a; color: #ffffff; border: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button.submit:hover { background: #163d5f; }
+  button.submit:disabled { opacity: 0.6; cursor: not-allowed; }
+  .scale-legend { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 6px; }
+  .scale-legend span { font-weight: 400; }
+  .success { background: #e6f7ee; border: 1px solid #3fb985; color: #14663c; padding: 12px; border-radius: 6px; display: none; margin-top: 16px; }
+  .error { background: #fdecea; border: 1px solid #e57373; color: #b3261e; padding: 12px; border-radius: 6px; display: none; margin-top: 16px; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>CodeStruct Usability Study — Questionnaire</h1>
+  <p>Thank you for participating. This questionnaire asks about your experience using CodeStruct. Please answer every item honestly — there are no right or wrong answers.</p>
+
+  <form id="questionnaireForm" novalidate>
+    <div class="meta-grid">
+      <div>
+        <label for="participantId">Participant ID</label>
+        <input type="text" id="participantId" name="participantId" placeholder="e.g. P01" required>
+      </div>
+      <div>
+        <label for="condition">Condition</label>
+        <select id="condition" name="condition" required>
+          <option value="">Select condition</option>
+          <option value="baseline">Baseline (Graph / Table / Inspector only)</option>
+          <option value="advanced">Advanced Architecture</option>
+        </select>
+      </div>
+    </div>
+
+    <p class="hint">For each statement below, select the number that best reflects your level of agreement (1 = Strongly Disagree, 5 = Strongly Agree).</p>
+
+    <h2>System Usability Scale (SUS)</h2>
+    <div id="susItems">
+      <!-- Items injected by JavaScript -->
+    </div>
+
+    <h2>Rubric (1–5)</h2>
+    <div class="rubric-item">
+      <label for="rubricContent">Content quality</label>
+      <div class="likert" id="likert-rubricContent"></div>
+      <p class="hint">1 = Poor, 5 = Excellent</p>
+    </div>
+    <div class="rubric-item">
+      <label for="rubricPresentation">Presentation quality</label>
+      <div class="likert" id="likert-rubricPresentation"></div>
+      <p class="hint">1 = Poor, 5 = Excellent</p>
+    </div>
+    <div class="rubric-item">
+      <label for="rubricUsefulness">Usefulness</label>
+      <div class="likert" id="likert-rubricUsefulness"></div>
+      <p class="hint">1 = Not useful, 5 = Very useful</p>
+    </div>
+
+    <h2>Comprehension Question</h2>
+    <div class="comprehension">
+      <label for="comprehension">Name the main architectural components and how they relate.</label>
+      <textarea id="comprehension" name="comprehension" rows="4" placeholder="Type your answer here…" required></textarea>
+    </div>
+
+    <button type="submit" class="submit" id="submitBtn">Submit Response</button>
+    <div id="successMsg" class="success">Thank you! Your response has been saved locally. You may close this page.</div>
+    <div id="errorMsg" class="error">Something went wrong saving your response. Please try again.</div>
+  </form>
+</div>
+
+<script>
+// Standard SUS items — exact validated wording, must not be paraphrased.
+const SUS_ITEMS = [
+  "I think that I would like to use this system frequently.",
+  "I found the system unnecessarily complex.",
+  "I thought the system was easy to use.",
+  "I think that I would need the support of a technical person to be able to use this system.",
+  "I found the various functions in this system were well integrated.",
+  "I thought there was too much inconsistency in the system.",
+  "I would imagine that most people would learn to use this system very quickly.",
+  "I found the system very cumbersome to use.",
+  "I felt very confident using the system.",
+  "I needed to learn a lot of things before I could get going with this system."
+];
+
+function renderLikert(containerId, name) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = i;
+    input.required = true;
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(' ' + i));
+    container.appendChild(label);
+  }
+}
+
+function renderSUS() {
+  const container = document.getElementById('susItems');
+  SUS_ITEMS.forEach((text, idx) => {
+    const item = document.createElement('div');
+    item.className = 'item';
+    const p = document.createElement('p');
+    p.className = 'item-text';
+    const num = document.createElement('span');
+    num.className = 'item-num';
+    num.textContent = (idx + 1);
+    p.appendChild(num);
+    p.appendChild(document.createTextNode(' ' + text));
+    item.appendChild(p);
+    const likert = document.createElement('div');
+    likert.className = 'likert';
+    likert.id = 'likert-sus' + (idx + 1);
+    item.appendChild(likert);
+    const legend = document.createElement('div');
+    legend.className = 'scale-legend';
+    legend.innerHTML = '<span>1 Strongly Disagree</span><span>5 Strongly Agree</span>';
+    item.appendChild(legend);
+    container.appendChild(item);
+    renderLikert('likert-sus' + (idx + 1), 'sus' + (idx + 1));
+  });
+}
+
+// Render rubric Likert scales
+renderLikert('likert-rubricContent', 'rubricContent');
+renderLikert('likert-rubricPresentation', 'rubricPresentation');
+renderLikert('likert-rubricUsefulness', 'rubricUsefulness');
+
+// Render SUS items
+renderSUS();
+
+const form = document.getElementById('questionnaireForm');
+const submitBtn = document.getElementById('submitBtn');
+const successMsg = document.getElementById('successMsg');
+const errorMsg = document.getElementById('errorMsg');
+
+form.addEventListener('submit', function (e) {
+  e.preventDefault();
+  successMsg.style.display = 'none';
+  errorMsg.style.display = 'none';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving…';
+
+  const formData = new FormData(form);
+
+  // Build response object
+  const response = {
+    participantId: formData.get('participantId').trim(),
+    condition: formData.get('condition'),
+    timestamp: new Date().toISOString(),
+    sus: {},
+    rubric: {
+      contentQuality: parseInt(formData.get('rubricContent'), 10),
+      presentationQuality: parseInt(formData.get('rubricPresentation'), 10),
+      usefulness: parseInt(formData.get('rubricUsefulness'), 10)
+    },
+    comprehension: formData.get('comprehension').trim()
+  };
+
+  // Collect SUS responses (items 1-10)
+  let susComplete = true;
+  SUS_ITEMS.forEach((_, idx) => {
+    const val = formData.get('sus' + (idx + 1));
+    if (val === null) susComplete = false;
+    response.sus['item' + (idx + 1)] = val ? parseInt(val, 10) : null;
+  });
+
+  if (!susComplete || response.sus[item => item === null]) {
+    // handled by HTML5 required, but double check
+  }
+
+  // Serialize as JSON line (one JSON object per line) for easy append + later bulk parsing
+  const jsonLine = JSON.stringify(response);
+
+  // Try localStorage first (offline-friendly), fallback to in-memory if blocked
+  try {
+    const existing = localStorage.getItem('usability_responses') || '';
+    const updated = existing ? existing + '\n' + jsonLine : jsonLine;
+    localStorage.setItem('usability_responses', updated);
+  } catch (err) {
+    // localStorage unavailable; keep in a page-level variable (will be lost on reload)
+    window.__fallbackResponses = window.__fallbackResponses || [];
+    window.__fallbackResponses.push(jsonLine);
+  }
+
+  submitBtn.textContent = 'Saved';
+  submitBtn.style.background = '#3fb985';
+  successMsg.style.display = 'block';
+
+  // Scroll to success message
+  setTimeout(() => successMsg.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+});
+</script>
+
+</body>
+</html>

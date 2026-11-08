@@ -17,13 +17,17 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import PythonLexer, get_lexer_for_filename
 
+from backend.advanced_architecture import MalformedLLMOutputError, cluster_architecture
 from backend.analyzer import analyze_project, compute_impact
 from backend.patterns import detect_patterns
 from backend.qwen_client import check_ollama_connection, query_qwen
 from backend.schemas import (
+    AdvancedArchitectureRequest,
+    AdvancedArchitectureResponse,
     AnalyzeRequest,
     ChatRequest,
     ChatResponse,
+    ComponentCluster,
     Graph,
     ImpactResponse,
     OpenInEditorRequest,
@@ -399,3 +403,34 @@ def get_impact(node_id: str, request: Request, max_depth: int = 5) -> ImpactResp
         raise HTTPException(status_code=400, detail="No project has been analyzed yet. Run POST /api/analyze first.")
     impacted = compute_impact(last_graph, node_id, max_depth=max_depth)
     return ImpactResponse(symbol_id=node_id, max_depth=max_depth, impacted=impacted)
+
+
+@router.post("/architecture/advanced", response_model=AdvancedArchitectureResponse)
+def post_advanced_architecture(
+    request: Request,
+    body: Optional[AdvancedArchitectureRequest] = None,
+) -> AdvancedArchitectureResponse:
+    """Analyze AST graph and cluster symbols into architectural components via LLM (Phase 19)."""
+    last_graph = get_stored_graph(request)
+    if not last_graph:
+        raise HTTPException(
+            status_code=400,
+            detail="No project has been analyzed yet. Run POST /api/analyze first.",
+        )
+
+    force_refresh = body.force_refresh if body else False
+    try:
+        result = cluster_architecture(last_graph, force_refresh=force_refresh, timeout=30.0)
+        return AdvancedArchitectureResponse(**result)
+    except MalformedLLMOutputError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM architectural clustering failed validation: {str(e)}"
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error during architectural clustering: {str(e)}"
+        )

@@ -1,89 +1,84 @@
-# Phase 13: Design-Pattern Detection (Sprint 2)
+# Phase 19 + Phase 20 Tooling — Commit to New Branch (Not Main)
 
 ## Objective
-Detect three structurally-recognizable design patterns — Singleton, Factory, Observer — in the analyzed project using precise AST-based heuristics, and surface them in the UI. This is heuristic pattern-matching on code structure, not guaranteed correct identification of design intent — document this limitation explicitly in the UI and in `README.md`.
+Commit all Phase 19 (Advanced Architecture) implementation files and Phase 20 (Usability Study tooling) changes currently sitting in the working tree into a **new git branch**. These changes must **not** land on `main`.
 
 ## Preconditions
-Phase 1 (analysis engine) and Phase 11 (custom project paths) complete.
-
-## Detection Heuristics — implement exactly as specified, do not invent alternative rules:
-
-### 1. Singleton
-A class is flagged `Singleton` if ALL of the following hold:
-- It defines a `__new__` method.
-- That method's body contains an `if` statement whose test compares a class-level attribute (`cls.<name>` or `ClassName.<name>`) to `None`.
-- Inside that `if` block, there is an assignment to that same attribute.
-- The method returns that attribute (directly, or via the class attribute reference) at the end.
-- Evidence string to report: `"__new__ guards and returns a cached class-level instance"`.
-
-### 2. Factory
-A function or method is flagged `Factory` if ALL of the following hold:
-- Its body contains 2 or more `return <ClassName>(...)` statements (a `constructs` edge whose call is the direct subject of a `return`).
-- Those `ClassName`s are at least 2 distinct classes defined within the analyzed project.
-- Those return statements occur in different branches of the same `if`/`elif`/`else` chain (not sequential unconditional returns).
-- Evidence string to report: `"returns different constructed types across conditional branches"`.
-
-### 3. Observer/Subject
-A class is flagged `Observer` (specifically, as the *subject* in the pattern) if ALL of the following hold:
-- It has a method containing a `for <var> in self.<attr>:` loop (iterating a `self`-owned attribute).
-- Inside that loop's body, there is a method call on the loop variable (`<var>.<method>(...)`).
-- Evidence string to report: `"iterates a self-owned collection and invokes a method on each element"`.
+- Working tree at `D:\CodeStruct` contains uncommitted Phase 19 + Phase 20 changes (see `git status`)
+- Remote `origin` = `https://github.com/VSA-ABHINAV/CodeStruct.git` (confirmed in Phase 18)
+- All Phase 19 tests pass (52/52 regression suite) — verified in report.md
+- All Phase 20 unit tests pass — verified in report.md
 
 ## Tasks
-1. Implement `detect_patterns(graph: dict, ast_trees: dict) -> list[dict]` in `backend/analyzer.py` (or a new `backend/patterns.py` — your call, but keep it a clearly separate function from `analyze_project`), applying the three heuristics above against the already-parsed AST. Each match produces `{ "pattern": "Singleton" | "Factory" | "Observer", "symbol_id": "string", "evidence": "string" }` using the exact evidence strings specified above.
-2. Add `GET /api/patterns` returning `{ "patterns": [...] }` for the currently-analyzed project (same in-memory last-analysis pattern as other endpoints — no re-analysis).
-3. Create three new fixture files for testing (do **not** modify `sample_project/sample_project.py` — it must stay exactly as specified in Section 7):
-   - `tests/pattern_fixtures/singleton_example.py`
-   - `tests/pattern_fixtures/factory_example.py`
-   - `tests/pattern_fixtures/observer_example.py`
-   Each file should contain a minimal, clean example of its pattern per the heuristic rules above (e.g., the `Singleton`/`ShapeFactory`+`Circle`+`Square`/`Subject`+`ConcreteObserver` examples are acceptable reference shapes — write clean, minimal versions of each).
-4. Add a "Patterns" tab in the center area (alongside Graph/Code/Table) listing detected patterns as a simple list: pattern name, symbol name, evidence string. Clicking an entry selects that symbol (same selection-sync as other views).
 
-## Files to create/modify
-- `backend/analyzer.py` or `backend/patterns.py` (detection logic)
-- `backend/api.py` (add `GET /api/patterns` endpoint)
-- `backend/schemas.py` (add `PatternMatch` model)
-- `tests/pattern_fixtures/singleton_example.py`
-- `tests/pattern_fixtures/factory_example.py`
-- `tests/pattern_fixtures/observer_example.py`
-- `tests/test_patterns.py`
-- `frontend/static/app.js` (Patterns tab, selection sync)
-- `frontend/index.html` (Patterns tab button, list UI)
+### 1. Create a new branch
+- Create a new branch from the current `master` (e.g., `feature/phase-19-20-tooling` or similar descriptive name).
+- **Do NOT commit to `master`/`main`.** The human explicitly requires these changes stay off the main branch.
 
-## Interface contracts
+### 2. Stage the following changes
+Stage all files related to Phase 19 and Phase 20 tooling:
 
-### PatternMatch (new model for Section 4.2/4.3)
-```json
-{
-  "pattern": "Singleton | Factory | Observer",
-  "symbol_id": "string",
-  "evidence": "string"
-}
-```
+**Phase 19 (Advanced Architecture):**
+- `codestruct/backend/advanced_architecture.py` (new)
+- `codestruct/tests/test_advanced_architecture.py` (new)
+- `codestruct/scratch/run_live_advanced_architecture.py` (new)
+- `codestruct/scratch/verify_phase19_ui.py` (new)
+- `codestruct/docs/screenshots/view_architecture.png` (new)
+- `codestruct/docs/screenshots/architecture_cross_navigation.png` (new)
+- `docs/screenshots/view_architecture.png` (new)
+- `docs/screenshots/architecture_cross_navigation.png` (new)
+- `codestruct/backend/api.py` (modified — added `/api/architecture/advanced` endpoint)
+- `codestruct/backend/qwen_client.py` (modified — optional `system_prompt` param)
+- `codestruct/backend/schemas.py` (modified — added `ComponentCluster`, `AdvancedArchitectureResponse`)
+- `codestruct/frontend/index.html` (modified — Architecture tab)
+- `codestruct/frontend/static/app.css` (modified — Architecture styles)
+- `codestruct/frontend/static/app.js` (modified — Architecture tab controller)
+- `codestruct/scratch/update_app_js.py` (modified)
 
-### GET /api/patterns (extends Section 4.3)
-**Response:**
-```json
-{ "patterns": [ { "pattern": "string", "symbol_id": "string", "evidence": "string" } ] }
-```
+**Phase 20 (Usability Study tooling — Antigravity-buildable tasks only):**
+- `docs/usability_study/questionnaire.html` (new)
+- `docs/usability_study/score.py` (new)
+- `docs/usability_study/test_score.py` (new)
+- `docs/usability_study/results.md` (new — structure pending real data)
+- `docs/usability_study/raw_data/README.md` (new)
+- `docs/usability_study/raw_data/` (empty directory — note: git does not track empty directories; the README suffices)
 
-## Guardrails — do NOT do the following
-- Do not add other patterns (e.g., Strategy, Decorator) in this phase.
-- Do not loosen the heuristics to catch "near-matches" — strict adherence to the specified rules is required to avoid false positives on `sample_project` (which must return zero matches).
-- Do not claim certainty in the UI — label this feature as heuristic-based pattern matching, not verified design intent.
-- Do not implement anything from the Backlog section (Section 9) of the plan document.
-- Do not implement anything from a different phase (including Phases 14, 15, 16).
-- If you believe something is missing from these instructions, stop and ask rather than guessing.
+**Build-record docs:**
+- `PROGRESS.md` (modified — added Phase 19 and Phase 20 entries)
+- `prompt.md` (modified — Phase 19 then Phase 20 prompts)
+- `report.md` (modified — Phase 19 report, then Phase 20 report)
 
-## What I need back in report.md
-- A list of every file you created or changed.
-- The exact commands you ran to test this phase (copy-pasted, not summarized).
-- The exact output of those commands (not "tests passed" — the actual output).
-- An explicit statement, for each Success Criteria checklist item below, of pass or fail.
-- Anything you were unsure about or had to make a judgment call on.
+Do **not** stage:
+- `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.codestruct_cache/` (gitignored)
+- `venv/`, `.venv/` (gitignored)
+- `scratch/` debug artifacts unrelated to Phase 19/20 verification (e.g., `cdp_capture.py`, `debug_docks.py`, etc. — leave as-is)
 
-## This phase's Success Criteria
-- [ ] Each of the three fixtures is detected individually with the correct, exact evidence string.
-- [ ] Analyzing the fixtures directory via the API returns all three patterns.
-- [ ] Analyzing `sample_project` returns zero patterns (negative control passes — confirms no false positives on the regression fixture).
-- [ ] Patterns tab in the UI lists and correctly syncs selection for all three.
+### 3. Commit
+- Commit with a clear message, e.g.:
+  `feat: Phase 19 Advanced Architecture + Phase 20 usability study tooling`
+- Include all the above files in a single commit (or a small logical set of commits on the new branch).
+
+### 4. Push (conditional)
+- Per the Phase 18 spec guardrail: "Never push without a human-confirmed remote URL."
+- The remote `origin` was confirmed in Phase 18, but **do not push to `master`/`main`**.
+- If you push, push only to the new branch, and report the branch name and remote output.
+- If you are unsure whether to push, stop and ask the human — do not guess.
+
+## Guardrails
+- **Never commit to `main`/`master`.** New branch only.
+- **Never force-push.**
+- **Never rewrite or squash existing history.**
+- **Do not fabricate test results or participant data.** Phase 20 `results.md` correctly shows n=0 pending real study sessions — do not alter it to look complete.
+- **Phase 16 (dynamic/runtime execution) remains untouched.** Confirm no Phase 16 code is included.
+
+## What I Need Back in report.md
+- The new branch name
+- The exact `git` commands run (copy-pasted, not summarized)
+- The exact `git status` output after committing (clean working tree on the new branch)
+- The exact `git log --oneline` output showing the commit(s) on the new branch
+- Whether you pushed and, if so, the `git push` output (branch + remote)
+- A confirmation that `master`/`main` was not touched
+- Anything you were unsure about or had to make a judgment call on
+
+## Estimated Time
+0.5h

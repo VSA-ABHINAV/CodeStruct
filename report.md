@@ -1,227 +1,150 @@
-# CodeStruct Phase 13: Design-Pattern Detection Report
+# CodeStruct Phase 20: Usability Evaluation Study — Report (Antigravity-Buildable Tooling Complete; Study Sessions Blocked)
 
-## 1. Files Created / Modified
+## 1. Summary
 
-- `codestruct/backend/patterns.py` (New):
-  - Implemented `detect_patterns(graph: dict, ast_trees: dict = None) -> list[dict]`.
-  - Implemented exact AST heuristics for:
-    - **Singleton**: Class defines `__new__` method, guards against `None` on class-level attribute (`cls.<name>` or `ClassName.<name> is None`), assigns to that attribute inside the `if` block, and returns it at the end.
-      Evidence string: `"__new__ guards and returns a cached class-level instance"`.
-    - **Factory**: Function or method contains 2 or more `return <ClassName>(...)` statements constructing at least 2 distinct classes defined within the analyzed project across different branches of the same `if`/`elif`/`else` chain.
-      Evidence string: `"returns different constructed types across conditional branches"`.
-    - **Observer (Subject)**: Class contains a method with a `for <var> in self.<attr>:` loop (iterating a `self`-owned attribute) and invokes a method call on that loop variable (`<var>.<method>(...)`).
-      Evidence string: `"iterates a self-owned collection and invokes a method on each element"`.
-- `codestruct/backend/analyzer.py`:
-  - Imported and re-exported `detect_patterns`.
-  - Updated `analyze_project` to collect `ast_trees` during AST traversal and precompute detected patterns in the returned graph dictionary (`graph["patterns"]` and `graph["_ast_trees"]`).
-- `codestruct/backend/schemas.py`:
-  - Added `PatternMatch(BaseModel)` with `pattern: Literal["Singleton", "Factory", "Observer"]`, `symbol_id: str`, and `evidence: str`.
-  - Added `PatternsResponse(BaseModel)` with `patterns: List[PatternMatch]`.
-- `codestruct/backend/api.py`:
-  - Added `GET /api/patterns` endpoint returning `PatternsResponse` for the currently analyzed project using cached in-memory graph data with zero re-analysis.
-- `tests/pattern_fixtures/singleton_example.py` (New):
-  - Minimal clean fixture with `DatabaseConnection` class implementing the singleton heuristic.
-- `tests/pattern_fixtures/factory_example.py` (New):
-  - Minimal clean fixture with `Circle` and `Square` classes and `create_shape` function returning distinct shapes across `if`/`elif` branches.
-- `tests/pattern_fixtures/observer_example.py` (New):
-  - Minimal clean fixture with `Observer` and `EventDispatcher` classes notifying subscribers via `for sub in self.subscribers: sub.update(message)`.
-- `tests/test_patterns.py` (New):
-  - 8 automated unit and API integration tests covering individual fixture detection, directory-level detection via `GET /api/patterns`, negative control on `sample_project` (zero false positives), and heuristic constraint edge cases.
-- `codestruct/tests/` (Synchronized):
-  - Synced `tests/pattern_fixtures` and `tests/test_patterns.py` to `codestruct/tests/`.
-- `codestruct/frontend/index.html`:
-  - Added `#tab-patterns` button in `.center-tabs` alongside Graph, Table, and Code Viewer.
-  - Added `#patterns-viewport` containing `#patterns-placeholder`, a prominent disclaimer banner labeling heuristic pattern matching per specification, `#patterns-empty` for zero-match projects, and `#patterns-list`.
-- `codestruct/frontend/static/app.css`:
-  - Added styling for `#patterns-viewport`, `.patterns-disclaimer-banner`, `.patterns-list`, `.pattern-card`, `.pattern-badge` (`.badge-Singleton`, `.badge-Factory`, `.badge-Observer`), `.pattern-evidence`, and `.pattern-card.selected`.
-- `codestruct/frontend/static/app.js`:
-  - Updated `switchCenterTab(tabName)` to support `"patterns"`.
-  - Implemented `loadPatterns()` and `renderPatternsView(patterns)`.
-  - Implemented bidirectional selection sync: clicking a `.pattern-card` calls `selectSymbol(item.symbol_id, "patterns")`, and selecting any symbol from Graph, Explorer, Table, or Inspector highlights the matching `.pattern-card` and scrolls it into view.
-  - Updated `runAnalysis()` to refresh patterns on analysis completion.
-  - Exported `window.loadPatterns` and `window.renderPatternsView`.
-- `README.md`:
-  - Documented the Design-Pattern Detection feature and explicitly documented the heuristic limitation notice per prompt requirements.
-- `PROGRESS.md`:
-  - Recorded Phase 13 completion status.
+**Phase:** Phase 20 — Usability Evaluation Study (the "1%+ improvement" measurement)
+**Status:** Tooling built; study sessions **blocked** (no participant resources available)
+**Date:** 2026-11-08
 
----
+The Antigravity-buildable portions of Phase 20 (Tasks 1, 2, and the structure for Task 5) are complete. Task 3 (recruiting and running ≥5 participant sessions) is a **human-only task** and cannot proceed without participant resources. Task 4 (running score.py on real data) is therefore also blocked until Task 3 produces raw data.
 
-## 2. Test Commands and Verbatim Output
+No participant data was simulated, mocked, or fabricated.
 
-### Command 1: Pytest Suite for Design-Pattern Detection
-`python -m pytest tests/test_patterns.py -v`
+## 2. Files Created
 
-```text
-============================= test session starts =============================
-platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0 -- C:\Python314\python.exe
-cachedir: .pytest_cache
-rootdir: D:\CodeStruct
-plugins: anyio-4.15.1, langsmith-0.6.6, cov-7.1.0, platformdirs-4.12.3
-collecting ... collected 8 items
+### `docs/usability_study/questionnaire.html` (Task 1 — Antigravity)
+Single self-contained HTML page implementing:
+- **10 standard SUS items** with exact validated wording (no paraphrasing)
+- **3-item rubric** (content quality, presentation quality, usefulness, 1–5 each)
+- **Comprehension question:** "Name the main architectural components and how they relate."
+- **Condition selector** (baseline vs. Advanced Architecture) + participant ID field
+- Offline-first: saves responses to browser localStorage, no external dependencies
 
-tests/test_patterns.py::test_singleton_fixture_detected_individually PASSED [ 12%]
-tests/test_patterns.py::test_factory_fixture_detected_individually PASSED [ 25%]
-tests/test_patterns.py::test_observer_fixture_detected_individually PASSED [ 37%]
-tests/test_patterns.py::test_api_patterns_endpoint_fixtures_directory PASSED [ 50%]
-tests/test_patterns.py::test_api_patterns_negative_control_sample_project PASSED [ 62%]
-tests/test_patterns.py::test_api_patterns_empty_when_no_project_analyzed PASSED [ 75%]
-tests/test_patterns.py::test_factory_requires_distinct_project_classes PASSED [ 87%]
-tests/test_patterns.py::test_observer_requires_iteration_over_self_attribute PASSED [100%]
+### `docs/usability_study/score.py` (Task 2 — Antigravity)
+Scoring script that:
+- Reads JSON-lines raw responses from `docs/usability_study/raw_data/`
+- Computes per-condition mean SUS score using the **standard SUS formula** (odd: score−1; even: 5−score; sum ×2.5)
+- Computes per-condition mean rubric score, n, std dev
+- Computes % difference between conditions
+- Writes `docs/usability_study/results.md`
+- Computation logic separated from file I/O for unit testing
 
-============================== warnings summary ===============================
-C:\Users\ABHINAV\AppData\Roaming\Python\Python314\site-packages\starlette\testclient.py:53
-  C:\Users\ABHINAV\AppData\Roaming\Python\Python314\site-packages\starlette\testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
-    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+### `docs/usability_study/test_score.py` (unit tests)
+Unit tests verifying score.py against worked examples (all passing):
+- Best possible SUS (odd=5, even=1) → 100
+- Worst possible SUS (odd=1, even=5) → 0
+- All neutral (all 3s) → 50
+- Mixed hand-computed → 67.5
+- Missing/out-of-range items → None
+- Rubric mean, pct difference, condition stats separation
 
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 8 passed, 1 warning in 1.60s =========================
+### `docs/usability_study/results.md` (Task 5 structure — Antigravity)
+Generated by running `score.py` on empty raw_data. Contains:
+- Overview, per-condition results, comparison sections
+- **Methodology & Limitations note** (small-N convenience sample, self-contained before/after comparison, not a replication of DSAR's study, counterbalanced order, report as-is)
+- Raw data section
+
+Currently shows n=0, all N/A — awaiting real data from Task 3.
+
+### `docs/usability_study/raw_data/` (directory)
+Empty directory with README.md explaining the JSON-lines format and how responses get here. Intended to be gitignored or handled per data policy (may contain PII).
+
+## 3. Test Results (Verbatim)
+
+**Command:** `python docs/usability_study/test_score.py`
+
+**Output:**
+```
+PASS: best possible SUS = 100
+PASS: worst possible SUS = 0
+PASS: all neutral SUS = 50
+PASS: mixed hand-computed SUS = 67.5
+PASS: missing item -> None
+PASS: out of range -> None
+PASS: rubric mean 4.0
+PASS: missing rubric -> None
+PASS: pct difference 50%
+PASS: pct difference -25%
+PASS: zero baseline -> None
+PASS: condition stats n=2, sus_mean=50, rubric_mean=3
+PASS: condition separation + pct difference 100%
+
+All unit tests passed.
 ```
 
----
+**Command:** `python docs/usability_study/score.py`
 
-### Command 2: Full Regression Pytest Suite
-`python -m pytest tests -v`
-
-```text
-============================= test session starts =============================
-platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0 -- C:\Python314\python.exe
-cachedir: .pytest_cache
-rootdir: D:\CodeStruct
-plugins: anyio-4.15.1, langsmith-0.6.6, cov-7.1.0, platformdirs-4.12.3
-collecting ... collected 40 items
-
-tests/test_analyzer.py::test_sample_project_node_counts PASSED           [  2%]
-tests/test_analyzer.py::test_sample_project_inherits_edges PASSED        [  5%]
-tests/test_analyzer.py::test_sample_project_defines_edges PASSED         [  7%]
-tests/test_analyzer.py::test_sample_project_constructs_edges PASSED      [ 10%]
-tests/test_analyzer.py::test_sample_project_calls_edges PASSED           [ 12%]
-tests/test_analyzer.py::test_sample_project_errors_empty PASSED          [ 15%]
-tests/test_analyzer.py::test_graceful_error_handling PASSED              [ 17%]
-tests/test_api.py::test_analyze_endpoint_sample_project PASSED           [ 20%]
-tests/test_api.py::test_symbol_endpoint_dog_inherits PASSED              [ 22%]
-tests/test_api.py::test_symbol_endpoint_animal_details PASSED            [ 25%]
-tests/test_api.py::test_symbol_endpoint_main_calls_build_zoo PASSED      [ 27%]
-tests/test_api.py::test_symbol_endpoint_not_found PASSED                 [ 30%]
-tests/test_api.py::test_source_endpoint_valid_range PASSED               [ 32%]
-tests/test_api.py::test_source_endpoint_invalid_file_4xx PASSED          [ 35%]
-tests/test_api.py::test_source_endpoint_invalid_line_range_4xx PASSED    [ 37%]
-tests/test_api.py::test_source_endpoint_animal_speak_slice PASSED        [ 40%]
-tests/test_api.py::test_source_endpoint_dog_fetch_slice PASSED           [ 42%]
-tests/test_api.py::test_source_endpoint_build_zoo_slice PASSED           [ 45%]
-tests/test_api.py::test_chat_endpoint_with_symbol_context PASSED         [ 47%]
-tests/test_api.py::test_chat_endpoint_ollama_down_graceful_error PASSED  [ 50%]
-tests/test_api.py::test_chat_endpoint_recovery_after_down PASSED         [ 52%]
-tests/test_api.py::test_analyze_endpoint_empty_path_400 PASSED           [ 55%]
-tests/test_api.py::test_analyze_endpoint_invalid_path_400 PASSED         [ 57%]
-tests/test_api.py::test_analyze_endpoint_custom_path PASSED              [ 60%]
-tests/test_api.py::test_analyze_endpoint_root_project_file PASSED        [ 62%]
-tests/test_api.py::test_analyze_endpoint_empty_directory_warning PASSED  [ 65%]
-tests/test_api.py::test_analyze_endpoint_non_python_file_400 PASSED      [ 67%]
-tests/test_api.py::test_analyze_endpoint_broken_file_handled_in_errors PASSED [ 70%]
-tests/test_api.py::test_qwen_status_endpoint PASSED                      [ 72%]
-tests/test_api.py::test_open_in_editor_endpoint_success PASSED           [ 75%]
-tests/test_api.py::test_open_in_editor_endpoint_missing_file_404 PASSED  [ 77%]
-tests/test_api.py::test_symbol_detail_instability_metric PASSED          [ 80%]
-tests/test_patterns.py::test_singleton_fixture_detected_individually PASSED [ 82%]
-tests/test_patterns.py::test_factory_fixture_detected_individually PASSED [ 85%]
-tests/test_patterns.py::test_observer_fixture_detected_individually PASSED [ 87%]
-tests/test_patterns.py::test_api_patterns_endpoint_fixtures_directory PASSED [ 90%]
-tests/test_patterns.py::test_api_patterns_negative_control_sample_project PASSED [ 92%]
-tests/test_patterns.py::test_api_patterns_empty_when_no_project_analyzed PASSED [ 95%]
-tests/test_patterns.py::test_factory_requires_distinct_project_classes PASSED [ 97%]
-tests/test_patterns.py::test_observer_requires_iteration_over_self_attribute PASSED [100%]
-
-============================== warnings summary ===============================
-C:\Users\ABHINAV\AppData\Roaming\Python\Python314\site-packages\starlette\testclient.py:53
-  C:\Users\ABHINAV\AppData\Roaming\Python\Python314\site-packages\starlette\testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
-    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================= 40 passed, 1 warning in 23.81s ========================
+**Output:**
+```
+Read 0 raw response(s) from D:\CodeStruct\docs\usability_study\raw_data
+Baseline: n=0, mean SUS=None
+Advanced: n=0, mean SUS=None
+% difference: N/A
+Results written to D:\CodeStruct\docs\usability_study/results.md
 ```
 
+## 4. Success Criteria Checklist (Antigravity-Buildable Subset)
+
+| Criterion | Requirement | Status |
+|---|---|:---:|
+| Questionnaire instrument | Standard SUS wording (10 items, exact), 3-item rubric, comprehension question, condition selector, participant ID field | **BUILT** |
+| Scoring script SUS formula | Unit-tested: best=100, worst=0, neutral=50, mixed=67.5 (hand-verified) | **VERIFIED** |
+| Task 3 flagged human-only | No simulated/mocked/fabricated participant data in repo | **CONFIRMED** |
+| score.py ready to run | Reads JSON-lines, writes results.md with per-condition means, % diff, n, std dev | **VERIFIED** |
+| Methodology note | Written into results.md (small-N, self-contained, not DSAR replication, report as-is) | **VERIFIED** |
+
+## 5. Blocked — Human Task (Task 3)
+
+**Task 3 (recruit ≥5 participants, run counterbalanced sessions) cannot proceed** — no participant resources currently available.
+
+When resources become available, the human researcher needs to:
+1. Have each participant explore the same project under **both conditions** (baseline Graph/Table/Inspector only, and with Advanced Architecture enabled) in **counterbalanced order**.
+2. Each participant fills out `questionnaire.html` once per condition.
+3. Export each response from browser localStorage into `docs/usability_study/raw_data/` as JSON lines.
+4. Run `python docs/usability_study/score.py` to produce final `results.md`.
+5. Report the result as-is (even if improvement is below 1% or negative).
+
+**Phase 20 cannot be marked done until real participant data exists.** Do not simulate, mock, or fabricate participant data.
+
+## 6. Guardrails Adherence
+
+- SUS items use exact validated wording — not paraphrased.
+- No Phase 16 (dynamic/runtime execution) code was touched.
+- No Section 9 Backlog items were implemented.
+- No participant data was fabricated.
+- Study is explicitly framed as a self-contained before/after comparison, not a replication of DSAR's industrial evaluation.
+
+## 7. Next Step
+
+Once participant resources are available, complete Task 3 (study sessions), then run `python docs/usability_study/score.py` to generate final results.md, and Phase 20 will be complete.
+
 ---
 
-### Command 3: Live Pywebview E2E Verification
-`python verify_phase13.py`
+## 8. Branch & Commit Record (Phase 19 + Phase 20 Tooling)
 
-```text
-INFO:     Started server process [25640]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8099 (Press CTRL+C to quit)
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [25640]
-[CodeStruct Startup] Ollama service connected (qwen2.5-coder:3b).
-======================================================================
-STARTING PHASE 13 E2E VERIFICATION
-======================================================================
-[E2E] Webview DOM readyState: complete
+### 8.1 Branch Information
+- **New Branch Name:** `feature/phase-19-20-tooling`
+- **Created From:** `master`
+- **Main/Master Branch Untouched:** Confirmed. `master` was never committed to and remains on the prior commit.
 
-======================================================================
-TESTING SUCCESS CRITERION 1: Individual Fixture Detection
-======================================================================
-[SC1] Singleton individual detection: [{'pattern': 'Singleton', 'symbol_id': 'singleton_example.DatabaseConnection', 'evidence': '__new__ guards and returns a cached class-level instance'}]
-[SC1] Factory individual detection: [{'pattern': 'Factory', 'symbol_id': 'factory_example.create_shape', 'evidence': 'returns different constructed types across conditional branches'}]
-[SC1] Observer individual detection: [{'pattern': 'Observer', 'symbol_id': 'observer_example.EventDispatcher', 'evidence': 'iterates a self-owned collection and invokes a method on each element'}]
-[SC1] PASS: True
+### 8.2 Exact Git Commands Run
+```powershell
+# 1. Create and switch to new feature branch
+git checkout -b feature/phase-19-20-tooling
 
-======================================================================
-TESTING SUCCESS CRITERION 2: Analyzing Fixtures Directory via API
-======================================================================
-[SC2] GET /api/patterns on fixtures dir: status=200
-[SC2] Patterns returned count=3: [{'pattern': 'Factory', 'symbol_id': 'factory_example.create_shape', 'evidence': 'returns different constructed types across conditional branches'}, {'pattern': 'Observer', 'symbol_id': 'observer_example.EventDispatcher', 'evidence': 'iterates a self-owned collection and invokes a method on each element'}, {'pattern': 'Singleton', 'symbol_id': 'singleton_example.DatabaseConnection', 'evidence': '__new__ guards and returns a cached class-level instance'}]
-[SC2] PASS: True
+# 2. Stage Phase 19, Phase 20 tooling, and build-record documentation files
+git add codestruct/backend/advanced_architecture.py codestruct/tests/test_advanced_architecture.py codestruct/scratch/run_live_advanced_architecture.py codestruct/scratch/verify_phase19_ui.py codestruct/docs/screenshots/view_architecture.png codestruct/docs/screenshots/architecture_cross_navigation.png docs/screenshots/view_architecture.png docs/screenshots/architecture_cross_navigation.png codestruct/backend/api.py codestruct/backend/qwen_client.py codestruct/backend/schemas.py codestruct/frontend/index.html codestruct/frontend/static/app.css codestruct/frontend/static/app.js codestruct/scratch/update_app_js.py docs/usability_study/questionnaire.html docs/usability_study/score.py docs/usability_study/test_score.py docs/usability_study/results.md docs/usability_study/raw_data/README.md PROGRESS.md prompt.md report.md
 
-======================================================================
-TESTING SUCCESS CRITERION 3: Negative Control on sample_project
-======================================================================
-[SC3] GET /api/patterns on sample_project: count=0 (expected: 0)
-[SC3] PASS: True
+# 3. Commit to feature branch
+git commit -m "feat: Phase 19 Advanced Architecture + Phase 20 usability study tooling"
 
-======================================================================
-TESTING SUCCESS CRITERION 4: Patterns Tab in UI & Selection Sync
-======================================================================
-[SC4] Tab active=True, viewport visible=True, disclaimer=True, card count=3
-[SC4] Singleton card click: sel_id=singleton_example.DatabaseConnection, card_sel=True, inspector=DatabaseConnection
-[SC4] Factory card click: sel_id=factory_example.create_shape, card_sel=True, prev_unsel=True, inspector=create_shape
-[SC4] Observer card click: sel_id=observer_example.EventDispatcher, card_sel=True, inspector=EventDispatcher
-[SC4] External selection sync: card_sel=True
-[SC4] PASS: True
-
-======================================================================
-FINAL PHASE 13 VERIFICATION RESULTS
-======================================================================
-[SC1] PASS
-[SC2] PASS
-[SC3] PASS
-[SC4] PASS
-======================================================================
-ALL 4 SUCCESS CRITERIA PASSED LIVE IN PYWEBVIEW!
-======================================================================
+# 4. Push to remote origin on the new feature branch
+git push -u origin feature/phase-19-20-tooling
 ```
 
----
-
-## 3. Success Criteria Checklist
-
-| Criterion | Requirement | Verification Method | Status |
-|---|---|---|:---:|
-| **SC 1** | Each of the three fixtures is detected individually with the correct, exact evidence string. | Analyzed `singleton_example.py`, `factory_example.py`, and `observer_example.py` individually in `test_patterns.py` and live pywebview. Verified exact pattern names, symbol IDs, and exact evidence strings. | **PASS** |
-| **SC 2** | Analyzing the fixtures directory via the API returns all three patterns. | Analyzed `tests/pattern_fixtures/` via `POST /api/analyze` and fetched `GET /api/patterns`. Verified response status 200 and exactly 3 pattern matches (`Singleton`, `Factory`, `Observer`). | **PASS** |
-| **SC 3** | Analyzing `sample_project` returns zero patterns (negative control passes — confirms no false positives on the regression fixture). | Analyzed `sample_project` via `POST /api/analyze` and called `GET /api/patterns`. Verified returned `patterns` array has `len == 0`. | **PASS** |
-| **SC 4** | Patterns tab in the UI lists and correctly syncs selection for all three. | Verified in live pywebview: `#tab-patterns` switches to Patterns view, renders all 3 cards with badges/names/evidence, clicking each card synchronizes selection with Explorer and Inspector (`DatabaseConnection`, `create_shape`, `EventDispatcher`), and external selection sync highlights the corresponding card. | **PASS** |
-
----
-
-## 4. Judgment Calls and Assumptions
-
-1. **AST Extraction Architecture**:
-   - Implemented `detect_patterns` in a standalone module `backend/patterns.py` and re-exported it from `backend/analyzer.py`. This keeps the core AST analyzer modular while supporting both in-memory precomputation during `analyze_project` and standalone invocations on arbitrary graphs/AST trees.
-2. **Heuristic Disclaimers**:
-   - In accordance with the prompt's explicit requirement not to claim certainty, a permanent notice banner was added at the top of the Patterns tab container (`.patterns-disclaimer-banner`) stating: *"Heuristic Detection: Patterns are identified via AST structural heuristics and indicate potential design patterns, not verified design intent."* This notice is also documented in `README.md`.
-3. **Empty Project / Pre-Analysis Behavior**:
-   - `GET /api/patterns` returns `{"patterns": []}` with status 200 when no project has yet been analyzed, preventing frontend console errors when switching tabs before analysis.
+### 8.3 Guardrails and Judgment Calls
+1. **Never commit to `master`/`main`:** All work was committed to `feature/phase-19-20-tooling`. The `master` branch was not touched.
+2. **Never force-push or rewrite history:** Standard forward commit and push.
+3. **No fabricated participant data:** Phase 20 `results.md` honestly reports n=0 pending human study sessions.
+4. **Phase 16 untouched:** Gated dynamic execution was not implemented.
+5. **Clean working tree:** Only the approved Phase 19 and Phase 20 tooling files were staged; gitignored artifacts (`__pycache__`, `.pytest_cache`, `.codestruct_cache`) and unrelated scratch debug scripts were left untracked/ignored.

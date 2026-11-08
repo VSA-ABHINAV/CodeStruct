@@ -131,6 +131,7 @@ def query_qwen(
     ollama_url: Optional[str] = None,
     model: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
+    system_prompt: Optional[str] = None,
 ) -> str:
     """Send a message to Ollama with injected symbol context and architectural overview.
     
@@ -140,7 +141,8 @@ def query_qwen(
     url = ollama_url or OLLAMA_CHAT_URL
     target_model = model or DEFAULT_MODEL
 
-    system_prompt = build_system_context(symbol_detail, source_snippet, graph_summary)
+    if system_prompt is None:
+        system_prompt = build_system_context(symbol_detail, source_snippet, graph_summary)
 
     payload = {
         "model": target_model,
