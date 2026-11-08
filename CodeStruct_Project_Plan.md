@@ -14,7 +14,10 @@
 | Sprint 2 corrections (edge-description fix, folder consolidation) | **DONE, verified** |
 | 14 (caching) | **DONE, verified** — cache-invalidation on modify/delete confirmed with a real cross-file fixture and passing tests |
 | 15 (change-impact analysis) | **DONE, verified** — backend oracle exact match, UI sync confirmed via live DOM state checks |
-| 17 (UI/UX overhaul) | **DONE, verified** — fonts confirmed loading via `document.fonts.check()`, structural behaviors confirmed via CDP automation, toolbar deduplication verified (Follow-Up 1), and Inspector/Qwen persistent re-expand rails verified (Follow-Up 2). |
+| 17 (UI/UX overhaul) + both Follow-Ups (toolbar dedup, dock rail) | **DONE, verified** |
+| 18 (Git repository setup & push) | **Claimed done by the human; no evidence file received for this phase yet.** Not formally verified on this end — treat as pending until `report.md`/evidence for Phase 18 is reviewed. |
+| 19 (Advanced Architecture — AST + LLM component clustering) | **NEXT — start here** |
+| 20 (Usability Evaluation Study — the "1%+ improvement" measurement) | **NEXT, after Phase 19** |
 | 16 (dynamic/runtime execution) | **NOT STARTED — gated.** Needs a security/sandboxing design before any implementation. Do not touch without that design being written and reviewed first. |
 
 `PROGRESS.md`, in the project root, is the authoritative current-phase tracker. If it disagrees with the table above, trust `PROGRESS.md` and update this table to match.
@@ -864,7 +867,7 @@ This is a static-analysis/architecture-visualization tool — the subject matter
 
 ### Phase 17 Follow-Up 2 — Missing Re-Expand Control on Inspector/Qwen Docks
 
-**STATUS: COMPLETE, verified.** Inspector and Qwen Assistant docks collapse to persistent 40px vertical rails matching Explorer's pattern, re-expand correctly upon clicking either the rail or the header chevron, preserve selection and chat draft state, and show consistent 4-dock collapsed rail treatment.
+**STATUS: DONE, verified.** Root cause was the rail elements being child nodes of the panels they belonged to, so hiding the panel hid its own rail; fixed by restructuring `#right-dock` into proper one-collapsed/both-collapsed flex layouts rather than patching the symptom. Found via screenshot review: collapsing the Explorer dock or the Status/Logs dock leaves a visible toggle (a rail with a chevron/triangle) to re-expand it, exactly as Phase 17 specified. Collapsing the Inspector or Qwen Assistant dock instead removes them entirely — no rail, no chevron, nothing clickable — so once collapsed, there is no way to get them back without restarting the app. This is a regression against Phase 17's own Success Criteria #1 ("All four docks collapse to a visible rail/strip state and expand back on click"), which was apparently only implemented correctly for the left and bottom docks, not the two right-side ones.
 
 **Objective:** Collapsing Inspector or Qwen Assistant must leave the same kind of persistent, clickable rail that Explorer and Status/Logs already have — never a full disappearance.
 
@@ -882,13 +885,146 @@ This is a static-analysis/architecture-visualization tool — the subject matter
 4. Screenshot all four docks in their collapsed state side by side, confirming all four show the same rail treatment.
 
 **Success Criteria:**
-- [x] Inspector shows a persistent, clickable rail when collapsed, and re-expands correctly.
-- [x] Qwen Assistant shows a persistent, clickable rail when collapsed, and re-expands correctly, with chat history and draft input preserved.
-- [x] All four docks (Explorer, Inspector, Qwen, Status/Logs) now show visually consistent rail treatment when collapsed.
+- [ ] Inspector shows a persistent, clickable rail when collapsed, and re-expands correctly.
+- [ ] Qwen Assistant shows a persistent, clickable rail when collapsed, and re-expands correctly, with chat history and draft input preserved.
+- [ ] All four docks (Explorer, Inspector, Qwen, Status/Logs) now show visually consistent rail treatment when collapsed.
 
 **Guardrails:** Do not change Explorer's or Status/Logs's already-working collapse behavior — copy their pattern, don't rewrite it. Do not touch backend logic.
 
 **Est. time:** 0.5h
+
+**STATUS UPDATE: DONE, verified.** Root cause was the rails being child elements of the panels they belonged to, so hiding the panel hid its own rail. Fixed with dedicated `.one-collapsed`/`.both-collapsed` layout states on the right dock container rather than a per-panel patch.
+
+---
+
+### Phase 18 — Git Repository Setup & Push
+
+**STATUS: NEXT.**
+
+**Objective:** Get the project into a clean, pushable git repository without fabricating history or pushing to a guessed destination.
+
+**Tasks:**
+1. Check `git status` / `git log` / `git remote -v` in the project root first. Three possible states, handle each differently:
+   - **No `.git` at all:** initialize one, do a single well-organized initial commit (see Task 4) — do not try to reconstruct fake incremental "Phase 0, Phase 1, ..." commits after the fact; that would misrepresent history that doesn't actually exist as separate saved states.
+   - **`.git` exists with real incremental commit history** (e.g., commits were already made phase-by-phase during the build): leave that history alone, just bring it up to date with anything currently uncommitted and proceed to pushing.
+   - **`.git` exists but no remote is configured:** stop here and tell the human directly that a remote URL is needed before anything can be pushed — do not invent one or guess a hosting provider.
+2. Write/update `.gitignore`: exclude `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.codestruct_cache/`, any `venv/`/`.venv/`, OS cruft (`.DS_Store`, `Thumbs.db`), and any `.env`/credential files. Do **not** ignore the vendored assets (`frontend/static/vendor/`, including the fonts and Cytoscape.js) or any test fixtures (`tests/`, `sample_project/`) — those must stay tracked for the app and tests to work for anyone who clones it.
+3. Scan for anything that looks like a secret or credential (API keys, tokens, hardcoded paths with personal info) before the first commit or push. This project is local-only (Ollama has no cloud credential), but confirm rather than assume.
+4. Confirm `requirements.txt` is accurate against what's actually imported in the codebase.
+5. Review `README.md`: it should explain how to set up and run the app and its tests, not narrate the internal AI-pipeline process. Move the planning/status documents (`CodeStruct_Project_Plan.md`, `CodeStruct_Implementation_Status*.md`, `PROGRESS.md`, and any `prompt.md`/`report.md` pairs) into a `docs/pipeline/` subfolder so the repo root stays focused on the app itself, while still preserving them in the repo as a genuine build record.
+6. Commit everything with a clear message, then push to the confirmed remote/branch.
+
+**Test Procedure / Evidence Required:**
+1. `git log --oneline` output showing the actual resulting commit history (not a description of it).
+2. `git status` showing a clean working tree after the push (nothing uncommitted left behind).
+3. `git remote -v` and the branch pushed to, confirmed against what the human provided.
+4. Confirm the pushed state still passes the full regression suite by checking it out fresh into a separate temp directory and running `pytest -v` there — this is the real test of whether `.gitignore` broke something by excluding a file the app or tests actually need.
+
+**Success Criteria:**
+- [ ] Repository state (no-`.git` / existing-history / missing-remote) was correctly detected and handled per Task 1 — no fabricated commit history, no guessed remote.
+- [ ] `.gitignore` excludes build/cache artifacts but keeps vendored assets and test fixtures tracked.
+- [ ] No secrets or credentials present in the committed tree.
+- [ ] A fresh clone (or fresh checkout into a temp directory) passes the full regression suite unchanged.
+- [ ] Push completed to the confirmed remote/branch, with real `git log`/`git status`/`git remote -v` output as evidence.
+
+**Guardrails:** Never push without a human-confirmed remote URL. Never fabricate a commit history that didn't actually happen as separate saved states. Never force-push. Do not rewrite or squash any real existing history without the human's explicit sign-off first.
+
+**Est. time:** 1.0h
+
+---
+
+### Phase 19 — Advanced Architecture (AST + LLM Component Clustering & Narrative Generation)
+
+**STATUS: NEXT.** This is the feature closing the gaps your own comparison spreadsheet shows against the most recent reference paper — "Evaluating Explanatory Artefacts of DSAR-Recovered Software Architectures from Industrial Codebases" (Rukmono, Ochoa, Bressers, Krüger, Chaudron; FSE Companion '26) — where CodeStruct currently shows "—" on LLM, RAG, Natural-language summaries, Architecture clustering, and Architectural classification.
+
+**Objective:** Generate a higher-level architectural view by having the LLM cluster the existing AST-derived symbol graph into architectural components and produce natural-language explanations — grounded entirely in real extracted graph facts, never in invented symbols. This builds on the existing graph (Phase 1), metrics (Phase 12), pattern detection (Phase 13), and Qwen/Ollama integration (Phase 8) — no new analysis engine, no new AI backend.
+
+**Design:**
+- **Input to the LLM:** a structured summary of the current Graph JSON — node list (id/name/kind/module/file_path), edge list (source/target/type), existing fan-in/fan-out/instability metrics, and any detected design patterns. Raw source code is *not* sent wholesale (too large for real projects now that Phase 11 allows arbitrary paths) — only structural facts, with a symbol's source snippet fetched on demand if the LLM's response references needing it.
+- **Output (strict JSON contract):**
+  ```json
+  {
+    "components": [
+      {
+        "component_id": "string",
+        "name": "string",
+        "member_symbol_ids": ["string", "..."],
+        "role": "string (freeform architectural role label)",
+        "rationale": "string (why these symbols are grouped, in natural language)"
+      }
+    ],
+    "unclustered_symbol_ids": ["string", "..."],
+    "narrative": "string (project-level architecture summary)"
+  }
+  ```
+- **Validation layer (non-negotiable):** every `member_symbol_ids` entry must be an actual node id in the current graph — any invented id is dropped and logged, never shown to the user as real. Every real symbol must appear either in some component or in `unclustered_symbol_ids` — nothing is silently lost. Malformed LLM output triggers one retry with a stricter prompt, then a clear UI error state — never a silent partial/fabricated result.
+- **Caching:** the result is cached against the current graph's content (reusing Phase 14's cache infrastructure conceptually); repeated requests without re-analysis must not re-call the LLM each time.
+
+**Tasks:**
+1. Implement `backend/advanced_architecture.py`: prompt construction from the graph summary, the LLM call via the existing `qwen_client.py`, and the validation layer described above.
+2. Add `POST /api/architecture/advanced` returning the validated response, with caching.
+3. Add `ComponentCluster` / `AdvancedArchitectureResponse` models to `backend/schemas.py`.
+4. Add an "Advanced Architecture" tab (alongside Graph/Table/Patterns/Code): render components as a coarser graph (member counts, roles) plus the narrative text; clicking a component highlights its member symbols in the existing symbol-level Graph view.
+5. Apply a reasonable timeout (30s) on the LLM call with a clear "taking longer than expected"/retry UI state — never an indefinitely hung UI.
+
+**Files created/modified:** `backend/advanced_architecture.py` (new), `backend/api.py`, `backend/schemas.py`, `frontend/static/app.js`, `frontend/index.html`, `tests/test_advanced_architecture.py` (new).
+
+**Test Procedure:**
+1. Unit-test the validator with a mocked LLM response containing one invented symbol id not in the real graph; assert it's dropped and logged, not silently accepted.
+2. Unit-test the validator with a mocked response that omits a real symbol from every component; assert it's surfaced in `unclustered_symbol_ids`, not silently lost.
+3. Integration-test `/api/architecture/advanced` against `sample_project` with the Ollama call **mocked** to a fixed, known-good response (real LLM output is non-deterministic and must not gate automated pass/fail); assert the endpoint returns a correctly validated, correctly shaped response built from that mock.
+4. Run it once **live** (unmocked) against `sample_project`; this is qualitative evidence (does the clustering look sane — e.g., `Animal`/`Dog`/`Cat` grouped together — is the narrative coherent) logged with the actual output, not asserted as pass/fail.
+5. Call the endpoint twice without re-analyzing; confirm via call-count instrumentation that the LLM was only actually invoked once (cache reuse).
+
+**Success Criteria:**
+- [ ] Validator correctly rejects/flags an invented symbol id (mocked test).
+- [ ] Validator correctly surfaces an unclustered real symbol rather than dropping it (mocked test).
+- [ ] `/api/architecture/advanced` returns a correctly validated response against a deterministic mocked LLM call.
+- [ ] A live, unmocked run against `sample_project` produces a sane clustering and coherent narrative (evidence logged).
+- [ ] Repeated calls without re-analysis reuse the cache rather than re-invoking the LLM.
+- [ ] UI shows the Advanced Architecture tab with working cross-navigation to the symbol graph.
+
+**Guardrails:** Never show LLM-clustered output to the user before it passes the validator. Never silently drop a real symbol from the `unclustered_symbol_ids` accounting. Never let a hung LLM call block the UI indefinitely. This is additive — it does not replace or alter the existing symbol-level Graph view.
+
+**Est. time:** 4.5h (prompt design + validator ~2.0h, endpoint + caching ~1.0h, UI tab ~1.5h)
+
+---
+
+### Phase 20 — Usability Evaluation Study (the "1%+ improvement" measurement)
+
+**STATUS: NEXT, after Phase 19.**
+
+**Reframing, stated explicitly so it's not silently assumed:** DSAR's FSE '26 evaluation is a qualitative industrial judgment study — it has no single published number to numerically "beat by 1%." The measurable, defensible claim instead is a **controlled within-CodeStruct before/after comparison**: does Phase 19's Advanced Architecture feature measurably improve usability over CodeStruct's existing graph-only experience, using evaluation dimensions inspired by DSAR's own criteria (content quality, presentation quality, usefulness) plus the field-standard System Usability Scale (SUS) for a credible numeric score. This is honestly reported as a self-contained comparison, not a replication or outperforming of DSAR's own industrial study.
+
+**Objective:** Produce a real, honestly-reported human-centred usability measurement comparing CodeStruct with vs. without the Advanced Architecture feature.
+
+**Important — split of responsibility:** Antigravity can build the instrument and scoring tooling (Tasks 1, 2, 4, 5 below). **Running actual participant sessions (Task 3) requires real human participants and cannot be done by Antigravity** — that part is on you. Flag this explicitly rather than letting a prompt imply Antigravity can "run the study" on its own.
+
+**Tasks:**
+1. *(Antigravity)* Build a simple local questionnaire (a single self-contained HTML page is fine, matching the project's existing offline-first approach) implementing: the standard 10-item SUS instrument, a 3-item rubric (content quality / presentation quality / usefulness, each 1–5) mirrored from DSAR's own evaluated dimensions, and one short comprehension question ("name the main architectural components and how they relate"). Save as `docs/usability_study/questionnaire.html`.
+2. *(Antigravity)* Build `docs/usability_study/score.py`: reads raw per-participant responses (CSV/JSON), computes per-condition (baseline vs. Advanced Architecture) mean SUS score, mean rubric score, the % difference between conditions, and basic descriptive stats (n, std dev); writes `docs/usability_study/results.md`.
+3. *(Human — you)* Recruit at least 5 participants. Each explores the same project under both conditions — baseline (Graph/Table/Inspector only) and with Advanced Architecture enabled — in counterbalanced order (half see baseline first, half see Advanced Architecture first, to control for a learning-effect confound). Each fills out the questionnaire once per condition. Save raw responses into `docs/usability_study/raw_data/`.
+4. *(Antigravity)* Run `score.py` on the real collected data once it exists; produce the final `results.md`.
+5. *(Antigravity)* Write a short methodology/limitations note into `results.md`: small-N convenience sample, explicit statement that this is a self-contained before/after comparison and not a replication of DSAR's own industrial study.
+
+**Files created:** `docs/usability_study/questionnaire.html`, `docs/usability_study/score.py`, `docs/usability_study/raw_data/` (populated by the human step), `docs/usability_study/results.md`.
+
+**Test Procedure:**
+1. Confirm the questionnaire correctly implements all 10 standard SUS items (exact standard wording — do not paraphrase the instrument, that invalidates the standardized scoring) plus the 3-item rubric and comprehension question.
+2. Confirm `score.py` correctly computes SUS scores per the standard SUS scoring formula (odd items: score−1; even items: 5−score; sum ×2.5), not an improvised formula.
+3. Once real data exists: confirm `results.md` shows the actual per-participant raw numbers alongside the computed means — not just a final percentage with no way to check it.
+
+**Success Criteria:**
+- [ ] Questionnaire instrument built correctly (standard SUS wording, 3-item rubric, comprehension question).
+- [ ] Scoring script implements the real SUS formula correctly (unit-tested against a known worked example).
+- [ ] At least 5 participants completed both conditions, counterbalanced.
+- [ ] `results.md` shows real computed means, real % difference, and the raw per-participant data is included/linked for verification.
+- [ ] The methodology note explicitly distinguishes this from DSAR's own industrial evaluation.
+- [ ] The result is reported as-is, whatever it is — if the measured improvement is below 1%, or even negative, that is what gets reported.
+
+**Guardrails:** Do not paraphrase or shorten the standard SUS items — use the exact validated wording, or the score is no longer a real SUS score. Do not exclude unfavorable responses, cherry-pick participants, or adjust the scoring to force a passing result. Do not claim this outperforms or replicates DSAR's published study.
+
+**Est. time:** Antigravity-buildable parts (instrument + scoring tooling): ~2.0h. Human-run parts (recruiting and running ≥5 sessions): not time-boxable the same way — budget this separately from the "sprint" framing used elsewhere in this document.
 
 ---
 
@@ -900,7 +1036,8 @@ This is a static-analysis/architecture-visualization tool — the subject matter
 | Day 2 | Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 → Phase 10 |
 | Post-MVP (approved addendum) | Phase 11, after Phase 10's Definition of Done was already met |
 | Sprint 2 (10-hour budget, for a staff demo) | Phase 12 (4.0h) → Phase 13 (5.0h) → 1.0h regression/demo rehearsal buffer |
-| Sprint 3 (open-ended) | 2 open Sprint 2 corrections (see Status at a Glance) → Phase 14 (3.5h) → Phase 15 (4.0h) → Phase 17 (4.5h) |
+| Sprint 3 (open-ended) | 2 open Sprint 2 corrections (see Status at a Glance) → Phase 14 (3.5h) → Phase 15 (4.0h) → Phase 17 (4.5h) + 2 Follow-Ups |
+| Sprint 4 (open-ended; Phase 20 includes a human-run, non-time-boxable step) | Phase 18 (1.0h, pending evidence) → Phase 19 (4.5h) → Phase 20 (~2.0h Antigravity-buildable + human-run study sessions) |
 
 With one builder, phases are sequential — there is no slack. If behind schedule at the Day 1/Day 2 boundary, do not skip testing steps; instead drop stretch items first (see Section 9) before cutting any phase's core Success Criteria.
 
@@ -1019,12 +1156,20 @@ The MVP (Phases 0–10) is considered done independently of Phase 11. Phase 11 i
 - [ ] **Outstanding correction:** the duplicated folder tree must be consolidated to one canonical layout.
 
 **Sprint 3 Definition of Done** (the 2 Sprint 2 corrections + Phases 14, 15, 17 — tracked separately from Sprint 2 and the MVP; Phase 16 is explicitly excluded from this sprint):
-- [ ] Both outstanding Sprint 2 corrections are resolved (edge-description fix, folder-structure consolidation), each with evidence, not just a claim.
-- [ ] Phase 14's Success Criteria are checked off with evidence (cache-hit/miss behavior, invalidation, `force_refresh`, unchanged deterministic counts).
-- [ ] Phase 15's Success Criteria are checked off with evidence (all four Deterministic Test Oracle cases pass exactly).
-- [ ] Phase 17's Success Criteria are checked off with evidence (screenshots at both tested window sizes, keyboard-navigation confirmation, scroll-behavior confirmation).
-- [ ] The full Phase 0–13 regression suite still passes unchanged after all of the above.
-- [ ] Phase 16 remains explicitly untouched and documented as such — not implemented under scope pressure, not silently dropped from the backlog either.
+- [x] Both outstanding Sprint 2 corrections are resolved (edge-description fix, folder-structure consolidation), each with evidence, not just a claim.
+- [x] Phase 14's Success Criteria are checked off with evidence (cache-hit/miss behavior, invalidation, `force_refresh`, unchanged deterministic counts).
+- [x] Phase 15's Success Criteria are checked off with evidence (all four Deterministic Test Oracle cases pass exactly).
+- [x] Phase 17's Success Criteria are checked off with evidence (fonts confirmed via `document.fonts.check()`, structural behaviors via CDP automation), **plus both Follow-Ups (toolbar dedup, missing dock rail)**.
+- [x] The full regression suite still passes unchanged after all of the above.
+- [x] Phase 16 remains explicitly untouched and documented as such.
+
+**Sprint 4 Definition of Done** (Phases 18–20 — tracked separately; Phase 16 remains explicitly excluded):
+- [ ] Phase 18's Success Criteria are checked off with evidence (`git log`, `git status`, `git remote -v` output, fresh-checkout regression pass) — **not yet received on this end**, even though claimed done.
+- [ ] Phase 19's Success Criteria are checked off with evidence (validator tests, mocked-integration test, one live qualitative run, cache-reuse confirmation).
+- [ ] Phase 20's Antigravity-buildable tooling (questionnaire, scoring script) is built and the SUS scoring formula is verified correct against a worked example.
+- [ ] Phase 20's human-run study (≥5 participants, counterbalanced) has actually been completed, with raw data present.
+- [ ] `results.md` reports the real measured outcome — whatever it is — with the methodology note distinguishing this from DSAR's own industrial evaluation.
+- [ ] Phase 16 remains explicitly untouched and documented as such.
 
 ## 11. Multi-Agent Pipeline Notes (for Brain)
 
