@@ -124,9 +124,10 @@ class SourceResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """Request body for POST /api/qwen/chat (Phase 8)."""
+    """Request body for POST /api/llm/chat (and legacy /api/qwen/chat)."""
     message: str
     context_symbol_id: Optional[str] = None
+    model_id: Optional[str] = Field(None, description="Optional specific model ID from ModelRegistry")
 
 
 class ImpactedSymbol(BaseModel):
@@ -159,4 +160,99 @@ class PatternMatch(BaseModel):
 class PatternsResponse(BaseModel):
     """Response body for GET /api/patterns (Phase 13)."""
     patterns: List[PatternMatch] = Field(default_factory=list, description="List of detected design pattern matches")
+
+
+# ---------------------------------------------------------------------------
+# Section 4.4: Advanced Architecture Models (Phase 19)
+# ---------------------------------------------------------------------------
+
+class ComponentCluster(BaseModel):
+    """An architectural component cluster containing related symbols (Phase 19)."""
+    component_id: str = Field(..., description="Unique component identifier, e.g. 'comp_1'")
+    name: str = Field(..., description="Short architectural component name")
+    member_symbol_ids: List[str] = Field(default_factory=list, description="Validated member symbol IDs")
+    role: str = Field(..., description="Architectural role label, e.g. 'Domain Entity'")
+    rationale: str = Field(..., description="Natural language justification for grouping these symbols")
+
+
+class AdvancedArchitectureResponse(BaseModel):
+    """Response body for POST /api/architecture/advanced (Phase 19)."""
+    components: List[ComponentCluster] = Field(default_factory=list, description="List of architectural component clusters")
+    unclustered_symbol_ids: List[str] = Field(default_factory=list, description="Real symbol IDs not assigned to any component")
+    narrative: str = Field(..., description="Project-level architecture summary narrative")
+
+
+class AdvancedArchitectureRequest(BaseModel):
+    """Request body for POST /api/architecture/advanced (Phase 19 + Multi-LLM)."""
+    force_refresh: bool = Field(False, description="Whether to bypass the architecture cache")
+    model_id: Optional[str] = Field(None, description="Optional specific model ID from ModelRegistry")
+
+
+# ---------------------------------------------------------------------------
+# Section 4.5: First-Run Wizard Models
+# ---------------------------------------------------------------------------
+
+class WizardCompleteRequest(BaseModel):
+    """Request body for POST /api/wizard/complete."""
+    ai_enabled: bool = Field(False, description="Whether local AI features are enabled")
+    ollama_models_dir: Optional[str] = Field(None, description="Custom directory for Ollama models (OLLAMA_MODELS)")
+    ollama_model: str = Field("qwen2.5-coder:3b", description="Target local LLM model name")
+
+
+class WizardPullRequest(BaseModel):
+    """Request body for POST /api/wizard/ollama/pull."""
+    models_dir: str = Field(..., description="Target directory for storing Ollama models")
+    model_name: str = Field("qwen2.5-coder:3b", description="Model identifier to pull via Ollama")
+
+
+# ---------------------------------------------------------------------------
+# Section 4.6: Multi-LLM Provider & Model Registry Models
+# ---------------------------------------------------------------------------
+
+class ModelConfigCreate(BaseModel):
+    """Request body for POST /api/models (create or update model config)."""
+    id: Optional[str] = Field(None, description="Existing ID to update, or omit to generate")
+    provider: Literal["ollama", "openai", "anthropic", "gemini", "azure", "custom"]
+    display_name: str
+    model_name: str
+    api_key: Optional[str] = Field(None, description="Plaintext key from client; encrypted immediately via Fernet")
+    base_url: Optional[str] = None
+    deployment_name: Optional[str] = None
+    api_version: Optional[str] = None
+    enabled: bool = True
+    is_default_chat: bool = False
+    is_default_architecture: bool = False
+
+
+class ModelConfigPublic(BaseModel):
+    """Safe API representation of a configured model (keys masked, never exposed)."""
+    id: str
+    provider: Literal["ollama", "openai", "anthropic", "gemini", "azure", "custom"]
+    display_name: str
+    model_name: str
+    has_key: bool = False
+    masked_key: str = ""
+    base_url: Optional[str] = None
+    deployment_name: Optional[str] = None
+    api_version: Optional[str] = None
+    enabled: bool = True
+    is_default_chat: bool = False
+    is_default_architecture: bool = False
+
+
+class ModelListResponse(BaseModel):
+    """Response body for GET /api/models."""
+    models: List[ModelConfigPublic] = Field(default_factory=list)
+
+
+class ValidateModelResponse(BaseModel):
+    """Response body for POST /api/models/{model_id}/validate."""
+    valid: bool
+    models: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class SetDefaultModelRequest(BaseModel):
+    """Request body for POST /api/models/{model_id}/set-default."""
+    target: Literal["chat", "architecture", "both"] = "both"
 

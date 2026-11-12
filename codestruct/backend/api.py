@@ -17,22 +17,43 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import PythonLexer, get_lexer_for_filename
 
+from backend.advanced_architecture import MalformedLLMOutputError, cluster_architecture
 from backend.analyzer import analyze_project, compute_impact
+from backend.config import get_resource_base, load_config, save_config
+from backend.llm_client import build_system_context, query_llm
+from backend.llm_providers import get_provider
+from backend.model_config import ModelRegistry
 from backend.patterns import detect_patterns
 from backend.qwen_client import check_ollama_connection, query_qwen
 from backend.schemas import (
+    AdvancedArchitectureRequest,
+    AdvancedArchitectureResponse,
     AnalyzeRequest,
     ChatRequest,
     ChatResponse,
+    ComponentCluster,
     Graph,
     ImpactResponse,
+    ModelConfigCreate,
+    ModelConfigPublic,
+    ModelListResponse,
     OpenInEditorRequest,
     OpenInEditorResponse,
     PatternMatch,
     PatternsResponse,
+    SetDefaultModelRequest,
     SourceResponse,
     SymbolDetail,
     SymbolEdge,
+    ValidateModelResponse,
+    WizardCompleteRequest,
+    WizardPullRequest,
+)
+from backend.wizard import (
+    get_task_state,
+    run_system_checks,
+    start_ollama_install_task,
+    start_ollama_pull_task,
 )
 
 router = APIRouter(prefix="/api")
@@ -75,11 +96,14 @@ def post_analyze(payload: AnalyzeRequest, request: Request) -> Graph:
     else:
         pkg_dir = Path(__file__).resolve().parent.parent  # .../codestruct
         workspace_root = pkg_dir.parent  # .../CodeStruct
+        resource_base = get_resource_base()
 
         if (workspace_root / raw_path).exists():
             resolved_path = (workspace_root / raw_path).resolve()
         elif (pkg_dir / raw_path).exists():
             resolved_path = (pkg_dir / raw_path).resolve()
+        elif (resource_base / raw_path).exists():
+            resolved_path = (resource_base / raw_path).resolve()
         elif (Path.cwd() / raw_path).exists():
             resolved_path = (Path.cwd() / raw_path).resolve()
         elif candidate.exists():
@@ -317,26 +341,16 @@ def get_source_slice(
     return SourceResponse(html=highlighted_html, start=start_line, end=end_line)
 
 
-@router.post("/qwen/chat", response_model=ChatResponse)
-def chat_with_qwen(
-    request: Request,
-    body: ChatRequest,
-) -> ChatResponse:
-    """Send user message to local Ollama Qwen assistant with symbol context and architectural overview (Phase 8)."""
+def _extract_chat_context(request: Request, context_symbol_id: Optional[str]):
+    """Build symbol_detail, source_snippet, and graph_summary context for chat endpoints."""
     symbol_dict = None
     source_snippet = None
     graph_summary = None
 
     last_graph = get_stored_graph(request)
     if last_graph:
-        # Build architectural summary from the stored graph
         summary = last_graph.get("summary", {})
         if summary:
-            edge_counts: Dict[str, int] = {}
-            for edge in last_graph.get("edges", []):
-                etype = edge.get("type", "unknown")
-                edge_counts[etype] = edge_counts.get(etype, 0) + 1
-
             graph_summary = {
                 "summary": {
                     "node_count": summary.get("node_count", 0),
@@ -349,11 +363,10 @@ def chat_with_qwen(
                 "edges": last_graph.get("edges", []),
             }
 
-        if body.context_symbol_id:
-            detail = get_symbol_detail_from_graph(last_graph, body.context_symbol_id)
+        if context_symbol_id:
+            detail = get_symbol_detail_from_graph(last_graph, context_symbol_id)
             if detail:
                 symbol_dict = detail.model_dump()
-                # Attempt to extract raw source code snippet for context
                 try:
                     project_root = Path(last_graph["project_root"]).resolve()
                     if project_root.is_file():
@@ -372,23 +385,81 @@ def chat_with_qwen(
                 except Exception:
                     source_snippet = None
 
-    reply = query_qwen(
-        message=body.message,
-        symbol_detail=symbol_dict,
-        source_snippet=source_snippet,
-        graph_summary=graph_summary,
+    return symbol_dict, source_snippet, graph_summary
+
+
+@router.post("/llm/chat", response_model=ChatResponse)
+def chat_with_llm(
+    request: Request,
+    body: ChatRequest,
+) -> ChatResponse:
+    """Send user message to any configured LLM provider (or default chat model) with symbol context."""
+    registry = ModelRegistry()
+    rec = registry.resolve_model(model_id=body.model_id, feature="chat")
+    if rec is None:
+        return ChatResponse(
+            reply="[Error] No model configured or enabled. Open Settings (⚙️) to add or enable an LLM model."
+        )
+
+    if body.model_id and rec.id != body.model_id:
+        raise HTTPException(status_code=404, detail=f"Configured model not found or disabled: {body.model_id}")
+
+    symbol_dict, source_snippet, graph_summary = _extract_chat_context(request, body.context_symbol_id)
+
+    # Preserve legacy query_qwen behavior when default Ollama is active (ensures mock compatibility)
+    if rec.provider == "ollama" and rec.id == "ollama-default":
+        reply = query_qwen(
+            message=body.message,
+            symbol_detail=symbol_dict,
+            source_snippet=source_snippet,
+            graph_summary=graph_summary,
+            model=rec.model_name,
+        )
+        return ChatResponse(reply=reply)
+
+    system_prompt = build_system_context(symbol_dict, source_snippet, graph_summary)
+    decrypted_key = registry.get_decrypted_api_key(rec.id)
+    reply = query_llm(
+        provider_config=rec,
+        messages=[{"role": "user", "content": body.message}],
+        system_prompt=system_prompt,
+        model=rec.model_name,
+        decrypted_api_key=decrypted_key,
     )
     return ChatResponse(reply=reply)
 
 
+@router.post("/qwen/chat", response_model=ChatResponse)
+def chat_with_qwen(
+    request: Request,
+    body: ChatRequest,
+) -> ChatResponse:
+    """Deprecated alias for /api/llm/chat (Phase 8 backward compatibility)."""
+    return chat_with_llm(request, body)
+
+
 @router.get("/qwen/status")
 def get_qwen_status(request: Request) -> Dict[str, Any]:
-    """Check Ollama service status for startup validation and panel indicator (Phase 9)."""
+    """Check active default chat model / Ollama status (backward compatible)."""
+    registry = ModelRegistry()
+    rec = registry.resolve_model(feature="chat")
+    if rec and rec.provider != "ollama":
+        has_key = bool(rec.api_key_encrypted)
+        is_connected = rec.enabled and (has_key or rec.provider == "custom")
+        return {
+            "status": "connected" if is_connected else "disconnected",
+            "model": rec.model_name,
+            "display_name": rec.display_name,
+            "provider": rec.provider,
+        }
+
     is_connected = check_ollama_connection(timeout=1.0)
     request.app.state.ollama_connected = is_connected
     return {
         "status": "connected" if is_connected else "disconnected",
-        "model": "qwen2.5-coder:3b",
+        "model": rec.model_name if rec else "qwen2.5-coder:3b",
+        "display_name": rec.display_name if rec else "Ollama (qwen2.5-coder:3b)",
+        "provider": "ollama",
     }
 
 
@@ -399,3 +470,196 @@ def get_impact(node_id: str, request: Request, max_depth: int = 5) -> ImpactResp
         raise HTTPException(status_code=400, detail="No project has been analyzed yet. Run POST /api/analyze first.")
     impacted = compute_impact(last_graph, node_id, max_depth=max_depth)
     return ImpactResponse(symbol_id=node_id, max_depth=max_depth, impacted=impacted)
+
+
+@router.post("/architecture/advanced", response_model=AdvancedArchitectureResponse)
+def post_advanced_architecture(
+    request: Request,
+    body: Optional[AdvancedArchitectureRequest] = None,
+) -> AdvancedArchitectureResponse:
+    """Analyze AST graph and cluster symbols into architectural components via configured LLM (Phase 19 + Multi-LLM)."""
+    last_graph = get_stored_graph(request)
+    if not last_graph:
+        raise HTTPException(
+            status_code=400,
+            detail="No project has been analyzed yet. Run POST /api/analyze first.",
+        )
+
+    force_refresh = body.force_refresh if body else False
+    requested_model_id = body.model_id if body else None
+
+    registry = ModelRegistry()
+    rec = registry.resolve_model(model_id=requested_model_id, feature="architecture")
+    if requested_model_id and (rec is None or rec.id != requested_model_id):
+        raise HTTPException(status_code=404, detail=f"Configured model not found or disabled: {requested_model_id}")
+
+    decrypted_key = registry.get_decrypted_api_key(rec.id) if rec else None
+
+    try:
+        result = cluster_architecture(
+            last_graph,
+            force_refresh=force_refresh,
+            timeout=90.0,
+            provider_config=rec,
+            decrypted_api_key=decrypted_key,
+        )
+        return AdvancedArchitectureResponse(**result)
+    except MalformedLLMOutputError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM architectural clustering failed validation: {str(e)}"
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error during architectural clustering: {str(e)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Multi-LLM Model Management Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/models", response_model=ModelListResponse)
+def list_configured_models() -> ModelListResponse:
+    """List all configured LLM models with API keys masked (never exposed in plaintext)."""
+    registry = ModelRegistry()
+    models = [ModelConfigPublic(**m.model_dump()) for m in registry.list_models()]
+    return ModelListResponse(models=models)
+
+
+@router.post("/models", response_model=ModelConfigPublic)
+def upsert_configured_model(body: ModelConfigCreate) -> ModelConfigPublic:
+    """Add or update an LLM model configuration; API keys are immediately Fernet-encrypted."""
+    registry = ModelRegistry()
+    saved = registry.upsert_model(
+        model_id=body.id,
+        provider=body.provider,
+        display_name=body.display_name,
+        model_name=body.model_name,
+        api_key=body.api_key,
+        base_url=body.base_url,
+        deployment_name=body.deployment_name,
+        api_version=body.api_version,
+        enabled=body.enabled,
+        is_default_chat=body.is_default_chat,
+        is_default_architecture=body.is_default_architecture,
+    )
+    return ModelConfigPublic(**saved.model_dump())
+
+
+@router.delete("/models/{model_id}")
+def delete_configured_model(model_id: str) -> Dict[str, Any]:
+    """Delete a configured LLM model."""
+    registry = ModelRegistry()
+    removed = registry.delete_model(model_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"Model not found: {model_id}")
+    return {"deleted": True, "id": model_id}
+
+
+@router.post("/models/{model_id}/validate", response_model=ValidateModelResponse)
+def validate_configured_model(model_id: str) -> ValidateModelResponse:
+    """Test provider connectivity and return available models without exposing credentials."""
+    registry = ModelRegistry()
+    rec = registry.get_record(model_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail=f"Model not found: {model_id}")
+
+    decrypted_key = registry.get_decrypted_api_key(model_id)
+    if rec.provider in ("openai", "anthropic", "gemini", "azure") and not decrypted_key:
+        return ValidateModelResponse(
+            valid=False,
+            models=[],
+            error=f"Missing API key for {rec.display_name}. Please configure an API key.",
+        )
+
+    provider = get_provider(rec, decrypted_api_key=decrypted_key)
+    res = provider.validate_connection()
+    return ValidateModelResponse(
+        valid=bool(res.get("valid")),
+        models=list(res.get("models") or []),
+        error=res.get("error"),
+    )
+
+
+@router.post("/models/{model_id}/set-default", response_model=ModelConfigPublic)
+def set_default_model(model_id: str, body: SetDefaultModelRequest) -> ModelConfigPublic:
+    """Set the default model for Chat, Architecture, or both."""
+    registry = ModelRegistry()
+    updated = registry.set_default(model_id, target=body.target)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Model not found: {model_id}")
+    return ModelConfigPublic(**updated.model_dump())
+
+
+# ---------------------------------------------------------------------------
+# First-Run Setup Wizard Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/wizard/status")
+def get_wizard_status(models_dir: Optional[str] = Query(None)) -> Dict[str, Any]:
+    """Return persisted config and live hardware/OS/Ollama readiness checks."""
+    cfg = load_config()
+    checks = run_system_checks(custom_models_dir=models_dir)
+    return {
+        "config": cfg,
+        "system_checks": checks,
+        "task_state": get_task_state(),
+    }
+
+
+@router.post("/wizard/complete")
+def post_wizard_complete(body: WizardCompleteRequest, request: Request) -> Dict[str, Any]:
+    """Persist First-Run Wizard selections to %APPDATA%\\CodeStruct\\config.json."""
+    updates: Dict[str, Any] = {
+        "first_run_completed": True,
+        "ai_enabled": body.ai_enabled,
+        "ollama_model": body.ollama_model.strip() or "qwen2.5-coder:3b",
+    }
+    if body.ollama_models_dir and body.ollama_models_dir.strip():
+        target = Path(body.ollama_models_dir.strip()).expanduser().resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        updates["ollama_models_dir"] = str(target)
+        os.environ["OLLAMA_MODELS"] = str(target)
+
+    saved = save_config(updates)
+    request.app.state.ollama_connected = check_ollama_connection(timeout=1.0)
+    return {"saved": True, "config": saved}
+
+
+@router.post("/wizard/ollama/install")
+def post_wizard_ollama_install() -> Dict[str, Any]:
+    """Trigger optional Ollama runtime installation in background."""
+    return start_ollama_install_task()
+
+
+@router.post("/wizard/ollama/pull")
+def post_wizard_ollama_pull(body: WizardPullRequest) -> Dict[str, Any]:
+    """Start Ollama daemon with custom OLLAMA_MODELS path and pull the LLM."""
+    return start_ollama_pull_task(models_dir=body.models_dir, model_name=body.model_name)
+
+
+@router.get("/wizard/ollama/task_status")
+def get_wizard_ollama_task_status() -> Dict[str, Any]:
+    """Return live status and logs for ongoing Ollama install/pull task."""
+    return get_task_state()
+
+
+@router.post("/wizard/browse_folder")
+def post_wizard_browse_folder(request: Request) -> Dict[str, Any]:
+    """Open native folder picker dialog via pywebview to choose custom storage/project path."""
+    win = getattr(request.app.state, "webview_window", None)
+    if win is None:
+        return {"selected": None, "supported": False, "message": "Native dialog only available inside desktop window."}
+    try:
+        import webview
+        dialog_type = getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or getattr(webview, "FOLDER_DIALOG", 20)
+        result = win.create_file_dialog(dialog_type)
+        if result and len(result) > 0:
+            return {"selected": str(result[0]), "supported": True}
+        return {"selected": None, "supported": True}
+    except Exception as e:
+        return {"selected": None, "supported": False, "message": str(e)}

@@ -20,7 +20,8 @@ ENV/
 
 # Distribution & Packaging
 build/
-dist/
+dist/*
+!dist/CodeStruct.exe
 *.egg-info/
 *.egg
 
