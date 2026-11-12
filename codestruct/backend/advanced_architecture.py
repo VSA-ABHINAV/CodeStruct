@@ -20,6 +20,8 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from backend.llm_client import query_llm
+from backend.model_config import ModelConfigRecord
 from backend.patterns import detect_patterns
 from backend.qwen_client import query_qwen
 
@@ -45,7 +47,7 @@ def get_architecture_cache_size() -> int:
     return len(_ARCH_CACHE)
 
 
-def compute_graph_hash(graph: Dict[str, Any]) -> str:
+def compute_graph_hash(graph: Dict[str, Any], model_key: str = "") -> str:
     """Compute a deterministic SHA-256 hash representing the structural state of the graph."""
     nodes = [
         (n.get("id"), n.get("name"), n.get("kind"), n.get("module"), n.get("file_path"))
@@ -70,6 +72,7 @@ def compute_graph_hash(graph: Dict[str, Any]) -> str:
         "edges": edges,
         "patterns": patterns,
         "project_root": str(graph.get("project_root", "")),
+        "model_key": model_key,
     }
 
     raw_bytes = json.dumps(canonical_data, sort_keys=True).encode("utf-8")
@@ -345,26 +348,50 @@ def validate_clustering(
     return validated_result, dropped_invented_ids
 
 
+def _invoke_clustering_llm(
+    user_prompt: str,
+    system_prompt: str,
+    timeout: float,
+    ollama_url: Optional[str] = None,
+    model: Optional[str] = None,
+    provider_config: Optional[ModelConfigRecord] = None,
+    decrypted_api_key: Optional[str] = None,
+) -> str:
+    """Dispatch clustering prompt via generic query_llm (or legacy query_qwen for default Ollama)."""
+    if provider_config is not None and not (provider_config.provider == "ollama" and provider_config.id == "ollama-default"):
+        return query_llm(
+            provider_config=provider_config,
+            messages=[{"role": "user", "content": user_prompt}],
+            system_prompt=system_prompt,
+            model=model or provider_config.model_name,
+            decrypted_api_key=decrypted_api_key,
+            timeout=timeout,
+        )
+    target_model = model or (provider_config.model_name if provider_config else None)
+    return query_qwen(
+        message=user_prompt,
+        system_prompt=system_prompt,
+        timeout=timeout,
+        ollama_url=ollama_url,
+        model=target_model,
+    )
+
+
 def cluster_architecture(
     graph: Dict[str, Any],
     force_refresh: bool = False,
     ollama_url: Optional[str] = None,
     model: Optional[str] = None,
-    timeout: float = 30.0,
+    timeout: float = 90.0,
+    provider_config: Optional[ModelConfigRecord] = None,
+    decrypted_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute LLM component clustering with strict validation, retry, and caching.
     
-    Args:
-        graph: Analyzed project graph dictionary.
-        force_refresh: If True, bypass in-memory cache and re-query LLM.
-        ollama_url: Optional Ollama URL.
-        model: Optional model name.
-        timeout: Timeout in seconds for LLM call (default 30.0s).
-        
-    Returns:
-        Validated dictionary conforming to AdvancedArchitectureResponse schema.
+    Provider-agnostic: works identically across Ollama, OpenAI, Anthropic, Gemini, Azure, and Custom.
     """
-    cache_key = compute_graph_hash(graph)
+    model_key = f"{provider_config.id}:{provider_config.model_name}" if provider_config else (model or "")
+    cache_key = compute_graph_hash(graph, model_key=model_key)
     if not force_refresh and cache_key in _ARCH_CACHE:
         logger.info(f"[Advanced Architecture] Cache hit for hash {cache_key[:8]}")
         return _ARCH_CACHE[cache_key]
@@ -383,16 +410,18 @@ def cluster_architecture(
 
     # Initial LLM call
     logger.info("[Advanced Architecture] Querying LLM for component clustering...")
-    reply = query_qwen(
-        message=user_prompt,
+    reply = _invoke_clustering_llm(
+        user_prompt=user_prompt,
         system_prompt=system_prompt,
         timeout=timeout,
         ollama_url=ollama_url,
         model=model,
+        provider_config=provider_config,
+        decrypted_api_key=decrypted_api_key,
     )
 
     if reply.startswith("[Error]"):
-        raise RuntimeError(f"Ollama clustering request failed: {reply}")
+        raise RuntimeError(f"LLM clustering request failed: {reply}")
 
     try:
         validated_data, dropped = validate_clustering(reply, real_node_ids)
@@ -410,16 +439,18 @@ def cluster_architecture(
             "You MUST output ONLY a valid JSON object matching the schema with no extra text or fences."
         )
 
-        retry_reply = query_qwen(
-            message=stricter_user_prompt,
+        retry_reply = _invoke_clustering_llm(
+            user_prompt=stricter_user_prompt,
             system_prompt=stricter_system_prompt,
             timeout=timeout,
             ollama_url=ollama_url,
             model=model,
+            provider_config=provider_config,
+            decrypted_api_key=decrypted_api_key,
         )
 
         if retry_reply.startswith("[Error]"):
-            raise RuntimeError(f"Ollama clustering retry failed: {retry_reply}")
+            raise RuntimeError(f"LLM clustering retry failed: {retry_reply}")
 
         validated_data, dropped = validate_clustering(retry_reply, real_node_ids)
         if dropped:

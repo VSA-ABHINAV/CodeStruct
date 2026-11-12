@@ -738,7 +738,7 @@ async function loadArchitecture(forceRefresh = false) {
     if (loadingBox) loadingBox.style.display = "flex";
 
     if (loadingTitle) loadingTitle.textContent = "Synthesizing Architecture...";
-    if (loadingStatus) loadingStatus.textContent = "Clustering symbols and generating architectural narrative via Ollama (qwen2.5-coder:3b)...";
+    if (loadingStatus) loadingStatus.textContent = "Clustering symbols and generating architectural narrative via configured LLM...";
 
     // 15s timer for "taking longer than expected"
     const timeoutNoticeTimer = setTimeout(() => {
@@ -755,10 +755,12 @@ async function loadArchitecture(forceRefresh = false) {
     }, 32000);
 
     try {
+        const archSelect = document.getElementById("architecture-model-select");
+        const selectedModelId = archSelect && archSelect.value ? archSelect.value : null;
         const response = await fetch("/api/architecture/advanced", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ force_refresh: forceRefresh }),
+            body: JSON.stringify({ force_refresh: forceRefresh, model_id: selectedModelId }),
             signal: architectureAbortController.signal,
         });
 
@@ -1565,12 +1567,15 @@ async function sendChatMessage(customText = null) {
     if (sendBtn) sendBtn.disabled = true;
 
     try {
+        const chatSelect = document.getElementById("chat-model-select");
+        const selectedModelId = chatSelect && chatSelect.value ? chatSelect.value : null;
         const payload = {
             message: message,
-            context_symbol_id: symbolContextId || null
+            context_symbol_id: symbolContextId || null,
+            model_id: selectedModelId
         };
 
-        const res = await fetch("/api/qwen/chat", {
+        const res = await fetch("/api/llm/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -2060,8 +2065,686 @@ document.addEventListener("DOMContentLoaded", () => {
     applyResponsiveFloor();
     window.addEventListener("resize", applyResponsiveFloor);
 
+    // Initialize Multi-LLM Model Manager & Settings UI
+    initModelManager();
+
+    // Initialize First-Run Setup Wizard
+    initSetupWizard();
+
     console.log("[CodeStruct] Phase 9 frontend initialized.");
 });
+
+// ==========================================================================
+// First-Run Setup Wizard Controller (Windows Packaging & Onboarding)
+// ==========================================================================
+let wizardPollTimer = null;
+
+async function initSetupWizard() {
+    const btnOpen = document.getElementById("btn-open-wizard");
+    const btnClose = document.getElementById("btn-wizard-close");
+    const btnRecheck = document.getElementById("btn-wizard-recheck");
+    const btnBrowse = document.getElementById("btn-wizard-browse");
+    const btnInstallOllama = document.getElementById("btn-wizard-install-ollama");
+    const btnPullModel = document.getElementById("btn-wizard-pull-model");
+    const btnSkipAi = document.getElementById("btn-wizard-skip-ai");
+    const btnFinish = document.getElementById("btn-wizard-finish");
+    const inputModelsDir = document.getElementById("wizard-models-dir");
+
+    if (btnOpen) {
+        btnOpen.addEventListener("click", () => openSetupWizard());
+    }
+    if (btnClose) {
+        btnClose.addEventListener("click", () => closeSetupWizard());
+    }
+    if (btnRecheck) {
+        btnRecheck.addEventListener("click", () => {
+            const customDir = inputModelsDir ? inputModelsDir.value.trim() : "";
+            refreshWizardChecks(customDir || null);
+        });
+    }
+    if (btnBrowse) {
+        btnBrowse.addEventListener("click", async () => {
+            try {
+                const res = await fetch("/api/wizard/browse_folder", { method: "POST" });
+                const data = await res.json();
+                if (data.selected && inputModelsDir) {
+                    inputModelsDir.value = data.selected;
+                    refreshWizardChecks(data.selected);
+                } else if (!data.supported) {
+                    appendLog("[Wizard] Native folder dialog not supported in browser mode; type path directly.");
+                }
+            } catch (e) {
+                console.warn("[Wizard] Folder browse error:", e);
+            }
+        });
+    }
+    if (inputModelsDir) {
+        inputModelsDir.addEventListener("change", () => {
+            refreshWizardChecks(inputModelsDir.value.trim() || null);
+        });
+    }
+    if (btnInstallOllama) {
+        btnInstallOllama.addEventListener("click", () => triggerInstallOllama());
+    }
+    if (btnPullModel) {
+        btnPullModel.addEventListener("click", () => triggerPullModel());
+    }
+    // Toggle Ollama vs Cloud panels inside Setup Wizard
+    const modeRadios = document.querySelectorAll('input[name="wizard-ai-mode"]');
+    const ollamaSubpanel = document.getElementById("wizard-ollama-panel");
+    const cloudSubpanel = document.getElementById("wizard-cloud-panel");
+    modeRadios.forEach(radio => {
+        radio.addEventListener("change", () => {
+            const isCloud = radio.value === "cloud" && radio.checked;
+            if (ollamaSubpanel) ollamaSubpanel.style.display = isCloud ? "none" : "flex";
+            if (cloudSubpanel) cloudSubpanel.style.display = isCloud ? "flex" : "none";
+        });
+    });
+
+    const wizardCloudProvider = document.getElementById("wizard-cloud-provider");
+    const wizardCloudModel = document.getElementById("wizard-cloud-model");
+    const wizardCloudUrlRow = document.getElementById("wizard-cloud-url-row");
+    if (wizardCloudProvider) {
+        wizardCloudProvider.addEventListener("change", () => {
+            const pval = wizardCloudProvider.value;
+            if (wizardCloudUrlRow) {
+                wizardCloudUrlRow.style.display = (pval === "azure" || pval === "custom") ? "flex" : "none";
+            }
+            if (wizardCloudModel) {
+                if (pval === "openai") wizardCloudModel.value = "gpt-4o-mini";
+                else if (pval === "anthropic") wizardCloudModel.value = "claude-3-5-sonnet-20241022";
+                else if (pval === "gemini") wizardCloudModel.value = "gemini-1.5-flash";
+                else if (pval === "azure") wizardCloudModel.value = "gpt-4o";
+                else wizardCloudModel.value = "local-model";
+            }
+        });
+    }
+
+    if (btnSkipAi) {
+        btnSkipAi.addEventListener("click", () => completeSetupWizard(false));
+    }
+    if (btnFinish) {
+        btnFinish.addEventListener("click", () => completeSetupWizard(true));
+    }
+
+    // Auto-open on first run if not yet completed
+    try {
+        const res = await fetch("/api/wizard/status");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.config && !data.config.first_run_completed) {
+                renderWizardStatus(data);
+                openSetupWizard(false);
+            }
+        }
+    } catch (e) {
+        console.warn("[Wizard] Initial status check failed:", e);
+    }
+}
+
+function openSetupWizard(shouldRefresh = true) {
+    const overlay = document.getElementById("setup-wizard-overlay");
+    if (overlay) {
+        overlay.style.display = "flex";
+    }
+    if (shouldRefresh) {
+        const inputModelsDir = document.getElementById("wizard-models-dir");
+        const customDir = inputModelsDir ? inputModelsDir.value.trim() : "";
+        refreshWizardChecks(customDir || null);
+    }
+}
+
+function closeSetupWizard() {
+    const overlay = document.getElementById("setup-wizard-overlay");
+    if (overlay) {
+        overlay.style.display = "none";
+    }
+    if (wizardPollTimer) {
+        clearInterval(wizardPollTimer);
+        wizardPollTimer = null;
+    }
+}
+
+async function refreshWizardChecks(customModelsDir = null) {
+    try {
+        const q = customModelsDir ? "?models_dir=" + encodeURIComponent(customModelsDir) : "";
+        const res = await fetch("/api/wizard/status" + q);
+        if (!res.ok) return;
+        const data = await res.json();
+        renderWizardStatus(data);
+    } catch (e) {
+        console.error("[Wizard] Refresh checks failed:", e);
+    }
+}
+
+function renderWizardStatus(data) {
+    if (!data) return;
+    const cfg = data.config || {};
+    const chk = data.system_checks || {};
+
+    const grid = document.getElementById("wizard-checks-grid");
+    const cfgEl = document.getElementById("wizard-path-config");
+    const cacheEl = document.getElementById("wizard-path-cache");
+    const inputModelsDir = document.getElementById("wizard-models-dir");
+    const diskNote = document.getElementById("wizard-models-disk-note");
+    const btnInstall = document.getElementById("btn-wizard-install-ollama");
+
+    if (cfgEl) cfgEl.textContent = chk.config_path || "%APPDATA%\CodeStruct\config.json";
+    if (cacheEl) cacheEl.textContent = chk.cache_dir || "%LOCALAPPDATA%\CodeStruct\cache";
+    if (inputModelsDir && !inputModelsDir.value) {
+        inputModelsDir.value = chk.models_dir || cfg.ollama_models_dir || "";
+    }
+
+    if (diskNote) {
+        const freeGb = chk.disk_models_free_gb || 0;
+        diskNote.textContent = chk.disk_ok_ai
+            ? "Target drive has " + freeGb + " GB free (>= 2.5 GB required for model)."
+            : "Warning: Target drive only has " + freeGb + " GB free (< 2.5 GB recommended for qwen2.5-coder:3b).";
+        diskNote.style.color = chk.disk_ok_ai ? "#34d399" : "#fbbf24";
+    }
+
+    if (btnInstall) {
+        btnInstall.textContent = chk.ollama_installed
+            ? "✓ Ollama Installed"
+            : "⬇️ Install Ollama Runtime";
+    }
+
+    if (!grid) return;
+    const items = [
+        { label: "OS: " + (chk.os || "Unknown"), badge: "OK", cls: "ok" },
+        { label: "WebView2 GUI Runtime", badge: chk.webview2_installed ? (chk.webview2_version || "Ready") : "Missing", cls: chk.webview2_installed ? "ok" : "warn" },
+        { label: "Memory: " + (chk.ram_total_gb || "?") + " GB Total (" + (chk.ram_available_gb || "?") + " GB Free)", badge: chk.ram_ok_ai ? "AI Ready" : (chk.ram_ok_static ? "Static Only" : "Low RAM"), cls: chk.ram_ok_ai ? "ok" : "warn" },
+        { label: "Disk (%LOCALAPPDATA%): " + (chk.disk_cache_free_gb || "?") + " GB Free", badge: (chk.disk_cache_free_gb || 0) >= 0.5 ? "OK" : "Low Disk", cls: (chk.disk_cache_free_gb || 0) >= 0.5 ? "ok" : "warn" },
+        { label: "Ollama CLI / Daemon", badge: chk.ollama_running ? "Running" : (chk.ollama_installed ? "Installed (Stopped)" : "Not Installed"), cls: chk.ollama_running ? "ok" : (chk.ollama_installed ? "info" : "warn") },
+        { label: "Model (" + (chk.target_model || "qwen2.5-coder:3b") + ")", badge: chk.model_pulled ? "Pulled & Ready" : "Not Pulled", cls: chk.model_pulled ? "ok" : "warn" },
+    ];
+
+    grid.innerHTML = items.map(it =>
+        `<div class="wizard-check-item"><span class="wizard-check-label">${escapeHtml(it.label)}</span><span class="wizard-check-badge ${it.cls}">${escapeHtml(it.badge)}</span></div>`
+    ).join("");
+}
+
+async function triggerInstallOllama() {
+    showWizardTaskBox("Starting Ollama installation...");
+    try {
+        const res = await fetch("/api/wizard/ollama/install", { method: "POST" });
+        const data = await res.json();
+        if (data.started) {
+            startWizardTaskPolling();
+        } else {
+            showWizardTaskBox(data.message || "Could not start installer.");
+        }
+    } catch (e) {
+        showWizardTaskBox("Error: " + e.message);
+    }
+}
+
+async function triggerPullModel() {
+    const inputModelsDir = document.getElementById("wizard-models-dir");
+    const modelsDir = (inputModelsDir ? inputModelsDir.value.trim() : "") || "";
+    if (!modelsDir) {
+        showWizardTaskBox("Please specify a Custom Model Storage Directory first.");
+        return;
+    }
+
+    showWizardTaskBox("Starting model download into " + modelsDir + "...");
+    try {
+        const res = await fetch("/api/wizard/ollama/pull", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ models_dir: modelsDir, model_name: "qwen2.5-coder:3b" }),
+        });
+        const data = await res.json();
+        if (data.started) {
+            startWizardTaskPolling();
+        } else {
+            showWizardTaskBox(data.message || "Could not start model pull.");
+        }
+    } catch (e) {
+        showWizardTaskBox("Error: " + e.message);
+    }
+}
+
+function showWizardTaskBox(statusText, logs = []) {
+    const box = document.getElementById("wizard-task-box");
+    const statusEl = document.getElementById("wizard-task-status");
+    const logEl = document.getElementById("wizard-task-log");
+    if (box) box.style.display = "flex";
+    if (statusEl) statusEl.textContent = statusText;
+    if (logEl && logs.length > 0) {
+        logEl.textContent = logs.join("\n");
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+}
+
+function startWizardTaskPolling() {
+    if (wizardPollTimer) clearInterval(wizardPollTimer);
+    wizardPollTimer = setInterval(async () => {
+        try {
+            const res = await fetch("/api/wizard/ollama/task_status");
+            if (!res.ok) return;
+            const state = await res.json();
+            showWizardTaskBox(state.status.toUpperCase() + ": " + state.message, state.logs || []);
+            if (state.status === "completed" || state.status === "error") {
+                clearInterval(wizardPollTimer);
+                wizardPollTimer = null;
+                const inputModelsDir = document.getElementById("wizard-models-dir");
+                refreshWizardChecks(inputModelsDir ? inputModelsDir.value.trim() : null);
+                checkOllamaStartupStatus();
+            }
+        } catch (e) {
+            console.warn("[Wizard] Poll error:", e);
+        }
+    }, 1000);
+}
+
+async function completeSetupWizard(aiEnabled) {
+    const inputModelsDir = document.getElementById("wizard-models-dir");
+    const modelsDir = inputModelsDir ? inputModelsDir.value.trim() : null;
+
+    if (aiEnabled) {
+        const selectedModeEl = document.querySelector('input[name="wizard-ai-mode"]:checked');
+        const mode = selectedModeEl ? selectedModeEl.value : "ollama";
+        if (mode === "cloud") {
+            const cProvider = document.getElementById("wizard-cloud-provider")?.value || "openai";
+            const cModel = document.getElementById("wizard-cloud-model")?.value.trim() || "gpt-4o-mini";
+            const cKey = document.getElementById("wizard-cloud-key")?.value.trim() || "";
+            const cUrl = document.getElementById("wizard-cloud-url")?.value.trim() || null;
+
+            if (cKey || cProvider === "custom") {
+                try {
+                    await fetch("/api/models", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            provider: cProvider,
+                            display_name: `${cProvider.toUpperCase()} (${cModel})`,
+                            model_name: cModel,
+                            api_key: cKey || null,
+                            base_url: cUrl,
+                            enabled: true,
+                            is_default_chat: true,
+                            is_default_architecture: true,
+                        }),
+                    });
+                    const keyInput = document.getElementById("wizard-cloud-key");
+                    if (keyInput) keyInput.value = "";
+                    appendLog(`[Setup] Saved ${cProvider} cloud model (${cModel}) encrypted to %APPDATA%\\CodeStruct\\models.json.`);
+                } catch (err) {
+                    appendLog("[Error] Failed to save cloud model: " + err.message);
+                }
+            }
+        }
+    }
+
+    try {
+        const res = await fetch("/api/wizard/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ai_enabled: aiEnabled,
+                ollama_models_dir: modelsDir,
+                ollama_model: "qwen2.5-coder:3b",
+            }),
+        });
+        if (res.ok) {
+            appendLog("[Setup] Configuration saved to %APPDATA%\CodeStruct\config.json (AI Enabled: " + aiEnabled + ").");
+            if (window.ModelManager) await window.ModelManager.loadModels();
+            checkOllamaStartupStatus();
+            closeSetupWizard();
+        }
+    } catch (e) {
+        appendLog("[Error] Failed to save wizard configuration: " + e.message);
+    }
+}
+
+// ==========================================================================
+// Multi-LLM Provider Settings & Model Selectors (ModelManager)
+// ==========================================================================
+const ModelManager = {
+    models: [],
+
+    async loadModels() {
+        try {
+            const res = await fetch("/api/models");
+            if (!res.ok) return [];
+            const data = await res.json();
+            this.models = data.models || [];
+            this.renderModelSelectors();
+            this.renderModelsList();
+            return this.models;
+        } catch (e) {
+            console.warn("[ModelManager] Failed to load models:", e);
+            return [];
+        }
+    },
+
+    renderModelSelectors() {
+        const enabledModels = this.models.filter(m => m.enabled);
+        const chatSel = document.getElementById("chat-model-select");
+        const archSel = document.getElementById("architecture-model-select");
+
+        const populate = (selectEl, defaultFlag) => {
+            if (!selectEl) return;
+            const prevVal = selectEl.value;
+            if (enabledModels.length === 0) {
+                selectEl.innerHTML = `<option value="">No model configured</option>`;
+                return;
+            }
+            selectEl.innerHTML = enabledModels.map(m =>
+                `<option value="${escapeHtml(m.id)}">${escapeHtml(m.display_name)} [${escapeHtml(m.provider)}]</option>`
+            ).join("");
+
+            const defaultModel = enabledModels.find(m => m[defaultFlag]);
+            if (prevVal && enabledModels.some(m => m.id === prevVal)) {
+                selectEl.value = prevVal;
+            } else if (defaultModel) {
+                selectEl.value = defaultModel.id;
+            }
+        };
+
+        populate(chatSel, "is_default_chat");
+        populate(archSel, "is_default_architecture");
+    },
+
+    renderModelsList() {
+        const container = document.getElementById("models-list-container");
+        if (!container) return;
+
+        if (!this.models || this.models.length === 0) {
+            container.innerHTML = `<div class="wizard-field-hint">No models configured. Click "+ Add Model" to configure one.</div>`;
+            return;
+        }
+
+        container.innerHTML = "";
+        this.models.forEach(m => {
+            const card = document.createElement("div");
+            card.className = "model-card";
+            card.dataset.id = m.id;
+
+            const keyDisplay = m.provider === "ollama"
+                ? "Local (No API Key)"
+                : (m.has_key ? `Key: ${escapeHtml(m.masked_key)}` : "No API Key Set");
+
+            const defaultBadges = [];
+            if (m.is_default_chat) defaultBadges.push(`<span class="model-default-pill">Default Chat</span>`);
+            if (m.is_default_architecture) defaultBadges.push(`<span class="model-default-pill">Default Architecture</span>`);
+
+            card.innerHTML = `
+                <div class="model-card-top">
+                    <div class="model-card-title">
+                        <span class="provider-badge provider-${escapeHtml(m.provider)}">${escapeHtml(m.provider)}</span>
+                        <span class="model-display-name">${escapeHtml(m.display_name)}</span>
+                        <span class="model-id-sub">(${escapeHtml(m.model_name)})</span>
+                        ${defaultBadges.join("")}
+                    </div>
+                    <div class="model-card-actions">
+                        <button class="wizard-mini-btn btn-validate-model" type="button">Test Connection</button>
+                        <button class="wizard-mini-btn btn-default-chat" type="button" title="Set as default for AI Chat">Set Chat</button>
+                        <button class="wizard-mini-btn btn-default-arch" type="button" title="Set as default for Architecture">Set Arch</button>
+                        <button class="wizard-mini-btn btn-edit-model" type="button">Edit</button>
+                        <button class="wizard-mini-btn btn-delete-model" type="button" style="color: #f87171;">Delete</button>
+                    </div>
+                </div>
+                <div class="model-card-meta">
+                    <span>${keyDisplay} ${m.base_url ? ` &bull; ${escapeHtml(m.base_url)}` : ""}</span>
+                    <span>Status: ${m.enabled ? "Enabled" : "Disabled"}</span>
+                </div>
+                <div class="model-validation-msg" style="display: none;"></div>
+            `;
+
+            const msgEl = card.querySelector(".model-validation-msg");
+            card.querySelector(".btn-validate-model").addEventListener("click", async () => {
+                if (msgEl) {
+                    msgEl.style.display = "block";
+                    msgEl.className = "model-validation-msg";
+                    msgEl.textContent = "Testing connection...";
+                }
+                const result = await this.validateModel(m.id);
+                if (msgEl) {
+                    if (result.valid) {
+                        const count = (result.models || []).length;
+                        msgEl.className = "model-validation-msg ok";
+                        msgEl.textContent = `✓ Connected successfully (${count} model${count === 1 ? "" : "s"} reachable).`;
+                    } else {
+                        msgEl.className = "model-validation-msg err";
+                        msgEl.textContent = `✗ Validation failed: ${result.error || "Connection error"}`;
+                    }
+                }
+            });
+
+            card.querySelector(".btn-default-chat").addEventListener("click", () => this.setDefault(m.id, "chat"));
+            card.querySelector(".btn-default-arch").addEventListener("click", () => this.setDefault(m.id, "architecture"));
+            card.querySelector(".btn-edit-model").addEventListener("click", () => this.openForm(m));
+            card.querySelector(".btn-delete-model").addEventListener("click", () => this.deleteModel(m.id));
+
+            container.appendChild(card);
+        });
+    },
+
+    openForm(existing = null) {
+        const section = document.getElementById("model-form-section");
+        const heading = document.getElementById("model-form-heading");
+        const idInput = document.getElementById("model-form-id");
+        const providerSel = document.getElementById("model-form-provider");
+        const displayInput = document.getElementById("model-form-display-name");
+        const nameInput = document.getElementById("model-form-name");
+        const keyInput = document.getElementById("model-form-api-key");
+        const keyHint = document.getElementById("model-form-key-hint");
+        const urlInput = document.getElementById("model-form-base-url");
+        const depInput = document.getElementById("model-form-deployment");
+        const verInput = document.getElementById("model-form-api-version");
+        const enCheck = document.getElementById("model-form-enabled");
+        const chatCheck = document.getElementById("model-form-default-chat");
+        const archCheck = document.getElementById("model-form-default-arch");
+        const statusEl = document.getElementById("model-form-status");
+
+        if (statusEl) statusEl.textContent = "";
+        if (keyInput) keyInput.value = "";
+
+        if (existing) {
+            if (heading) heading.textContent = `Edit Model: ${existing.display_name}`;
+            if (idInput) idInput.value = existing.id;
+            if (providerSel) providerSel.value = existing.provider;
+            if (displayInput) displayInput.value = existing.display_name;
+            if (nameInput) nameInput.value = existing.model_name;
+            if (keyHint) keyHint.textContent = existing.has_key ? `(Stored: ${existing.masked_key} — leave blank to keep)` : "";
+            if (urlInput) urlInput.value = existing.base_url || "";
+            if (depInput) depInput.value = existing.deployment_name || "";
+            if (verInput) verInput.value = existing.api_version || "";
+            if (enCheck) enCheck.checked = existing.enabled;
+            if (chatCheck) chatCheck.checked = existing.is_default_chat;
+            if (archCheck) archCheck.checked = existing.is_default_architecture;
+        } else {
+            if (heading) heading.textContent = "Add New Model Provider";
+            if (idInput) idInput.value = "";
+            if (providerSel) providerSel.value = "openai";
+            if (displayInput) displayInput.value = "OpenAI GPT-4o Mini";
+            if (nameInput) nameInput.value = "gpt-4o-mini";
+            if (keyHint) keyHint.textContent = "";
+            if (urlInput) urlInput.value = "";
+            if (depInput) depInput.value = "";
+            if (verInput) verInput.value = "2024-06-01";
+            if (enCheck) enCheck.checked = true;
+            if (chatCheck) chatCheck.checked = false;
+            if (archCheck) archCheck.checked = false;
+        }
+
+        this.updateDynamicFormFields();
+        if (section) section.style.display = "flex";
+    },
+
+    updateDynamicFormFields() {
+        const provider = document.getElementById("model-form-provider")?.value || "openai";
+        const keyField = document.getElementById("field-api-key");
+        const depField = document.getElementById("field-deployment-name");
+        const verField = document.getElementById("field-api-version");
+        const urlField = document.getElementById("field-base-url");
+
+        if (keyField) keyField.style.display = provider === "ollama" ? "none" : "flex";
+        if (depField) depField.style.display = provider === "azure" ? "flex" : "none";
+        if (verField) verField.style.display = provider === "azure" ? "flex" : "none";
+        if (urlField) urlField.style.display = provider === "gemini" ? "none" : "flex";
+    },
+
+    async saveModel() {
+        const idVal = document.getElementById("model-form-id")?.value.trim() || null;
+        const provider = document.getElementById("model-form-provider")?.value || "openai";
+        const displayName = document.getElementById("model-form-display-name")?.value.trim() || "";
+        const modelName = document.getElementById("model-form-name")?.value.trim() || "";
+        const apiKey = document.getElementById("model-form-api-key")?.value.trim() || null;
+        const baseUrl = document.getElementById("model-form-base-url")?.value.trim() || null;
+        const deploymentName = document.getElementById("model-form-deployment")?.value.trim() || null;
+        const apiVersion = document.getElementById("model-form-api-version")?.value.trim() || null;
+        const enabled = document.getElementById("model-form-enabled")?.checked ?? true;
+        const defChat = document.getElementById("model-form-default-chat")?.checked ?? false;
+        const defArch = document.getElementById("model-form-default-arch")?.checked ?? false;
+        const statusEl = document.getElementById("model-form-status");
+
+        if (!modelName) {
+            if (statusEl) statusEl.textContent = "Model Name is required.";
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/models", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: idVal,
+                    provider: provider,
+                    display_name: displayName || modelName,
+                    model_name: modelName,
+                    api_key: apiKey,
+                    base_url: baseUrl,
+                    deployment_name: deploymentName,
+                    api_version: apiVersion,
+                    enabled: enabled,
+                    is_default_chat: defChat,
+                    is_default_architecture: defArch,
+                }),
+            });
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const saved = await res.json();
+            const keyInput = document.getElementById("model-form-api-key");
+            if (keyInput) keyInput.value = "";
+            document.getElementById("model-form-section").style.display = "none";
+            appendLog(`[Models] Saved encrypted config for ${saved.display_name} (${saved.provider}).`);
+            await this.loadModels();
+            checkOllamaStartupStatus();
+        } catch (e) {
+            if (statusEl) statusEl.textContent = `Save failed: ${e.message}`;
+        }
+    },
+
+    async deleteModel(modelId) {
+        try {
+            const res = await fetch(`/api/models/${encodeURIComponent(modelId)}`, { method: "DELETE" });
+            if (res.ok) {
+                appendLog(`[Models] Deleted model configuration: ${modelId}`);
+                await this.loadModels();
+                checkOllamaStartupStatus();
+            }
+        } catch (e) {
+            appendLog(`[Error] Delete model failed: ${e.message}`);
+        }
+    },
+
+    async validateModel(modelId) {
+        try {
+            const res = await fetch(`/api/models/${encodeURIComponent(modelId)}/validate`, { method: "POST" });
+            if (!res.ok) {
+                return { valid: false, models: [], error: `HTTP ${res.status}` };
+            }
+            return await res.json();
+        } catch (e) {
+            return { valid: false, models: [], error: e.message };
+        }
+    },
+
+    async setDefault(modelId, target) {
+        try {
+            const res = await fetch(`/api/models/${encodeURIComponent(modelId)}/set-default`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ target }),
+            });
+            if (res.ok) {
+                await this.loadModels();
+                checkOllamaStartupStatus();
+            }
+        } catch (e) {
+            appendLog(`[Error] Failed to set default model: ${e.message}`);
+        }
+    }
+};
+
+function initModelManager() {
+    const overlay = document.getElementById("models-settings-overlay");
+    const btnOpen = document.getElementById("btn-open-models");
+    const btnClose = document.getElementById("btn-models-close");
+    const btnNew = document.getElementById("btn-models-new");
+    const btnCancel = document.getElementById("btn-model-form-cancel");
+    const btnSave = document.getElementById("btn-model-form-save");
+    const providerSel = document.getElementById("model-form-provider");
+    const archSelect = document.getElementById("architecture-model-select");
+
+    if (btnOpen && overlay) {
+        btnOpen.addEventListener("click", async () => {
+            overlay.style.display = "flex";
+            await ModelManager.loadModels();
+        });
+    }
+    if (btnClose && overlay) {
+        btnClose.addEventListener("click", () => {
+            overlay.style.display = "none";
+        });
+    }
+    if (btnNew) {
+        btnNew.addEventListener("click", () => ModelManager.openForm(null));
+    }
+    if (btnCancel) {
+        btnCancel.addEventListener("click", () => {
+            const sec = document.getElementById("model-form-section");
+            if (sec) sec.style.display = "none";
+        });
+    }
+    if (btnSave) {
+        btnSave.addEventListener("click", () => ModelManager.saveModel());
+    }
+    if (providerSel) {
+        providerSel.addEventListener("change", () => {
+            ModelManager.updateDynamicFormFields();
+            const pval = providerSel.value;
+            const nameIn = document.getElementById("model-form-name");
+            const dispIn = document.getElementById("model-form-display-name");
+            const idVal = document.getElementById("model-form-id")?.value;
+            if (!idVal && nameIn && dispIn) {
+                if (pval === "openai") { nameIn.value = "gpt-4o-mini"; dispIn.value = "OpenAI GPT-4o Mini"; }
+                else if (pval === "anthropic") { nameIn.value = "claude-3-5-sonnet-20241022"; dispIn.value = "Claude 3.5 Sonnet"; }
+                else if (pval === "gemini") { nameIn.value = "gemini-1.5-flash"; dispIn.value = "Gemini 1.5 Flash"; }
+                else if (pval === "azure") { nameIn.value = "gpt-4o"; dispIn.value = "Azure OpenAI GPT-4o"; }
+                else if (pval === "custom") { nameIn.value = "local-model"; dispIn.value = "Custom OpenAI-Compat"; }
+                else if (pval === "ollama") { nameIn.value = "qwen2.5-coder:3b"; dispIn.value = "Ollama (qwen2.5-coder:3b)"; }
+            }
+        });
+    }
+    if (archSelect) {
+        archSelect.addEventListener("change", () => {
+            if (window.activeCenterTab === "architecture" && window.lastGraphData) {
+                window.lastArchitectureData = null;
+                loadArchitecture(true);
+            }
+        });
+    }
+
+    // Load models initially to populate Chat & Architecture dropdown selectors
+    ModelManager.loadModels();
+}
+
+window.ModelManager = ModelManager;
 
 // Export helpers for programmatic access
 window.runAnalysis = runAnalysis;

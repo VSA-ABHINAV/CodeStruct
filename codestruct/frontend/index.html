@@ -52,6 +52,8 @@
                     <button id="btn-analyze" class="toolbar-btn primary-btn" type="button">Analyze</button>
                 </div>
                 <button id="btn-open-project" class="toolbar-btn" type="button">Open Project</button>
+                <button id="btn-open-models" class="toolbar-btn" type="button" title="Configure Multi-LLM Providers & API Keys">⚙️ Models</button>
+                <button id="btn-open-wizard" class="toolbar-btn" type="button" title="System Check & AI Setup Wizard">🛠️ Setup</button>
             </div>
         </header>
 
@@ -231,7 +233,10 @@
                                 <span id="architecture-cluster-count" class="architecture-stat-pill">0 Components</span>
                                 <span id="architecture-unclustered-count" class="architecture-stat-pill">0 Unclustered</span>
                             </div>
-                            <button id="btn-architecture-refresh" class="toolbar-btn" type="button" title="Re-cluster architecture bypassing cache">🔄 Re-cluster</button>
+                            <div class="architecture-header-right">
+                                <select id="architecture-model-select" class="model-select" title="Select LLM model for Architecture clustering"></select>
+                                <button id="btn-architecture-refresh" class="toolbar-btn" type="button" title="Re-cluster architecture bypassing cache">🔄 Re-cluster</button>
+                            </div>
                         </div>
 
                         <!-- Architectural Narrative Card -->
@@ -354,17 +359,17 @@
                     </div>
                 </section>
 
-                <!-- Qwen Assistant Panel (Bottom) -->
+                <!-- AI Assistant Panel (Bottom) -->
                 <section id="qwen-panel" class="panel">
                     <div class="panel-header">
-                        <span class="panel-title">Qwen Assistant</span>
+                        <span class="panel-title">AI Assistant</span>
                         <div class="panel-controls chat-header-controls">
-                            <span id="chat-status-badge" class="chat-status-badge status-idle" title="Ollama connection state">
+                            <span id="chat-status-badge" class="chat-status-badge status-idle" title="Active AI model connection state">
                                 <span class="chat-status-dot"></span>
                                 <span id="chat-status-text">Ready</span>
                             </span>
-                            <span class="model-badge">qwen2.5-coder:3b</span>
-                            <button id="btn-toggle-qwen" class="dock-toggle-btn" title="Toggle Qwen dock" type="button" aria-label="Toggle Qwen">
+                            <select id="chat-model-select" class="model-select" title="Select active LLM model for Chat"></select>
+                            <button id="btn-toggle-qwen" class="dock-toggle-btn" title="Toggle AI Assistant dock" type="button" aria-label="Toggle AI Assistant">
                                 <span class="toggle-icon">▶</span>
                             </button>
                         </div>
@@ -417,6 +422,221 @@
                 </div>
             </div>
         </footer>
+    </div>
+
+    <!-- First-Run Setup Wizard Modal -->
+    <div id="setup-wizard-overlay" class="wizard-overlay" style="display: none;">
+        <div class="wizard-modal" role="dialog" aria-labelledby="wizard-title">
+            <div class="wizard-header">
+                <div class="wizard-header-title">
+                    <span class="wizard-logo">⚡</span>
+                    <div>
+                        <h2 id="wizard-title">Welcome to CodeStruct — Setup &amp; System Readiness</h2>
+                        <p class="wizard-subtitle">Zero-execution Python AST architecture platform &bull; Config saved to <code>%APPDATA%\CodeStruct</code></p>
+                    </div>
+                </div>
+                <button id="btn-wizard-close" class="dock-toggle-btn" type="button" title="Close setup wizard" aria-label="Close">✕</button>
+            </div>
+
+            <div class="wizard-body">
+                <!-- 1. System Checks -->
+                <div class="wizard-section">
+                    <div class="wizard-section-header">
+                        <span>1. System Readiness Checks</span>
+                        <button id="btn-wizard-recheck" class="wizard-mini-btn" type="button">↻ Recheck</button>
+                    </div>
+                    <div id="wizard-checks-grid" class="wizard-checks-grid">
+                        <div class="wizard-check-item"><span class="check-label">Running system diagnostics...</span></div>
+                    </div>
+                    <div class="wizard-paths-summary">
+                        <div><strong>Config Path:</strong> <code id="wizard-path-config">-</code></div>
+                        <div><strong>Cache Dir:</strong> <code id="wizard-path-cache">-</code></div>
+                    </div>
+                </div>
+
+                <!-- 2. Mandatory Open-Source AI Model Resource Warning -->
+                <div class="wizard-warning-box">
+                    <div class="wizard-warning-header">
+                        <span class="warning-icon">⚠️</span>
+                        <strong>IMPORTANT: Optional Local Open-Source AI Model &amp; Resource Impact</strong>
+                    </div>
+                    <p>
+                        CodeStruct's AI Chat Assistant and Phase 19 Advanced Architecture clustering run an open-source Large Language Model
+                        (<code>qwen2.5-coder:3b</code>) locally via Ollama. Choosing to install and execute this model has the following system impacts:
+                    </p>
+                    <ul>
+                        <li><strong>Disk Storage (~2.2 GB):</strong> Pulling <code>qwen2.5-coder:3b</code> downloads ~2.0 GB of model weights and permanently reserves ~2.2 GB in your chosen model directory.</li>
+                        <li><strong>Memory Footprint (3.0 GB – 4.5 GB RAM/VRAM):</strong> Running inference allocates 3.0–4.5 GB of system RAM (or dedicated GPU VRAM).</li>
+                        <li><strong>CPU / GPU &amp; Thermal Load:</strong> Token generation increases CPU/GPU load, fan activity, and laptop battery draw.</li>
+                    </ul>
+                    <p class="wizard-degradation-note">
+                        <strong>Graceful Degradation Guarantee:</strong> If you skip AI setup, CodeStruct operates 100% reliably offline — AST parsing, interactive relationship graphs, symbol tables, pattern detection, and change-impact analysis all work without Ollama.
+                    </p>
+                </div>
+
+                <!-- 3. Optional Local Ollama or Cloud Provider Setup -->
+                <div class="wizard-section">
+                    <div class="wizard-section-header">
+                        <span>2. Choose AI Provider (Optional)</span>
+                    </div>
+
+                    <div class="wizard-provider-tabs">
+                        <label class="wizard-radio-pill">
+                            <input type="radio" name="wizard-ai-mode" value="ollama" checked>
+                            <span>Local Ollama (qwen2.5-coder:3b)</span>
+                        </label>
+                        <label class="wizard-radio-pill">
+                            <input type="radio" name="wizard-ai-mode" value="cloud">
+                            <span>Cloud Provider (OpenAI / Anthropic / Gemini / Azure / Custom)</span>
+                        </label>
+                    </div>
+
+                    <!-- Local Ollama Sub-panel -->
+                    <div id="wizard-ollama-panel" class="wizard-subpanel">
+                        <div class="wizard-storage-row">
+                            <label for="wizard-models-dir">Custom Model Storage Directory (<code>OLLAMA_MODELS</code>):</label>
+                            <div class="wizard-storage-input-group">
+                                <input id="wizard-models-dir" type="text" class="wizard-input" placeholder="e.g., D:\OllamaModels or C:\Users\...\models">
+                                <button id="btn-wizard-browse" class="wizard-mini-btn" type="button">Browse...</button>
+                            </div>
+                            <div id="wizard-models-disk-note" class="wizard-field-hint">Checking target drive free space...</div>
+                        </div>
+
+                        <div class="wizard-ai-actions">
+                            <button id="btn-wizard-install-ollama" class="toolbar-btn" type="button">⬇️ Install Ollama Runtime</button>
+                            <button id="btn-wizard-pull-model" class="toolbar-btn primary-btn" type="button">📥 Pull qwen2.5-coder:3b (~2.0 GB)</button>
+                        </div>
+
+                        <div id="wizard-task-box" class="wizard-task-box" style="display: none;">
+                            <div id="wizard-task-status" class="wizard-task-status">Idle</div>
+                            <pre id="wizard-task-log" class="wizard-task-log"></pre>
+                        </div>
+                    </div>
+
+                    <!-- Cloud Provider Sub-panel -->
+                    <div id="wizard-cloud-panel" class="wizard-subpanel" style="display: none;">
+                        <p class="wizard-field-hint">API keys are encrypted at rest with Fernet (PBKDF2 + Machine GUID) in <code>%APPDATA%\CodeStruct\models.json</code>.</p>
+                        <div class="model-form-grid">
+                            <div class="form-field">
+                                <label for="wizard-cloud-provider">Provider</label>
+                                <select id="wizard-cloud-provider" class="wizard-input">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic (Claude)</option>
+                                    <option value="gemini">Google Gemini</option>
+                                    <option value="azure">Azure OpenAI</option>
+                                    <option value="custom">Custom OpenAI-Compatible</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label for="wizard-cloud-model">Model Name</label>
+                                <input id="wizard-cloud-model" type="text" class="wizard-input" value="gpt-4o-mini" placeholder="gpt-4o / claude-3-5-sonnet-20241022 / gemini-1.5-flash">
+                            </div>
+                            <div class="form-field full-span">
+                                <label for="wizard-cloud-key">API Key</label>
+                                <input id="wizard-cloud-key" type="password" class="wizard-input" placeholder="sk-... / AIza...">
+                            </div>
+                            <div class="form-field full-span" id="wizard-cloud-url-row" style="display: none;">
+                                <label for="wizard-cloud-url">Base URL / Endpoint</label>
+                                <input id="wizard-cloud-url" type="text" class="wizard-input" placeholder="https://api.openai.com/v1 or https://your-resource.openai.azure.com">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-footer">
+                <button id="btn-wizard-skip-ai" class="toolbar-btn" type="button">Skip AI — Static Analysis Only</button>
+                <button id="btn-wizard-finish" class="toolbar-btn primary-btn" type="button">Save Configuration &amp; Launch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multi-LLM Provider & Model Settings Modal -->
+    <div id="models-settings-overlay" class="wizard-overlay" style="display: none;">
+        <div class="wizard-modal models-modal" role="dialog" aria-labelledby="models-settings-title">
+            <div class="wizard-header">
+                <div class="wizard-header-title">
+                    <span class="wizard-logo">⚙️</span>
+                    <div>
+                        <h2 id="models-settings-title">LLM Providers &amp; Model Settings</h2>
+                        <p class="wizard-subtitle">Encrypted key storage at <code>%APPDATA%\CodeStruct\models.json</code> &bull; Keys masked &amp; never exposed</p>
+                    </div>
+                </div>
+                <button id="btn-models-close" class="dock-toggle-btn" type="button" title="Close Model Settings" aria-label="Close">✕</button>
+            </div>
+
+            <div class="wizard-body">
+                <!-- Configured Models List -->
+                <div class="wizard-section">
+                    <div class="wizard-section-header">
+                        <span>Configured Models</span>
+                        <button id="btn-models-new" class="wizard-mini-btn" type="button">+ Add Model</button>
+                    </div>
+                    <div id="models-list-container" class="models-list-container">
+                        <div class="wizard-field-hint">Loading configured models...</div>
+                    </div>
+                </div>
+
+                <!-- Add / Edit Model Form -->
+                <div id="model-form-section" class="wizard-section" style="display: none;">
+                    <div class="wizard-section-header">
+                        <span id="model-form-heading">Add New Model Provider</span>
+                        <button id="btn-model-form-cancel" class="wizard-mini-btn" type="button">Cancel</button>
+                    </div>
+
+                    <input id="model-form-id" type="hidden" value="">
+                    <div class="model-form-grid">
+                        <div class="form-field">
+                            <label for="model-form-provider">Provider</label>
+                            <select id="model-form-provider" class="wizard-input">
+                                <option value="ollama">Ollama (Local)</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic (Claude)</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="azure">Azure OpenAI</option>
+                                <option value="custom">Custom OpenAI-Compatible</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="model-form-display-name">Display Name</label>
+                            <input id="model-form-display-name" type="text" class="wizard-input" placeholder="e.g., GPT-4o">
+                        </div>
+                        <div class="form-field">
+                            <label for="model-form-name">Model Name / ID</label>
+                            <input id="model-form-name" type="text" class="wizard-input" placeholder="e.g., gpt-4o / claude-3-5-sonnet-20241022">
+                        </div>
+                        <div class="form-field" id="field-api-key">
+                            <label for="model-form-api-key">API Key <span class="key-mask-hint" id="model-form-key-hint"></span></label>
+                            <input id="model-form-api-key" type="password" class="wizard-input" placeholder="Enter API key (Fernet encrypted)">
+                        </div>
+                        <div class="form-field" id="field-base-url">
+                            <label for="model-form-base-url">Base URL / Endpoint</label>
+                            <input id="model-form-base-url" type="text" class="wizard-input" placeholder="Optional (or http://localhost:11434 for Ollama)">
+                        </div>
+                        <div class="form-field" id="field-deployment-name" style="display: none;">
+                            <label for="model-form-deployment">Azure Deployment Name</label>
+                            <input id="model-form-deployment" type="text" class="wizard-input" placeholder="Azure deployment ID">
+                        </div>
+                        <div class="form-field" id="field-api-version" style="display: none;">
+                            <label for="model-form-api-version">Azure API Version</label>
+                            <input id="model-form-api-version" type="text" class="wizard-input" placeholder="2024-06-01">
+                        </div>
+                    </div>
+
+                    <div class="model-form-checks">
+                        <label><input id="model-form-enabled" type="checkbox" checked> Enabled</label>
+                        <label><input id="model-form-default-chat" type="checkbox"> Default for AI Chat</label>
+                        <label><input id="model-form-default-arch" type="checkbox"> Default for Architecture Clustering</label>
+                    </div>
+
+                    <div id="model-form-status" class="wizard-field-hint"></div>
+
+                    <div class="wizard-footer" style="padding: 8px 0 0 0; background: transparent; border-top: none;">
+                        <button id="btn-model-form-save" class="toolbar-btn primary-btn" type="button">Save Model Configuration</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Local vendored Cytoscape for offline operation -->

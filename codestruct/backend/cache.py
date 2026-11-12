@@ -1,16 +1,16 @@
-"""Persistent incremental cache for CodeStruct (Phase 14)."""
-import json
+"""Persistent incremental cache for CodeStruct (Phase 14 & Windows Packaging)."""
 import hashlib
-import os
+import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from backend.config import get_cache_dir
 
 
 def _cache_path(project_root: str) -> Path:
     abs_root = Path(project_root).resolve()
     fingerprint = hashlib.sha256(str(abs_root).encode("utf-8")).hexdigest()
-    cache_dir = Path(".codestruct_cache")
-    cache_dir.mkdir(exist_ok=True)
+    cache_dir = get_cache_dir()
     return cache_dir / f"{fingerprint}.json"
 
 
