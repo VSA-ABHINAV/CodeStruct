@@ -1,5 +1,8 @@
 # CodeStruct
 
+[![Download latest release](https://img.shields.io/github/downloads/VSA-ABHINAV/CodeStruct/latest/total?label=download%20exe&logo=github)](https://github.com/VSA-ABHINAV/CodeStruct/releases/latest/download/CodeStruct.exe)
+[![Release](https://img.shields.io/github/v/release/VSA-ABHINAV/CodeStruct)](https://github.com/VSA-ABHINAV/CodeStruct/releases)
+
 > **A Native Desktop Static Analysis Platform & Architectural Intelligence Environment for Python**
 
 CodeStruct is an offline-first desktop application that statically parses Python codebases into interactive architecture graphs, sortable symbol tables, design-pattern catalogs, change-impact blast radiuses, and AI-synthesized architectural component clusters. The AI layer is **provider-agnostic**: connect a local Ollama runtime **or** any cloud model (OpenAI, Anthropic Claude, Google Gemini, Azure OpenAI, or any OpenAI-compatible endpoint) via the built-in Settings manager with encrypted API key storage.
@@ -14,10 +17,14 @@ No Python setup required — grab the prebuilt Windows desktop app directly:
 
 | Download | Link | Size |
 |---|---|---|
-| **CodeStruct.exe (Windows x64)** | [`dist/CodeStruct.exe`](https://github.com/VSA-ABHINAV/CodeStruct/raw/master/dist/CodeStruct.exe) | ~37 MB |
+| **CodeStruct.exe (Windows x64)** — latest release | [`Download from Releases`](https://github.com/VSA-ABHINAV/CodeStruct/releases/latest/download/CodeStruct.exe) | ~37 MB |
+| Direct from repository | [`dist/CodeStruct.exe`](https://github.com/VSA-ABHINAV/CodeStruct/raw/master/dist/CodeStruct.exe) | ~37 MB |
 
 **Direct link (copy/paste):**
-`https://github.com/VSA-ABHINAV/CodeStruct/raw/master/dist/CodeStruct.exe`
+`https://github.com/VSA-ABHINAV/CodeStruct/releases/latest/download/CodeStruct.exe`
+
+> [!TIP]
+> The **Releases** link above always points to the newest tagged build. Every release page lists its SHA-256 checksum so you can verify the download (`Get-FileHash CodeStruct.exe`).
 
 > [!NOTE]
 > - **Windows SmartScreen:** The executable is unsigned. Windows may show *"Windows protected your PC"* on first launch — click **More info → Run anyway**.
