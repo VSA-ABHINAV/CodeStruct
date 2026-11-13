@@ -2,20 +2,43 @@
 
 > **A Native Desktop Static Analysis Platform & Architectural Intelligence Environment for Python**
 
-CodeStruct is an offline-first desktop application that statically parses Python codebases into interactive architecture graphs, sortable symbol tables, design-pattern catalogs, change-impact blast radiuses, and AI-synthesized architectural component clusters.
+CodeStruct is an offline-first desktop application that statically parses Python codebases into interactive architecture graphs, sortable symbol tables, design-pattern catalogs, change-impact blast radiuses, and AI-synthesized architectural component clusters. The AI layer is **provider-agnostic**: connect a local Ollama runtime **or** any cloud model (OpenAI, Anthropic Claude, Google Gemini, Azure OpenAI, or any OpenAI-compatible endpoint) via the built-in Settings manager with encrypted API key storage.
 
 Analysis is **100% static** — powered exclusively by Python's standard library `ast` module. **No code from analyzed projects is ever executed, evaluated, or imported**, ensuring total safety when inspecting untrusted or arbitrary repositories.
 
 ---
 
+## Download the Ready-Made Executable
+
+No Python setup required — grab the prebuilt Windows desktop app directly:
+
+| Download | Link | Size |
+|---|---|---|
+| **CodeStruct.exe (Windows x64)** | [`dist/CodeStruct.exe`](https://github.com/VSA-ABHINAV/CodeStruct/raw/master/dist/CodeStruct.exe) | ~37 MB |
+
+**Direct link (copy/paste):**
+`https://github.com/VSA-ABHINAV/CodeStruct/raw/master/dist/CodeStruct.exe`
+
+> [!NOTE]
+> - **Windows SmartScreen:** The executable is unsigned. Windows may show *"Windows protected your PC"* on first launch — click **More info → Run anyway**.
+> - Config, AST cache, and logs are written to `%APPDATA%\CodeStruct` and `%LOCALAPPDATA%\CodeStruct` on first run — nothing is required next to the `.exe`.
+> - **Other platforms:** build from source instead — see [Step-by-Step Environment Setup](#step-by-step-environment-setup) and [Building the Standalone Executable](#building-the-standalone-executable).
+> - After downloading, rebuilds are only needed when a new version lands; re-download the file to update.
+
+---
+
 ## Table of Contents
 
+- [Download the Ready-Made Executable](#download-the-ready-made-executable)
 - [Architectural Overview](#architectural-overview)
 - [Prerequisite System Capabilities](#prerequisite-system-capabilities)
 - [Mandatory System Notice: Local AI Runtime & Model](#mandatory-system-notice-local-ai-runtime--model)
 - [Step-by-Step Environment Setup](#step-by-step-environment-setup)
 - [Local AI Installation & Model Configuration](#local-ai-installation--model-configuration)
+- [Multi-LLM Providers, API Keys & Model Settings](#multi-llm-providers-api-keys--model-settings)
+- [First-Run Setup Wizard](#first-run-setup-wizard)
 - [Execution Guide](#execution-guide)
+- [Building the Standalone Executable](#building-the-standalone-executable)
 - [Verification & Test Suite](#verification--test-suite)
 - [Core Feature Tour](#core-feature-tour)
 - [REST API Reference](#rest-api-reference)
@@ -50,9 +73,12 @@ flowchart TD
         ARCH["advanced_architecture.py (Component Clustering & Validation Safety Net)"]
     end
 
-    subgraph LLM ["Local AI Runtime (Optional Ollama Daemon)"]
-        OLLAMA["Ollama Service (http://localhost:11434)"]
-        MODEL["qwen2.5-coder:3b (Local Neural Weights)"]
+    subgraph LLM ["AI Runtime (Multi-LLM Provider Abstraction)"]
+        OLLAMA["OllamaProvider (http://localhost:11434)"]
+        OPENAI["OpenAIProvider (OpenAI / Azure / Custom-compatible)"]
+        ANTHROPIC["AnthropicProvider (Claude Messages API)"]
+        GEMINI["GeminiProvider (google-genai SDK)"]
+        KEYS["model_config.py (Fernet-Encrypted API Keys in AppData/models.json)"]
     end
 
     UI <-->|HTTP JSON / REST| Backend
@@ -62,9 +88,10 @@ flowchart TD
 
 ### Architectural Guarantees
 1. **Zero Execution of Analyzed Code:** Parsing uses Python's built-in `ast` module. Code is parsed into syntactic trees without invoking `exec`, `eval`, or dynamic `import`.
-2. **Offline-First:** Fonts (Inter, JetBrains Mono) and Cytoscape.js are fully vendored in `codestruct/frontend/static/vendor/`. No runtime internet connection is required.
+2. **Offline-First:** Fonts (Inter, JetBrains Mono) and Cytoscape.js are fully vendored in `codestruct/frontend/static/vendor/`. No runtime internet connection is required for core static analysis (cloud AI providers are optional and user-initiated).
 3. **Deterministic Symbol Accounting:** The Phase 19 validation layer guarantees that every real symbol in the AST graph is accounted for in component clusters or in `unclustered_symbol_ids`. Any hallucinated IDs from the local LLM are dropped and logged.
 4. **Resilient Port Binding:** Automatically detects if port `8000` is occupied (e.g., `[Errno 10048]`) and binds to the next available loopback port (`8001`–`8020`).
+5. **Encrypted Credential Storage:** API keys are Fernet-encrypted (PBKDF2-HMAC-SHA256, 100,000 iterations, machine-GUID-bound) at rest in `%APPDATA%\CodeStruct\models.json`. Keys are never persisted, logged, cached, or returned in plaintext; error strings are automatically redacted.
 
 ---
 
@@ -118,17 +145,18 @@ Before initializing CodeStruct, ensure your host machine satisfies these baselin
 > [!WARNING]
 > ### CRITICAL NOTICE: LOCAL OPEN-SOURCE AI MODEL DOWNLOAD & SYSTEM RESOURCE IMPACT
 >
-> CodeStruct includes an optional local AI chat assistant and an Advanced Architecture clustering synthesizer powered by an open-source Large Language Model (LLM).
+> CodeStruct includes an optional local AI chat assistant and an Advanced Architecture clustering synthesizer. You have **two AI provider paths**, both fully optional:
 >
-> By following the Ollama installation steps below, you are about to **download and execute an open-source neural network model directly on your local CPU/GPU**.
+> 1. **Local Open-Source LLM (Ollama):** Download and execute an open-source neural network (`qwen2.5-coder:3b`) directly on your local CPU/GPU.
+> 2. **Cloud Providers via API Key (OpenAI / Anthropic / Gemini / Azure / Custom):** No local model download — requests are sent to the provider's API using your own key, encrypted at rest locally (see [Multi-LLM Providers](#multi-llm-providers-api-keys--model-settings)).
 >
-> **Explicit Implications for Local System Resources & Storage:**
+> **If you choose the local Ollama path, the explicit implications are:**
 > 1. **Disk Storage:** Pulling `qwen2.5-coder:3b` requires approximately **2.0 GB** of network bandwidth and allocates **~2.2 GB** of permanent disk space inside Ollama's local model store (`~/.ollama/models` on macOS/Linux or `%USERPROFILE%\.ollama\models` on Windows).
 > 2. **Memory (RAM / VRAM) Footprint:** When loaded for inference, the model allocates between **3.0 GB and 4.5 GB** of system RAM (or dedicated GPU VRAM if CUDA, ROCm, or Apple Metal acceleration is available).
 > 3. **Processor & Thermal Load:** Inference drives sustained multi-core CPU or GPU utilization, increasing thermal output, fan noise, and battery drain on portable devices.
 >
 > **Graceful Degradation Guarantee:**
-> If your hardware lacks ~2.2 GB free disk space or 8+ GB total RAM, **skip the Ollama installation**. CodeStruct operates **100% reliably in degraded mode**: AST static parsing, interactive relationship graphs, symbol tables, Martin's Instability metrics, change-impact blast radius analysis, and design-pattern detection all work completely offline with zero loss of core capability. The Assistant dock will simply show an unobtrusive `Disconnected` badge.
+> If your hardware lacks ~2.2 GB free disk space or 8+ GB total RAM — or you simply don't want to configure any AI — **skip both AI paths**. CodeStruct operates **100% reliably in degraded mode**: AST static parsing, interactive relationship graphs, symbol tables, Martin's Instability metrics, change-impact blast radius analysis, and design-pattern detection all work completely offline with zero loss of core capability. The Assistant dock will simply show an unobtrusive `Disconnected` badge.
 
 ---
 
@@ -243,6 +271,85 @@ ollama list
 ```
 *(Expected output lists `qwen2.5-coder:3b`.)*
 
+> [!TIP]
+> **Prefer a cloud model instead?** Skip the Ollama steps entirely and configure OpenAI / Anthropic / Gemini / Azure / Custom directly in the **Settings (⚙️) modal** or the **First-Run Setup Wizard** — see the next section.
+
+---
+
+## Multi-LLM Providers, API Keys & Model Settings
+
+CodeStruct ships a full **Multi-LLM provider abstraction** (`llm_providers.py`, `llm_client.py`, `model_config.py`). You are not locked into Ollama — connect **any number of models** and switch between them at runtime.
+
+### Supported Providers
+
+| Provider key | Service | API Key Required | Extra Fields |
+|---|---|---|---|
+| `ollama` | Local Ollama runtime (`/api/chat`, `/api/tags`) | No | Base URL (default `http://localhost:11434`) |
+| `openai` | OpenAI Chat Completions | **Yes** | Optional Base URL |
+| `anthropic` | Anthropic Claude Messages API | **Yes** | Optional Base URL |
+| `gemini` | Google Gemini (`google-genai` SDK) | **Yes** | — |
+| `azure` | Azure OpenAI Deployments | **Yes** | Base URL/Endpoint, Deployment Name, API Version (e.g. `2024-06-01`) |
+| `custom` | Any OpenAI-compatible endpoint (LM Studio, vLLM, OpenRouter, etc.) | Optional (some local servers need none) | Base URL |
+
+### The Settings (⚙️) Modal — "LLM Providers & Model Settings"
+
+Open via the gear button in the header. The modal provides complete model lifecycle management:
+
+- **Configured model cards** showing provider badge, display name, model ID, masked key, base URL, and enabled status.
+- **`+ Add Model` / Edit** — a dynamic form that adapts per provider (API-key field hidden for Ollama; Deployment Name & API Version shown only for Azure; Base URL hidden for Gemini).
+- **Test Connection** — validates connectivity/auth against the provider and reports how many models are reachable (never exposes credentials).
+- **Set Chat / Set Arch** — set the model as default for **AI Chat**, **Architecture Clustering**, or both. Defaults are enforced uniquely (only one default per feature at a time).
+- **Delete** — removes the configuration; defaults are automatically re-assigned to the first remaining model.
+- **Enable/Disable** toggle — disabled models are excluded from resolution and chat requests.
+
+### Model Selectors in the Workspace
+
+- **AI Assistant dock header:** a chat-model dropdown listing all enabled models (defaults preselected), switchable per session.
+- **Architecture tab header:** an architecture-model dropdown used for the LLM component-clustering request (with optional per-request `model_id` override via the REST API).
+
+### Encrypted API Key Storage (Security Model)
+
+All API keys are **encrypted at rest** — never written to disk, logs, cache, or API responses in plaintext:
+
+1. A stable host-machine identifier is resolved (Windows `MachineGuid` registry key, Linux `/etc/machine-id`, macOS `IOPlatformUUID`, with a deterministic fallback).
+2. A Fernet key is derived via **PBKDF2-HMAC-SHA256 with 100,000 iterations** and a per-secret random 16-byte salt.
+3. Keys are stored as `enc:v1:<salt>:<fernet-token>` blobs inside `%APPDATA%\CodeStruct\models.json`.
+4. Decryption **refuses plaintext** blobs; every returned API view exposes only `has_key` and a masked key (e.g. `sk-****abcd`).
+5. Exception strings and logs are automatically redacted (`***REDACTED***`) so keys can never leak through error messages.
+
+### First-Class Migration & Resolution Rules
+
+- On first launch, any existing Ollama configuration (`config.json` → `ollama_host` / `ollama_model`) is **auto-migrated** into `models.json` as the `ollama-default` record.
+- Chat and Architecture requests resolve their target model in order: explicit `model_id` → feature default → first enabled model.
+- Cloud requests missing a decrypted key fail fast with a friendly `[Error]` directing you to Settings — no network call is attempted.
+
+---
+
+## First-Run Setup Wizard
+
+On launch, the **⚡ Setup & System Readiness wizard** can be opened from the header. It provides a guided, fully in-app onboarding experience:
+
+### 1. System Readiness Checks (live, with ↻ Recheck)
+- OS, architecture, and frozen-executable detection
+- Total & available RAM (with static-analysis and AI thresholds)
+- Free disk space for both the AST cache dir and the target model storage dir
+- Microsoft Edge WebView2 runtime detection (Windows) with version
+- Ollama executable discovery (PATH + standard install paths), daemon running state, and whether `qwen2.5-coder:3b` is pulled
+- `winget` availability; summary of config path and cache directory
+
+### 2. Mandatory Resource Warning
+The same disk/RAM/thermal impact notice as above, inline, with the graceful-degradation note.
+
+### 3. Choose AI Provider (Optional)
+- **Local Ollama panel:**
+  - Custom model storage directory (`OLLAMA_MODELS`) with a **native folder picker** (via pywebview; falls back to typing a path in browser mode) and live free-space check on the target drive.
+  - **⬇️ Install Ollama Runtime** — silent `winget install Ollama.Ollama` in a background thread with a live streaming task log; falls back to opening the official download page on failure.
+  - **📥 Pull qwen2.5-coder:3b** — starts the Ollama daemon (if needed) with your custom model path, streams `ollama pull` progress, and persists the resulting config automatically.
+- **Cloud Provider panel:** pick OpenAI / Anthropic / Gemini / Azure / Custom, enter model name, API key, and (for Azure/Custom) the endpoint. Keys are encrypted immediately on save.
+- **Footer:** **Skip AI — Static Analysis Only** (fully functional degraded mode) or **Save Configuration & Launch**.
+
+All wizard selections persist to `%APPDATA%\CodeStruct\config.json` (`first_run_completed`, `ai_enabled`, `ollama_model`, `ollama_models_dir`).
+
 ---
 
 ## Execution Guide
@@ -260,6 +367,7 @@ python run.py
 2. `find_available_port()` selects port `8000`, automatically falling back through `8001`–`8020` if occupied.
 3. Uvicorn runs the local backend server in a background daemon thread.
 4. `pywebview` opens the 1280×800 native desktop window.
+5. On first run (or anytime via the header), the **⚡ Setup Wizard** is available to run system checks and configure AI (local Ollama or cloud API keys) — or skip AI entirely.
 
 ### Analyzing Codebases:
 - **Bundled Sample Project:** Click **Analyze** directly (leaving the path field empty or as `sample_project`) to inspect the built-in 16-node `sample_project/sample_project.py` fixture.
@@ -273,6 +381,21 @@ If deploying on a headless server or preferring a standard browser over `pywebvi
 python -m uvicorn backend.main:app --app-dir codestruct --host 127.0.0.1 --port 8000
 ```
 Then open `http://127.0.0.1:8000` in your browser.
+
+---
+
+## Building the Standalone Executable
+
+CodeStruct can be packaged into a **single standalone Windows executable** via PyInstaller:
+
+```bash
+python build_exe.py
+```
+
+- Uses the `CodeStruct.spec` PyInstaller spec at the repository root.
+- Produces `dist/CodeStruct.exe` with bundled frontend assets and the sample project (asset paths resolve via `sys._MEIPASS` when frozen).
+- The build script fails hard if the output exceeds a **150 MB size budget**.
+- Config, cache, and logs still live in the user profile directories (`%APPDATA%\CodeStruct`, `%LOCALAPPDATA%\CodeStruct`) — not inside the executable folder.
 
 ---
 
@@ -344,8 +467,19 @@ python -m pytest -v docs/usability_study/test_score.py
 ### 6. Collapsible 4-Dock Workspace
 - **Explorer (Left):** Instant symbol filter tree; collapses to a 40px rail.
 - **Inspector (Right Top):** Fan-in, fan-out, Robert C. Martin's Instability ($I = \frac{\text{fan-out}}{\text{fan-in} + \text{fan-out}}$), docstrings, relationships, and transitive change-impact blast radius; collapses to a 40px rail.
-- **AI Assistant (Right Bottom):** Context-aware Ollama chat automatically receiving selected symbol metadata and source slices; collapses to a 40px rail.
+- **AI Assistant (Right Bottom):** Context-aware AI chat (any configured provider) automatically receiving selected symbol metadata and source slices, with a chat-model selector dropdown; collapses to a 40px rail.
 - **Status & Logs (Bottom):** Real-time timings, parse warnings, and system alerts.
+
+### 7. LLM Providers & Model Settings (⚙️ Modal)
+- Add / edit / delete any number of model configurations across **Ollama, OpenAI, Anthropic (Claude), Google Gemini, Azure OpenAI, and Custom OpenAI-compatible** endpoints.
+- **Test Connection** per model with reachability report; enable/disable toggles; separate **Default Chat** and **Default Architecture** assignments.
+- All API keys are **Fernet-encrypted at rest** (PBKDF2-HMAC-SHA256, 100k iterations, machine-GUID-bound) in `%APPDATA%\CodeStruct\models.json`, shown only as masked keys (e.g. `sk-****abcd`) and redacted from all errors and logs.
+
+### 8. First-Run Setup Wizard (⚡)
+- Live system readiness diagnostics (RAM, disk, WebView2, Ollama detection, winget availability) with a recheck button.
+- One-click **Ollama install via winget** and **model pull** (custom `OLLAMA_MODELS` directory with native folder picker) running as background tasks with streaming logs.
+- Alternative **cloud provider setup** (provider, model, API key, endpoint) directly in the wizard.
+- **Skip AI** for a pure static-analysis install; all choices persist to `%APPDATA%\CodeStruct\config.json`.
 
 ---
 
@@ -360,10 +494,22 @@ Endpoints exposed on `http://127.0.0.1:<port>`:
 | `GET` | `/api/source` | `?file_path=...&start=1&end=50` | `SourceResponse` | Pygments syntax-highlighted HTML slice. |
 | `GET` | `/api/impact/{node_id}` | `?max_depth=5` | `ImpactResponse` | Reverse dependency blast radius via BFS. |
 | `GET` | `/api/patterns` | *None* | `PatternsResponse` | Detected Singleton, Factory, and Observer matches. |
-| `POST` | `/api/architecture/advanced` | `{"force_refresh": false}` | `AdvancedArchitectureResponse` | Validated LLM component clustering & architectural narrative. |
+| `POST` | `/api/architecture/advanced` | `{"force_refresh": false, "model_id": "..."}` | `AdvancedArchitectureResponse` | Validated LLM component clustering via the default (or specified) architecture model. |
 | `POST` | `/api/open_in_editor` | `{"file_path": "..."}` | `OpenInEditorResponse` | Opens file in OS default external editor. |
-| `POST` | `/api/qwen/chat` | `{"message": "...", "context_symbol_id": "..."}` | `ChatResponse` | Context-grounded chat with local Ollama model. |
-| `GET` | `/api/qwen/status` | *None* | `{"status": "connected"}` | Checks Ollama server reachability (`localhost:11434`). |
+| `POST` | `/api/llm/chat` | `{"message": "...", "context_symbol_id": "...", "model_id": "..."}` | `ChatResponse` | Context-grounded chat with **any configured provider** (default chat model if `model_id` omitted). |
+| `POST` | `/api/qwen/chat` | *(deprecated alias)* | `ChatResponse` | Backward-compatible alias for `/api/llm/chat`. |
+| `GET` | `/api/qwen/status` | *None* | `{"status", "model", "display_name", "provider"}` | Checks the active default chat model's connectivity (provider-aware; Ollama probe when applicable). |
+| `GET` | `/api/models` | *None* | `ModelListResponse` | Lists all configured models with **masked keys only**. |
+| `POST` | `/api/models` | `ModelConfigCreate` (provider, model, key, base URL, deployment, defaults…) | `ModelConfigPublic` | Adds/updates a model config; API key is Fernet-encrypted on write. |
+| `DELETE` | `/api/models/{model_id}` | *Path param:* `model_id` | `{"deleted": true}` | Deletes a configured model (defaults re-assigned). |
+| `POST` | `/api/models/{model_id}/validate` | *Path param:* `model_id` | `ValidateModelResponse` | Tests provider connectivity/auth; returns reachable model list. |
+| `POST` | `/api/models/{model_id}/set-default` | `{"target": "chat" \| "architecture" \| "both"}` | `ModelConfigPublic` | Sets the default model for chat, architecture clustering, or both. |
+| `GET` | `/api/wizard/status` | `?models_dir=...` | *System checks JSON* | Live hardware/OS/WebView2/Ollama readiness checks + config + background task state. |
+| `POST` | `/api/wizard/complete` | `{"ai_enabled", "ollama_model", "ollama_models_dir"}` | *Config JSON* | Persists wizard selections to `%APPDATA%\CodeStruct\config.json`. |
+| `POST` | `/api/wizard/ollama/install` | *None* | `{"started": true}` | Background silent Ollama install via winget (or opens download page). |
+| `POST` | `/api/wizard/ollama/pull` | `{"models_dir": "...", "model_name": "..."}` | `{"started": true}` | Starts daemon with custom `OLLAMA_MODELS` path and pulls the model. |
+| `GET` | `/api/wizard/ollama/task_status` | *None* | *Task state JSON* | Live status + streaming log of ongoing install/pull task. |
+| `POST` | `/api/wizard/browse_folder` | *None* | `{"selected", "supported"}` | Opens native folder picker (pywebview) for model storage path. |
 | `GET` | `/` | *None* | `FileResponse` | Serves desktop application shell (`index.html`). |
 
 ---
@@ -376,6 +522,8 @@ CodeStruct/
 ├── requirements.txt                        # Universal pinned dependencies & local AI setup notice
 ├── README.md                               # Zero-friction onboarding & operational guide
 ├── CodeStruct_Project_Plan.md              # Master technical specification & data contracts
+├── build_exe.py                            # PyInstaller build script (standalone Windows exe, 150 MB budget)
+├── CodeStruct.spec                         # PyInstaller spec for the frozen desktop bundle
 ├── codestruct/
 │   ├── run.py                              # Package-level secondary wrapper
 │   ├── requirements.txt                    # Synchronized requirements file
@@ -383,21 +531,22 @@ CodeStruct/
 │   ├── backend/
 │   │   ├── __init__.py                     # Package marker
 │   │   ├── main.py                         # FastAPI lifecycle, port fallback & pywebview window
+│   │   ├── api.py                          # REST route endpoints (analysis, chat, models, wizard)
 │   │   ├── analyzer.py                     # AST parser, edge extraction & change-impact BFS
 │   │   ├── cache.py                        # Incremental SHA-256 AST disk cache manager
-│   │   ├── config.py                       # Persistent AppData settings & cache paths
-│   │   ├── llm_client.py                   # Multi-LLM query interface
-│   │   ├── llm_providers.py                # Abstract LLM provider & concrete implementations
-│   │   ├── model_config.py                 # Encrypted API key storage & model registry
+│   │   ├── config.py                       # AppData/LocalAppData persistence & PyInstaller asset resolution
+│   │   ├── llm_client.py                   # Multi-LLM query interface & context prompt builder
+│   │   ├── llm_providers.py                # Ollama / OpenAI / Anthropic / Gemini / Azure / Custom providers
+│   │   ├── model_config.py                 # Encrypted API key storage (Fernet) & ModelRegistry CRUD
 │   │   ├── patterns.py                     # Singleton, Factory, Observer heuristic detectors
-│   │   ├── qwen_client.py                  # Ollama REST client & context prompt builder
+│   │   ├── qwen_client.py                  # Legacy Ollama client (preserved for mock compatibility)
 │   │   ├── advanced_architecture.py        # Component clustering, validation net & caching
 │   │   ├── schemas.py                      # Pydantic v2 models & validation contracts
-│   │   └── wizard.py                       # First-run system check & environment wizard
+│   │   └── wizard.py                       # First-run system checks, winget install & model pull tasks
 │   ├── frontend/
-│   │   ├── index.html                      # Desktop semantic shell & 4-dock workspace
+│   │   ├── index.html                      # Desktop semantic shell, 4-dock workspace, Settings & Wizard modals
 │   │   └── static/
-│   │       ├── app.js                      # UI controller, Cytoscape renderer & selection sync
+│   │       ├── app.js                      # UI controller, Cytoscape renderer, selection sync, Model Manager
 │   │       ├── app.css                     # Blueprint dark theme stylesheet & icon rails
 │   │       └── vendor/                     # Vendored offline assets (zero CDN dependencies)
 │   │           ├── cytoscape.min.js        # Cytoscape.js 3.28.1
@@ -421,7 +570,12 @@ CodeStruct/
 │       ├── test_score.py                   # 13 SUS unit tests
 │       ├── results.md                      # Study reporting template
 │       └── raw_data/                       # Participant JSON-lines schema & data directory
-└── .codestruct_cache/                      # Generated AST cache (gitignored)
+├── dist/                                   # PyInstaller output (CodeStruct.exe)
+└── User Profile Storage (generated at runtime):
+    ├── %APPDATA%\CodeStruct\config.json    # Persisted app configuration & wizard selections
+    ├── %APPDATA%\CodeStruct\models.json    # Model registry with Fernet-encrypted API keys
+    ├── %LOCALAPPDATA%\CodeStruct\cache\    # Incremental AST disk cache
+    └── %LOCALAPPDATA%\CodeStruct\logs\     # Runtime logs
 ```
 
 ---
@@ -444,15 +598,19 @@ CodeStruct/
 - **Solution:** Always run `python run.py` or pass `--app-dir codestruct` to Uvicorn:
   `python -m uvicorn backend.main:app --app-dir codestruct --host 127.0.0.1 --port 8000`
 
-### 4. Qwen Assistant Shows `Disconnected`
-- **Cause:** Ollama service is not running on port `11434`.
-- **Solution:** Start `ollama serve` in a terminal, pull the model (`ollama pull qwen2.5-coder:3b`), and verify `ollama list`.
+### 4. AI Assistant Shows `Disconnected`
+- **Cause (Ollama):** Ollama service is not running on port `11434`.
+- **Solution:** Start `ollama serve` in a terminal, pull the model (`ollama pull qwen2.5-coder:3b`), and verify `ollama list`. Or switch to a cloud provider: open **Settings (⚙️)**, add an OpenAI / Anthropic / Gemini / Azure / Custom model with its API key, and set it as **Default Chat**.
 
-### 5. Linux `pywebview` Fails to Open Window
+### 5. Cloud Model Fails with `[Error] Missing or unreadable API key`
+- **Cause:** The configured cloud model has no stored key, or the key cannot be decrypted on this machine (encrypted blobs are machine-bound and do not transfer between computers).
+- **Solution:** Open **Settings (⚙️)**, edit the model, and re-enter the API key. Keys are re-encrypted with the current machine's identifier on save.
+
+### 6. Linux `pywebview` Fails to Open Window
 - **Cause:** Missing GTK/WebKitGTK bindings or running on a headless SSH session without `$DISPLAY`.
 - **Solution:** Install GTK/WebKit system packages (`sudo apt-get install -y python3-gi gir1.2-webkit2-4.1`), or launch in headless browser mode via Uvicorn and forward port `8000`.
 
-### 6. Target Project Has Syntax Errors
+### 7. Target Project Has Syntax Errors
 - **Behavior:** CodeStruct catches `SyntaxError` safely per file, records the diagnostic in `errors`, displays a warning in Status/Logs, and still graphs all valid files.
 
 ---
